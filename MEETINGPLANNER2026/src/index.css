@@ -1,0 +1,85 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+:root {
+  --font-family: 'Inter', system-ui, Avenir, Helvetica, Arial, sans-serif;
+
+  /* AP Theme Colors from APTheme.xaml */
+  --primary: #FF0000;
+  /* AP.Colors.Red */
+  --primary-hover: #B30000;
+  /* AP.Colors.DarkRed */
+  --text-color: #4D4D4D;
+  /* AP.Colors.Gray */
+  --bg-color: #ffffff;
+  /* White background */
+  --secondary: #f1f5f9;
+  /* Light Gray for sidebars/panels */
+  --accent: #FF0000;
+  /* MahApps.Colors.Accent */
+
+  /* Additional UI Colors */
+  --border-color: #e2e8f0;
+  --item-hover: #e2e8f0;
+  --selected-bg: #FFE5E5;
+  /* AP.Colors.LightRed */
+  --selected-border: #FF0000;
+
+  --border-radius: 8px;
+  --transition: 0.2s ease-in-out;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  font-family: var(--font-family);
+  background-color: var(--bg-color);
+  color: var(--text-color);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+button {
+  cursor: pointer;
+  border-radius: var(--border-radius);
+  border: 1px solid transparent;
+  padding: 0.6em 1.2em;
+  font-size: 1em;
+  font-weight: 500;
+  font-family: inherit;
+  background-color: var(--secondary);
+  color: var(--text-color);
+  transition: border-color 0.25s, background-color 0.25s;
+}
+
+button:hover {
+  border-color: var(--primary);
+  background-color: #334155;
+}
+
+button:focus,
+button:focus-visible {
+  outline: 4px auto -webkit-focus-ring-color;
+}
+
+input {
+  background-color: var(--secondary);
+  color: var(--text-color);
+  border: 1px solid #334155;
+  border-radius: var(--border-radius);
+  padding: 0.6em;
+  font-size: 1em;
+  outline: none;
+  transition: var(--transition);
+}
+
+input:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+}
+
+.container {
+  padding: 2rem;
+  max-width: 1200px;
+  margin: 0 auto;
+}
