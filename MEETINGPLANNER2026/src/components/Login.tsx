@@ -68,6 +68,10 @@ export function Login({ onLoginSuccess }: LoginProps) {
                 <div className={styles.disclaimer}>
                     Deze applicatie is gemaakt door <strong>Tim Dams</strong> en is <strong>géén</strong> officieel product van AP Hogeschool en Untis.
                 </div>
+                <div className={styles.browserWarning}>
+                    Momenteel werkt deze app enkel in <strong>Chrome, Edge en Brave</strong>.<br />
+                    Safari wordt nog niet ondersteund (login zal niet lukken).
+                </div>
                 <form onSubmit={handleLogin} className={styles.form}>
                     <div className={styles.inputGroup}>
                         <User size={20} className={styles.icon} />
