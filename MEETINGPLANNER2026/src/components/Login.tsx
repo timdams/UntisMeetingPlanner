@@ -3,7 +3,6 @@ import { untisService } from '../services/UntisService';
 import { User, Lock, Loader2 } from 'lucide-react';
 import clsx from 'clsx';
 import styles from './Login.module.css';
-import logo from '../assets/logo.jpg';
 
 interface LoginProps {
     onLoginSuccess: () => void;
@@ -65,10 +64,10 @@ export function Login({ onLoginSuccess }: LoginProps) {
     return (
         <div className={styles.loginContainer}>
             <div className={styles.card}>
-                <div className={styles.logoContainer}>
-                    <img src={logo} alt="AP Hogeschool" className={styles.logo} />
-                </div>
                 <h1 className={styles.title}>Untis Meeting Planner</h1>
+                <div className={styles.disclaimer}>
+                    Deze applicatie is gemaakt door <strong>Tim Dams</strong> en is <strong>géén</strong> officieel product van AP Hogeschool en Untis.
+                </div>
                 <form onSubmit={handleLogin} className={styles.form}>
                     <div className={styles.inputGroup}>
                         <User size={20} className={styles.icon} />
