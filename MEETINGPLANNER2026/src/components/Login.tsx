@@ -14,6 +14,18 @@ export function Login({ onLoginSuccess }: LoginProps) {
     const [status, setStatus] = useState('');
     const [isBusy, setIsBusy] = useState(false);
     const [rememberMe, setRememberMe] = useState(false);
+    const [debugInfo, setDebugInfo] = useState<any>(null);
+
+    const downloadDebugInfo = () => {
+        if (!debugInfo) return;
+        const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(debugInfo, null, 2));
+        const downloadAnchorNode = document.createElement('a');
+        downloadAnchorNode.setAttribute("href", dataStr);
+        downloadAnchorNode.setAttribute("download", `untis_debug_${new Date().getTime()}.json`);
+        document.body.appendChild(downloadAnchorNode);
+        downloadAnchorNode.click();
+        downloadAnchorNode.remove();
+    };
 
     useEffect(() => {
         const storedUser = localStorage.getItem('untis_user');
@@ -46,6 +58,7 @@ export function Login({ onLoginSuccess }: LoginProps) {
             const result = await untisService.login(apiUser, password);
             if (result.success) {
                 setStatus('Ingelogd.');
+                setDebugInfo(null);
                 if (rememberMe) {
                     localStorage.setItem('untis_user', cleanUsername);
                 } else {
@@ -54,9 +67,24 @@ export function Login({ onLoginSuccess }: LoginProps) {
                 onLoginSuccess();
             } else {
                 setStatus(`Foutieve login: ${result.error || 'Onbekende fout'}`);
+                setDebugInfo({
+                    timestamp: new Date().toISOString(),
+                    usernameAttempt: apiUser,
+                    error: result.error,
+                    userAgent: navigator.userAgent,
+                    localStorageLength: localStorage.length
+                });
             }
         } catch (err: any) {
             setStatus('Er ging iets mis: ' + err.message);
+            setDebugInfo({
+                timestamp: new Date().toISOString(),
+                usernameAttempt: cleanUsername + "@ap.be",
+                exception: err.message,
+                stack: err?.stack,
+                userAgent: navigator.userAgent,
+                localStorageLength: localStorage.length
+            });
         } finally {
             setIsBusy(false);
         }
@@ -113,9 +141,15 @@ export function Login({ onLoginSuccess }: LoginProps) {
                         {isBusy ? 'Bezig...' : 'Aanmelden'}
                     </button>
 
-                    {status && <div className={clsx(styles.status, status.startsWith('Fout') || status.startsWith('Geen') ? styles.error : styles.success)}>
+                    {status && <div className={clsx(styles.status, status.startsWith('Fout') || status.startsWith('Geen') || status.startsWith('Er ging') ? styles.error : styles.success)}>
                         {status}
                     </div>}
+
+                    {debugInfo && (
+                        <button type="button" onClick={downloadDebugInfo} className={styles.debugBtn}>
+                            Problemen met inloggen? Download Debug Info
+                        </button>
+                    )}
                 </form>
             </div>
         </div>

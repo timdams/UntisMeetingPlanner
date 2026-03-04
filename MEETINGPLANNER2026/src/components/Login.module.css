@@ -155,3 +155,20 @@
     color: #16a34a;
     border: 1px solid #22c55e;
 }
+
+.debugBtn {
+    margin-top: 1rem;
+    width: 100%;
+    background: transparent;
+    color: var(--text-color);
+    border: 1px dashed var(--border-color);
+    padding: 0.5rem;
+    font-size: 0.85rem;
+    cursor: pointer;
+    border-radius: 8px;
+    transition: background-color 0.2s;
+}
+
+.debugBtn:hover {
+    background: var(--secondary);
+}
