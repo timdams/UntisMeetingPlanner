@@ -1,7 +1,7 @@
 import { useMeetingPlanner } from '../../hooks/useMeetingPlanner';
 import { PlannerSidebar } from './PlannerSidebar';
 import { WeekView } from './WeekView';
-import { Loader2, Filter } from 'lucide-react';
+import { Loader2, Filter, Info } from 'lucide-react';
 import styles from './PlannerDashboard.module.css';
 import { useState } from 'react';
 
@@ -24,6 +24,11 @@ export function PlannerDashboard() {
 
             <div className={styles.main}>
                 {planner.error && <div className={styles.error}>{planner.error}</div>}
+
+                <div className={styles.infoBanner}>
+                    <Info size={18} className={styles.infoIcon} />
+                    <span><strong>Info:</strong> Rode blokken tonen momenten wanneer alle geselecteerde collega's en klassen vrij zijn volgens hun rooster om ingepland te worden.</span>
+                </div>
 
                 <div className={styles.toolbar}>
                     <button
