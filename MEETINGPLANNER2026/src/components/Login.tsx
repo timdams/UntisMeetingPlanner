@@ -71,8 +71,25 @@ export function Login({ onLoginSuccess }: LoginProps) {
                     timestamp: new Date().toISOString(),
                     usernameAttempt: apiUser,
                     error: result.error,
+                    rawServerResponses: result.rawResponses || 'Not available',
+                    serviceException: result.exception || 'None',
                     userAgent: navigator.userAgent,
-                    localStorageLength: localStorage.length
+                    localStorageLength: localStorage.length,
+                    screen: {
+                        width: window.screen.width,
+                        height: window.screen.height,
+                        colorDepth: window.screen.colorDepth,
+                    },
+                    window: {
+                        innerWidth: window.innerWidth,
+                        innerHeight: window.innerHeight,
+                    },
+                    browserDetails: {
+                        cookieEnabled: navigator.cookieEnabled,
+                        language: navigator.language,
+                        platform: (navigator as any).platform || 'unknown',
+                        vendor: navigator.vendor || 'unknown',
+                    }
                 });
             }
         } catch (err: any) {
@@ -83,7 +100,22 @@ export function Login({ onLoginSuccess }: LoginProps) {
                 exception: err.message,
                 stack: err?.stack,
                 userAgent: navigator.userAgent,
-                localStorageLength: localStorage.length
+                localStorageLength: localStorage.length,
+                screen: {
+                    width: window.screen.width,
+                    height: window.screen.height,
+                    colorDepth: window.screen.colorDepth,
+                },
+                window: {
+                    innerWidth: window.innerWidth,
+                    innerHeight: window.innerHeight,
+                },
+                browserDetails: {
+                    cookieEnabled: navigator.cookieEnabled,
+                    language: navigator.language,
+                    platform: (navigator as any).platform || 'unknown',
+                    vendor: navigator.vendor || 'unknown',
+                }
             });
         } finally {
             setIsBusy(false);

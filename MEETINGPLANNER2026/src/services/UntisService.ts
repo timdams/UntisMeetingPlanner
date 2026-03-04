@@ -22,16 +22,20 @@ class UntisService {
         return headers;
     }
 
-    async login(username: string, password: string): Promise<{ success: boolean; error?: string }> {
+    async login(username: string, password: string): Promise<{ success: boolean; error?: string; rawResponses?: any; exception?: any }> {
         try {
+            const debugData: any = {};
+
             // 1. Warmup
             try {
-                await fetch(`${BASE_URL}/WebUntis/?school=${SCHOOL}`, {
+                const w = await fetch(`${BASE_URL}/WebUntis/?school=${SCHOOL}`, {
                     method: 'GET',
                     headers: { 'tenant-id': TENANT_ID }
                 });
+                debugData.warmup = { status: w.status, ok: w.ok };
             } catch (e) {
                 console.warn("Warmup failed:", e);
+                debugData.warmup = { error: e instanceof Error ? e.message : 'Unknown warmup error' };
             }
 
             // 2. Login POST (application/x-www-form-urlencoded)
@@ -51,6 +55,7 @@ class UntisService {
                 credentials: 'include' // THIS WAS OMIT! Browser wouldn't save the login cookie!
             });
 
+            debugData.loginResp = { status: loginResp.status, ok: loginResp.ok, redirected: loginResp.redirected, url: loginResp.url };
             if (!loginResp.ok) {
                 console.warn("Login POST status:", loginResp.status);
             }
@@ -62,11 +67,15 @@ class UntisService {
                 credentials: 'include' // The proxy needs to handle cookie passing if we use omit, or we use 'include' if proxy forwards it
             });
 
+            debugData.tokenResp = { status: tokenResp.status, ok: tokenResp.ok };
             if (!tokenResp.ok) {
-                return { success: false, error: `Token fetch failed: ${tokenResp.status}` };
+                const txt = await tokenResp.text().catch(() => '');
+                debugData.tokenResp.body = txt.substring(0, 1000); // Only capture partial if it's huge
+                return { success: false, error: `Token fetch failed: ${tokenResp.status}`, rawResponses: debugData };
             }
 
             const body = await tokenResp.text();
+            debugData.tokenResp.bodySample = body.substring(0, 500);
             this.bearerToken = this.extractToken(body);
 
             if (this.bearerToken) {
@@ -75,11 +84,11 @@ class UntisService {
             }
 
             console.error("Failed to parse token from response body:", body);
-            return { success: false, error: "Ongeldige logingegevens (of API weigerde toegang)." };
+            return { success: false, error: "Ongeldige logingegevens (of API weigerde toegang).", rawResponses: debugData };
         } catch (e: any) {
             console.error("Login Exception Detail:", e);
             const msg = e instanceof Error ? e.message : JSON.stringify(e);
-            return { success: false, error: msg || "Unknown error (empty)" };
+            return { success: false, error: msg || "Unknown error (empty)", exception: { name: e?.name, message: e?.message, stack: e?.stack } };
         }
     }
 
