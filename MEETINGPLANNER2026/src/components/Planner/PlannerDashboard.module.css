@@ -22,33 +22,7 @@
     /* Add gap between items */
 }
 
-.searchBtn {
-    background: var(--primary);
-    color: white;
-    padding: 0.6rem 1.2rem;
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    font-size: 0.95rem;
-    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-    transition: background-color 0.2s;
-    border: none;
-    border-radius: var(--border-radius);
-    cursor: pointer;
-}
 
-.searchBtn:hover:not(:disabled) {
-    background: var(--primary-hover);
-    transform: translateY(-1px);
-}
-
-.searchBtn:disabled {
-    background: var(--secondary);
-    color: var(--text-color);
-    opacity: 0.5;
-    cursor: not-allowed;
-    box-shadow: none;
-}
 
 .error {
     background-color: var(--selected-bg);
@@ -67,4 +41,34 @@
     color: var(--text-color);
     cursor: pointer;
     user-select: none;
+}
+
+.mobileFilterBtn {
+    display: none;
+    background-color: var(--secondary);
+    color: var(--text-color);
+    border: 1px solid var(--border-color);
+    padding: 0.6rem 1rem;
+    border-radius: var(--border-radius);
+    align-items: center;
+    gap: 0.5rem;
+    cursor: pointer;
+    font-size: 0.95rem;
+    font-weight: 500;
+}
+
+@media (max-width: 768px) {
+    .toolbar {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .mobileFilterBtn {
+        display: flex;
+        justify-content: center;
+    }
+
+    .checkboxLabel {
+        padding: 0.5rem 0;
+    }
 }

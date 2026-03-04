@@ -170,3 +170,73 @@
 .chip:hover .remove {
     opacity: 1;
 }
+
+/* Mobile Specific Details */
+.mobileHeader {
+    display: none;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem;
+    border-bottom: 1px solid var(--border-color);
+    background-color: var(--secondary);
+}
+
+.mobileTitle {
+    font-weight: 600;
+    font-size: 1.1rem;
+}
+
+.closeBtn {
+    background: none;
+    border: none;
+    color: var(--text-color);
+    cursor: pointer;
+    padding: 0.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+}
+
+.closeBtn:hover {
+    background-color: var(--item-hover);
+}
+
+.backdrop {
+    display: none;
+}
+
+@media (max-width: 768px) {
+    .sidebar {
+        position: fixed;
+        top: 0;
+        left: 0;
+        bottom: 0;
+        width: 85%;
+        max-width: 350px;
+        z-index: 50;
+        transform: translateX(-100%);
+        transition: transform 0.3s ease-in-out;
+        box-shadow: 2px 0 8px rgba(0, 0, 0, 0.1);
+    }
+
+    .sidebar.openOnMobile {
+        transform: translateX(0);
+    }
+
+    .mobileHeader {
+        display: flex;
+    }
+
+    .backdrop {
+        display: block;
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background-color: rgba(0, 0, 0, 0.4);
+        z-index: 40;
+        backdrop-filter: blur(2px);
+    }
+}

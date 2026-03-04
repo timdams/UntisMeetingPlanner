@@ -37,6 +37,14 @@ export function useMeetingPlanner() {
         loadResources();
     }, []);
 
+    useEffect(() => {
+        if (state.selectedTeachers.length > 0 || state.selectedClasses.length > 0) {
+            findMeetingOptions();
+        } else {
+            setState(s => ({ ...s, meetingOptions: [] })); // Clear if empty
+        }
+    }, [state.selectedTeachers, state.selectedClasses, state.weekDate, state.searchOnlyInLessonDays]);
+
     const loadResources = async () => {
         setState(s => ({ ...s, isBusy: true, error: null }));
         try {

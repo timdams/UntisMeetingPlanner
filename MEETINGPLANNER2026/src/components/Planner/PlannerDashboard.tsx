@@ -1,11 +1,13 @@
 import { useMeetingPlanner } from '../../hooks/useMeetingPlanner';
 import { PlannerSidebar } from './PlannerSidebar';
 import { WeekView } from './WeekView';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Filter } from 'lucide-react';
 import styles from './PlannerDashboard.module.css';
+import { useState } from 'react';
 
 export function PlannerDashboard() {
     const planner = useMeetingPlanner();
+    const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
     return (
         <div className={styles.dashboard}>
@@ -16,12 +18,22 @@ export function PlannerDashboard() {
                 selectedClasses={planner.selectedClasses}
                 onToggleTeacher={planner.toggleTeacher}
                 onToggleClass={planner.toggleClass}
+                isOpenOnMobile={isMobileSidebarOpen}
+                onCloseMobile={() => setIsMobileSidebarOpen(false)}
             />
 
             <div className={styles.main}>
                 {planner.error && <div className={styles.error}>{planner.error}</div>}
 
                 <div className={styles.toolbar}>
+                    <button
+                        className={styles.mobileFilterBtn}
+                        onClick={() => setIsMobileSidebarOpen(true)}
+                    >
+                        <Filter size={18} />
+                        Filters & Selectie
+                    </button>
+
                     <label className={styles.checkboxLabel}>
                         <input
                             type="checkbox"
@@ -31,13 +43,7 @@ export function PlannerDashboard() {
                         Ook zoeken in dagen dat klas/lector geen lessen heeft
                     </label>
 
-                    <button
-                        onClick={planner.findMeetingOptions}
-                        disabled={planner.isBusy || (planner.selectedTeachers.length === 0 && planner.selectedClasses.length === 0)}
-                        className={styles.searchBtn}
-                    >
-                        {planner.isBusy ? <Loader2 className="animate-spin" /> : 'Zoek Vergaderopties'}
-                    </button>
+                    {planner.isBusy && <Loader2 className="animate-spin text-primary" size={20} />}
                 </div>
 
                 <WeekView

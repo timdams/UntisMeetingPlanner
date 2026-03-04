@@ -122,6 +122,36 @@ export function WeekView({ weekDate, meetingOptions, onWeekDateChange }: Props) 
                     );
                 })}
             </div>
+
+            {/* Mobile List View */}
+            <div className={styles.listContainer}>
+                {days.map(day => {
+                    const dateStr = day.toISOString().split('T')[0];
+                    const slots = meetingOptions.filter(s => s.day === dateStr);
+
+                    if (slots.length === 0) {
+                        return (
+                            <div key={dateStr} className={styles.missingDay}>
+                                <div className={styles.listDayHeader}>{formatDate(day)}</div>
+                                <div className={styles.missingLabel}>Geen overlappende vrije momenten</div>
+                            </div>
+                        );
+                    }
+
+                    return (
+                        <div key={dateStr} className={styles.listDayGroup}>
+                            <div className={styles.listDayHeader}>{formatDate(day)}</div>
+                            <div className={styles.listSlotsContainer}>
+                                {slots.map((slot, idx) => (
+                                    <div key={idx} className={styles.listSlot}>
+                                        <div className={styles.listTimeBadge}>{slot.start} - {slot.end}</div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    );
+                })}
+            </div>
         </div>
     );
 }
