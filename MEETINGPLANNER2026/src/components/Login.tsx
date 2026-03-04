@@ -27,12 +27,13 @@ export function Login({ onLoginSuccess }: LoginProps) {
         e.preventDefault();
         if (isBusy) return;
 
-        if (username.toLowerCase().endsWith('@ap.be')) {
-            setStatus("Geen domein toevoegen, enkel pnummer.");
-            return;
+        let cleanUsername = username.trim();
+        if (cleanUsername.toLowerCase().endsWith('@ap.be')) {
+            cleanUsername = cleanUsername.slice(0, -6);
         }
-        if (username.includes('.')) {
-            setStatus("Gebruik je pnummer zonder @ap.be.");
+
+        if (cleanUsername.includes('.')) {
+            setStatus("Gebruik je pnummer, niet je naam (geen puntjes).");
             return;
         }
 
@@ -41,12 +42,12 @@ export function Login({ onLoginSuccess }: LoginProps) {
 
         try {
             // Append domain to username as expected by the API
-            const apiUser = username + "@ap.be";
+            const apiUser = cleanUsername + "@ap.be";
             const result = await untisService.login(apiUser, password);
             if (result.success) {
                 setStatus('Ingelogd.');
                 if (rememberMe) {
-                    localStorage.setItem('untis_user', username);
+                    localStorage.setItem('untis_user', cleanUsername);
                 } else {
                     localStorage.removeItem('untis_user');
                 }
