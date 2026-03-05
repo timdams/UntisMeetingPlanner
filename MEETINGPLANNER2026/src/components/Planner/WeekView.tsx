@@ -1,13 +1,14 @@
-import { FreeSlot } from '../../hooks/useMeetingPlanner';
+import { FreeSlot, BlockedSlot } from '../../hooks/useMeetingPlanner';
 import styles from './WeekView.module.css';
 
 interface Props {
     weekDate: Date;
     meetingOptions: FreeSlot[];
+    blockedSlots: BlockedSlot[];
     onWeekDateChange: (date: Date) => void;
 }
 
-export function WeekView({ weekDate, meetingOptions, onWeekDateChange }: Props) {
+export function WeekView({ weekDate, meetingOptions, blockedSlots, onWeekDateChange }: Props) {
     // Helper to get Mon-Fri dates
     const getDays = () => {
         const d = new Date(weekDate);
@@ -91,6 +92,7 @@ export function WeekView({ weekDate, meetingOptions, onWeekDateChange }: Props) 
                 {days.map(day => {
                     const dateStr = day.toISOString().split('T')[0];
                     const slots = meetingOptions.filter(s => s.day === dateStr);
+                    const dayBlocked = blockedSlots.filter(s => s.day === dateStr);
 
                     return (
                         <div key={dateStr} className={styles.dayColumn}>
@@ -103,7 +105,22 @@ export function WeekView({ weekDate, meetingOptions, onWeekDateChange }: Props) 
                                     <div key={i} className={styles.gridLine} style={{ top: `${(i + 1) * 60 / totalMinutes * 100}%` }} />
                                 ))}
 
-                                {/* Slots */}
+                                {/* Blocked slots (behind free slots) */}
+                                {dayBlocked.map((bs, idx) => (
+                                    <div
+                                        key={`blocked-${idx}`}
+                                        className={styles.blockedSlot}
+                                        style={{
+                                            top: `${getPosition(bs.start)}%`,
+                                            height: `${getDuration(bs.start, bs.end)}%`
+                                        }}
+                                        title={bs.reason}
+                                    >
+                                        <span className={styles.blockedText}>{bs.reason}</span>
+                                    </div>
+                                ))}
+
+                                {/* Free slots */}
                                 {slots.map((slot, idx) => (
                                     <div
                                         key={idx}

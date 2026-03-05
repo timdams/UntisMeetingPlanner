@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__Claude_Preview__preview_start",
+      "Bash(npx tsc --noEmit)",
+      "Bash(where npx)",
+      "Bash(echo $SHELL)",
+      "Bash(echo $PATH)"
+    ]
+  }
+}

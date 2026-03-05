@@ -9,6 +9,7 @@ export interface PlannerState {
     selectedClasses: ClassGroup[];
     weekDate: Date;
     meetingOptions: FreeSlot[];
+    blockedSlots: BlockedSlot[];
     isBusy: boolean;
     error: string | null;
     searchOnlyInLessonDays: boolean;
@@ -20,6 +21,13 @@ export interface FreeSlot {
     end: string; // HH:mm
 }
 
+export interface BlockedSlot {
+    day: string; // ISO Date YYYY-MM-DD
+    start: string; // HH:mm
+    end: string; // HH:mm
+    reason: string; // bv. "De Vos bezet" of "De Ridder geen les"
+}
+
 export function useMeetingPlanner() {
     const [state, setState] = useState<PlannerState>({
         teachers: [],
@@ -28,6 +36,7 @@ export function useMeetingPlanner() {
         selectedClasses: [],
         weekDate: new Date(),
         meetingOptions: [],
+        blockedSlots: [],
         isBusy: false,
         error: null,
         searchOnlyInLessonDays: true, // Default to strict mode (only days with lessons)
@@ -41,7 +50,7 @@ export function useMeetingPlanner() {
         if (state.selectedTeachers.length > 0 || state.selectedClasses.length > 0) {
             findMeetingOptions();
         } else {
-            setState(s => ({ ...s, meetingOptions: [] })); // Clear if empty
+            setState(s => ({ ...s, meetingOptions: [], blockedSlots: [] })); // Clear if empty
         }
     }, [state.selectedTeachers, state.selectedClasses, state.weekDate, state.searchOnlyInLessonDays]);
 
@@ -94,7 +103,7 @@ export function useMeetingPlanner() {
         const { selectedTeachers, selectedClasses, weekDate, searchOnlyInLessonDays } = state;
         if (selectedTeachers.length === 0 && selectedClasses.length === 0) return;
 
-        setState(s => ({ ...s, isBusy: true, error: null, meetingOptions: [] }));
+        setState(s => ({ ...s, isBusy: true, error: null, meetingOptions: [], blockedSlots: [] }));
 
         try {
             // Calculate Monday-Friday range
@@ -114,21 +123,21 @@ export function useMeetingPlanner() {
 
             const allRosters = await Promise.all([...teacherPromises, ...classPromises]);
 
-            // Flatten rosters into a single list of objects { type, resourceId, entries: [] }
-            // Using mapped structure for validation
-            const resourcesData: { resourceId: number, entries: any[] }[] = [];
+            // Build resource list with names for blocked slot attribution
+            const resourcesData: { resourceId: number, name: string, entries: any[] }[] = [];
 
             let i = 0;
             for (const t of selectedTeachers) {
-                resourcesData.push({ resourceId: t.id, entries: allRosters[i] });
+                resourcesData.push({ resourceId: t.id, name: t.displayName, entries: allRosters[i] });
                 i++;
             }
             for (const c of selectedClasses) {
-                resourcesData.push({ resourceId: c.id, entries: allRosters[i] });
+                resourcesData.push({ resourceId: c.id, name: c.displayName, entries: allRosters[i] });
                 i++;
             }
 
             const freeSlots: FreeSlot[] = [];
+            const blocked: BlockedSlot[] = [];
 
             // Working hours 08:00 - 18:00
             const startHour = 8;
@@ -139,7 +148,6 @@ export function useMeetingPlanner() {
                 currentDailyDate.setDate(monday.getDate() + dayOffset);
 
                 // Fix: use local YYYY-MM-DD to avoid timezone issues with toISOString()
-                // Construct string manually to be safe:
                 const year = currentDailyDate.getFullYear();
                 const month = String(currentDailyDate.getMonth() + 1).padStart(2, '0');
                 const day = String(currentDailyDate.getDate()).padStart(2, '0');
@@ -147,26 +155,32 @@ export function useMeetingPlanner() {
 
                 console.log(`Checking Day: ${dateStr}, Strict: ${searchOnlyInLessonDays}`);
 
-                // 1. Strict Mode Filter
-                if (searchOnlyInLessonDays && selectedTeachers.length > 0) {
-                    const teachersData = resourcesData.slice(0, selectedTeachers.length);
-                    const allHaveLesson = teachersData.every(r =>
-                        r.entries.some((e: any) => e.start.startsWith(dateStr))
-                    );
-
-                    if (!allHaveLesson) {
-                        console.log(`Skipping ${dateStr} - not all teachers have lessons`);
-                        continue; // Skip this day
-                    }
-                }
-
-                // 2. Calculate busy intervals
                 const dayStart = new Date(currentDailyDate);
                 dayStart.setHours(startHour, 0, 0, 0);
                 const dayEnd = new Date(currentDailyDate);
                 dayEnd.setHours(endHour, 0, 0, 0);
 
-                const busyIntervals: { start: number, end: number }[] = [];
+                // 1. Strict Mode Filter
+                if (searchOnlyInLessonDays && selectedTeachers.length > 0) {
+                    const teachersData = resourcesData.slice(0, selectedTeachers.length);
+                    const teachersWithoutLessons = teachersData
+                        .filter(r => !r.entries.some((e: any) => e.start.startsWith(dateStr)))
+                        .map(r => r.name);
+
+                    if (teachersWithoutLessons.length > 0) {
+                        console.log(`Skipping ${dateStr} - not all teachers have lessons`);
+                        blocked.push({
+                            day: dateStr,
+                            start: formatTime(dayStart),
+                            end: formatTime(dayEnd),
+                            reason: formatBlockedReason(teachersWithoutLessons, 'geen les')
+                        });
+                        continue; // Skip this day
+                    }
+                }
+
+                // 2. Collect tagged busy intervals (with resource name)
+                const taggedBusy: { start: number, end: number, name: string }[] = [];
 
                 for (const res of resourcesData) {
                     for (const entry of res.entries) {
@@ -184,37 +198,53 @@ export function useMeetingPlanner() {
                         const clampedStart = s < dayStart ? dayStart : s;
                         const clampedEnd = e > dayEnd ? dayEnd : e;
 
-                        busyIntervals.push({ start: clampedStart.getTime(), end: clampedEnd.getTime() });
+                        taggedBusy.push({ start: clampedStart.getTime(), end: clampedEnd.getTime(), name: res.name });
                     }
                 }
 
-                console.log(`Busy intervals for ${dateStr}:`, busyIntervals.length);
-
-                // 3. Merge busy intervals
+                // 3. Merge busy intervals (untagged, for free slot calculation)
+                const busyIntervals = taggedBusy.map(b => ({ start: b.start, end: b.end }));
                 busyIntervals.sort((a, b) => a.start - b.start);
 
                 const mergedBusy: { start: number, end: number }[] = [];
                 for (const b of busyIntervals) {
                     if (mergedBusy.length === 0) {
-                        mergedBusy.push(b);
+                        mergedBusy.push({ ...b });
                     } else {
                         const last = mergedBusy[mergedBusy.length - 1];
                         if (b.start < last.end) {
-                            // Overlap
                             last.end = Math.max(last.end, b.end);
                         } else {
-                            mergedBusy.push(b);
+                            mergedBusy.push({ ...b });
                         }
                     }
                 }
 
-                // 4. Invert to finding free slots
+                console.log(`Busy intervals for ${dateStr}:`, taggedBusy.length);
+
+                // 4. Build blocked slots with reason attribution
+                for (const mb of mergedBusy) {
+                    // Find which resources are busy during this merged interval
+                    const busyNames = new Set<string>();
+                    for (const tb of taggedBusy) {
+                        if (tb.start < mb.end && tb.end > mb.start) {
+                            busyNames.add(tb.name);
+                        }
+                    }
+                    blocked.push({
+                        day: dateStr,
+                        start: formatTime(new Date(mb.start)),
+                        end: formatTime(new Date(mb.end)),
+                        reason: formatBlockedReason([...busyNames], 'bezet')
+                    });
+                }
+
+                // 5. Invert to find free slots
                 let currentTime = dayStart.getTime();
                 const slots: FreeSlot[] = [];
 
                 for (const b of mergedBusy) {
                     if (b.start > currentTime) {
-                        // Free slot found
                         slots.push({
                             day: dateStr,
                             start: formatTime(new Date(currentTime)),
@@ -226,7 +256,6 @@ export function useMeetingPlanner() {
                     }
                 }
 
-                // Final slot after last busy interval
                 if (currentTime < dayEnd.getTime()) {
                     slots.push({
                         day: dateStr,
@@ -238,7 +267,7 @@ export function useMeetingPlanner() {
                 freeSlots.push(...slots);
             }
 
-            setState(s => ({ ...s, isBusy: false, meetingOptions: freeSlots }));
+            setState(s => ({ ...s, isBusy: false, meetingOptions: freeSlots, blockedSlots: blocked }));
         } catch (err: any) {
             console.error(err);
             setState(s => ({ ...s, isBusy: false, error: err.message }));
@@ -247,6 +276,15 @@ export function useMeetingPlanner() {
 
     const formatTime = (d: Date) => {
         return d.toLocaleTimeString('nl-BE', { hour: '2-digit', minute: '2-digit' });
+    };
+
+    const formatBlockedReason = (names: string[], suffix: string) => {
+        if (names.length === 0) return suffix;
+        if (names.length === 1) return `${names[0]} ${suffix}`;
+        if (names.length === 2) return `${names[0]} en ${names[1]} ${suffix}`;
+        const last = names[names.length - 1];
+        const rest = names.slice(0, -1).join(', ');
+        return `${rest} en ${last} ${suffix}`;
     };
 
     return {

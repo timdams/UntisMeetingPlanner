@@ -54,6 +54,7 @@ export function PlannerDashboard() {
                 <WeekView
                     weekDate={planner.weekDate}
                     meetingOptions={planner.meetingOptions}
+                    blockedSlots={planner.blockedSlots}
                     onWeekDateChange={planner.setWeekDate}
                 />
             </div>
