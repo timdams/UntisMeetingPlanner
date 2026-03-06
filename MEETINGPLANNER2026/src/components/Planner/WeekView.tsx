@@ -6,9 +6,10 @@ interface Props {
     meetingOptions: FreeSlot[];
     blockedSlots: BlockedSlot[];
     onWeekDateChange: (date: Date) => void;
+    onSlotClick?: (slot: FreeSlot) => void;
 }
 
-export function WeekView({ weekDate, meetingOptions, blockedSlots, onWeekDateChange }: Props) {
+export function WeekView({ weekDate, meetingOptions, blockedSlots, onWeekDateChange, onSlotClick }: Props) {
     // Helper to get Mon-Fri dates
     const getDays = () => {
         const d = new Date(weekDate);
@@ -124,12 +125,13 @@ export function WeekView({ weekDate, meetingOptions, blockedSlots, onWeekDateCha
                                 {slots.map((slot, idx) => (
                                     <div
                                         key={idx}
-                                        className={styles.slot}
+                                        className={`${styles.slot} ${onSlotClick ? styles.slotClickable : ''}`}
                                         style={{
                                             top: `${getPosition(slot.start)}%`,
                                             height: `${getDuration(slot.start, slot.end)}%`
                                         }}
-                                        title={`${slot.start} - ${slot.end}`}
+                                        title={onSlotClick ? `${slot.start} - ${slot.end} — Klik om .ics te downloaden` : `${slot.start} - ${slot.end}`}
+                                        onClick={() => onSlotClick?.(slot)}
                                     >
                                         {slot.start} - {slot.end}
                                     </div>
@@ -161,7 +163,14 @@ export function WeekView({ weekDate, meetingOptions, blockedSlots, onWeekDateCha
                             <div className={styles.listSlotsContainer}>
                                 {slots.map((slot, idx) => (
                                     <div key={idx} className={styles.listSlot}>
-                                        <div className={styles.listTimeBadge}>{slot.start} - {slot.end}</div>
+                                        <div
+                                            className={`${styles.listTimeBadge} ${onSlotClick ? styles.listTimeBadgeClickable : ''}`}
+                                            title={onSlotClick ? 'Klik om .ics te downloaden' : undefined}
+                                            onClick={() => onSlotClick?.(slot)}
+                                        >
+                                            {slot.start} - {slot.end}
+                                            {onSlotClick && <span className={styles.downloadHint}>↓ .ics</span>}
+                                        </div>
                                     </div>
                                 ))}
                             </div>

@@ -39,22 +39,13 @@ export function Login({ onLoginSuccess }: LoginProps) {
         e.preventDefault();
         if (isBusy) return;
 
-        let cleanUsername = username.trim();
-        if (cleanUsername.toLowerCase().endsWith('@ap.be')) {
-            cleanUsername = cleanUsername.slice(0, -6);
-        }
-
-        if (cleanUsername.includes('.')) {
-            setStatus("Gebruik je pnummer, niet je naam (geen puntjes).");
-            return;
-        }
+        const cleanUsername = username.trim();
 
         setIsBusy(true);
         setStatus('Aanmelden...');
 
         try {
-            // Append domain to username as expected by the API
-            const apiUser = cleanUsername + "@ap.be";
+            const apiUser = cleanUsername;
             const result = await untisService.login(apiUser, password);
             if (result.success) {
                 setStatus('Ingelogd.');
@@ -96,7 +87,7 @@ export function Login({ onLoginSuccess }: LoginProps) {
             setStatus('Er ging iets mis: ' + err.message);
             setDebugInfo({
                 timestamp: new Date().toISOString(),
-                usernameAttempt: cleanUsername + "@ap.be",
+                usernameAttempt: cleanUsername,
                 exception: err.message,
                 stack: err?.stack,
                 userAgent: navigator.userAgent,
@@ -138,7 +129,7 @@ export function Login({ onLoginSuccess }: LoginProps) {
                         <User size={20} className={styles.icon} />
                         <input
                             type="text"
-                            placeholder="p-nummer (bijv. p123456)"
+                            placeholder="Login (bv. p87879@ap.be of student.grad.inf)"
                             value={username}
                             onChange={(e) => setUsername(e.target.value)}
                             disabled={isBusy}
@@ -164,7 +155,7 @@ export function Login({ onLoginSuccess }: LoginProps) {
                                 checked={rememberMe}
                                 onChange={e => setRememberMe(e.target.checked)}
                             />
-                            Onthoud p-nummer
+                            Onthoud login
                         </label>
                     </div>
 

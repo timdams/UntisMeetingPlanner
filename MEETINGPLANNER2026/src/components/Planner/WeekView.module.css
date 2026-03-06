@@ -124,10 +124,21 @@
     align-items: center;
     justify-content: center;
     color: var(--primary);
-    cursor: pointer;
+    cursor: default;
     overflow: hidden;
     white-space: nowrap;
     z-index: 1;
+}
+
+.slotClickable {
+    cursor: pointer;
+    transition: background-color 0.15s, transform 0.1s;
+}
+
+.slotClickable:hover {
+    background-color: var(--primary);
+    color: #fff;
+    transform: scaleY(1.02);
 }
 
 /* Mobile List View */
@@ -190,6 +201,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
+    gap: 0.5rem;
     padding: 0.75rem 1rem;
     background-color: var(--bg-color);
     border: 1px solid var(--primary);
@@ -198,6 +210,22 @@
     font-weight: 500;
     width: 100%;
     box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.listTimeBadgeClickable {
+    cursor: pointer;
+    transition: background-color 0.15s;
+}
+
+.listTimeBadgeClickable:hover {
+    background-color: var(--primary);
+    color: #fff;
+}
+
+.downloadHint {
+    font-size: 0.75rem;
+    opacity: 0.7;
+    font-weight: 400;
 }
 
 @media (max-width: 768px) {

@@ -1,9 +1,51 @@
-import { useMeetingPlanner } from '../../hooks/useMeetingPlanner';
+import { useMeetingPlanner, FreeSlot } from '../../hooks/useMeetingPlanner';
 import { PlannerSidebar } from './PlannerSidebar';
 import { WeekView } from './WeekView';
 import { Loader2, Filter, Info } from 'lucide-react';
 import styles from './PlannerDashboard.module.css';
 import { useState } from 'react';
+import { Teacher } from '../../types';
+
+function generateIcs(slot: FreeSlot, teachers: Teacher[]): string {
+    const uid = `meeting-${slot.day}-${slot.start.replace(':', '')}-${Date.now()}@untisMeetingPlanner`;
+    const dateFormatted = slot.day.replace(/-/g, '');
+    const startFormatted = slot.start.replace(':', '') + '00';
+    const endFormatted = slot.end.replace(':', '') + '00';
+    const dtstamp = new Date().toISOString().replace(/[-:.]/g, '').slice(0, 15) + 'Z';
+    const names = teachers.map(t => t.displayName);
+    const summary = names.length > 0 ? `Meeting: ${names.join(', ')}` : 'Meeting';
+    const description = names.length > 0 ? `Genodigden: ${names.join('\\, ')}` : '';
+
+    const lines = [
+        'BEGIN:VCALENDAR',
+        'VERSION:2.0',
+        'PRODID:-//UntisMeetingPlanner//NL',
+        'CALSCALE:GREGORIAN',
+        'BEGIN:VEVENT',
+        `UID:${uid}`,
+        `DTSTAMP:${dtstamp}`,
+        `DTSTART;TZID=Europe/Brussels:${dateFormatted}T${startFormatted}`,
+        `DTEND;TZID=Europe/Brussels:${dateFormatted}T${endFormatted}`,
+        `SUMMARY:${summary}`,
+    ];
+    if (description) lines.push(`DESCRIPTION:${description}`);
+    lines.push('END:VEVENT', 'END:VCALENDAR');
+
+    return lines.join('\r\n');
+}
+
+function downloadIcs(slot: FreeSlot, teachers: Teacher[]) {
+    const content = generateIcs(slot, teachers);
+    const blob = new Blob([content], { type: 'text/calendar;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `meeting-${slot.day}-${slot.start.replace(':', '')}.ics`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+}
 
 export function PlannerDashboard() {
     const planner = useMeetingPlanner();
@@ -56,6 +98,7 @@ export function PlannerDashboard() {
                     meetingOptions={planner.meetingOptions}
                     blockedSlots={planner.blockedSlots}
                     onWeekDateChange={planner.setWeekDate}
+                    onSlotClick={(slot) => downloadIcs(slot, planner.selectedTeachers)}
                 />
             </div>
         </div>
