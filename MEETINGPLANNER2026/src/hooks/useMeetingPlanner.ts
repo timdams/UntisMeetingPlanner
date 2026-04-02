@@ -21,11 +21,20 @@ export interface FreeSlot {
     end: string; // HH:mm
 }
 
+export interface BlockedDetail {
+    name: string;       // resource name (e.g. "De Vos")
+    lessonText?: string; // e.g. "Wiskunde 3A"
+    lessonInfo?: string; // extra info from Untis
+    start: string;      // HH:mm
+    end: string;        // HH:mm
+}
+
 export interface BlockedSlot {
     day: string; // ISO Date YYYY-MM-DD
     start: string; // HH:mm
     end: string; // HH:mm
     reason: string; // bv. "De Vos bezet" of "De Ridder geen les"
+    details?: BlockedDetail[]; // per-resource lesson details
 }
 
 export function useMeetingPlanner() {
@@ -89,6 +98,10 @@ export function useMeetingPlanner() {
                 : [...s.selectedClasses, cls];
             return { ...s, selectedClasses: newList };
         });
+    };
+
+    const setSelection = (teachers: Teacher[], classes: ClassGroup[]) => {
+        setState(s => ({ ...s, selectedTeachers: teachers, selectedClasses: classes }));
     };
 
     const setWeekDate = (date: Date) => {
@@ -173,14 +186,20 @@ export function useMeetingPlanner() {
                             day: dateStr,
                             start: formatTime(dayStart),
                             end: formatTime(dayEnd),
-                            reason: formatBlockedReason(teachersWithoutLessons, 'geen les')
+                            reason: formatBlockedReason(teachersWithoutLessons, 'geen les'),
+                            details: teachersWithoutLessons.map(name => ({
+                                name,
+                                start: formatTime(dayStart),
+                                end: formatTime(dayEnd),
+                                lessonText: 'Geen les op deze dag',
+                            })),
                         });
                         continue; // Skip this day
                     }
                 }
 
-                // 2. Collect tagged busy intervals (with resource name)
-                const taggedBusy: { start: number, end: number, name: string }[] = [];
+                // 2. Collect tagged busy intervals (with resource name + lesson details)
+                const taggedBusy: { start: number, end: number, name: string, lessonText?: string, lessonInfo?: string }[] = [];
 
                 for (const res of resourcesData) {
                     for (const entry of res.entries) {
@@ -198,7 +217,13 @@ export function useMeetingPlanner() {
                         const clampedStart = s < dayStart ? dayStart : s;
                         const clampedEnd = e > dayEnd ? dayEnd : e;
 
-                        taggedBusy.push({ start: clampedStart.getTime(), end: clampedEnd.getTime(), name: res.name });
+                        taggedBusy.push({
+                            start: clampedStart.getTime(),
+                            end: clampedEnd.getTime(),
+                            name: res.name,
+                            lessonText: entry.lessonText,
+                            lessonInfo: entry.lessonInfo,
+                        });
                     }
                 }
 
@@ -222,20 +247,29 @@ export function useMeetingPlanner() {
 
                 console.log(`Busy intervals for ${dateStr}:`, taggedBusy.length);
 
-                // 4. Build blocked slots with reason attribution
+                // 4. Build blocked slots with reason attribution + details
                 for (const mb of mergedBusy) {
                     // Find which resources are busy during this merged interval
                     const busyNames = new Set<string>();
+                    const details: BlockedDetail[] = [];
                     for (const tb of taggedBusy) {
                         if (tb.start < mb.end && tb.end > mb.start) {
                             busyNames.add(tb.name);
+                            details.push({
+                                name: tb.name,
+                                lessonText: tb.lessonText,
+                                lessonInfo: tb.lessonInfo,
+                                start: formatTime(new Date(tb.start)),
+                                end: formatTime(new Date(tb.end)),
+                            });
                         }
                     }
                     blocked.push({
                         day: dateStr,
                         start: formatTime(new Date(mb.start)),
                         end: formatTime(new Date(mb.end)),
-                        reason: formatBlockedReason([...busyNames], 'bezet')
+                        reason: formatBlockedReason([...busyNames], 'bezet'),
+                        details,
                     });
                 }
 
@@ -291,6 +325,7 @@ export function useMeetingPlanner() {
         ...state,
         toggleTeacher,
         toggleClass,
+        setSelection,
         setWeekDate,
         findMeetingOptions,
         loadResources,

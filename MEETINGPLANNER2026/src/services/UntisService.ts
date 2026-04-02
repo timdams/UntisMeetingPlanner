@@ -213,6 +213,9 @@ class UntisService {
             for (const ge of day.gridEntries) {
                 if (!ge.duration || !ge.duration.start || !ge.duration.end) continue;
 
+                // Log raw grid entry to discover available fields
+                console.log('[UntisService] Raw gridEntry:', JSON.stringify(ge));
+
                 let startTime = ge.duration.start;
                 let endTime = ge.duration.end;
 
@@ -235,6 +238,31 @@ class UntisService {
                     endTime = `${isoDate}T${endTime}:00`;
                 }
 
+                // Extract subject name from position1 (type SUBJECT)
+                const subjects: string[] = [];
+                if (ge.position1 && Array.isArray(ge.position1)) {
+                    for (const p of ge.position1) {
+                        if (p.current?.type === 'SUBJECT' && p.current.displayName) {
+                            subjects.push(p.current.displayName);
+                        }
+                    }
+                }
+
+                // Extract class names from position1 (type CLASS)
+                const classNames: string[] = [];
+                if (ge.position1 && Array.isArray(ge.position1)) {
+                    for (const p of ge.position1) {
+                        if (p.current?.type === 'CLASS' && p.current.displayName) {
+                            classNames.push(p.current.displayName);
+                        }
+                    }
+                }
+
+                const lessonText = subjects.join(', ') || ge.lessonText || undefined;
+                const lessonInfo = classNames.length > 0
+                    ? classNames.join(', ')
+                    : ge.lessonInfo || undefined;
+
                 entries.push({
                     id: ge.ids ? ge.ids[0] : 0, // Use first ID or 0
                     start: startTime,
@@ -242,7 +270,9 @@ class UntisService {
                     classes: [], // Detailed mapping omitted for now
                     teachers: [],
                     rooms: [],
-                    subjects: []
+                    subjects: [],
+                    lessonText,
+                    lessonInfo,
                 });
             }
         }

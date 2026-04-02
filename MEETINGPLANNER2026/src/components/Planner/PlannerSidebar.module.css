@@ -171,6 +171,146 @@
     opacity: 1;
 }
 
+/* Save Group Row */
+.saveGroupRow {
+    display: flex;
+    gap: 0.5rem;
+    margin-top: 0.75rem;
+}
+
+.saveGroupInput {
+    flex: 1;
+    padding: 0.35rem 0.5rem;
+    background-color: var(--bg-color);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    color: var(--text-color);
+    font-size: 0.8rem;
+}
+
+.saveGroupInput:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 2px rgba(255, 0, 0, 0.2);
+}
+
+.saveGroupBtn {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.35rem 0.6rem;
+    background-color: var(--primary);
+    color: white;
+    border: none;
+    border-radius: 6px;
+    font-size: 0.8rem;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background-color 0.2s;
+}
+
+.saveGroupBtn:hover:not(:disabled) {
+    background-color: var(--primary-hover);
+}
+
+.saveGroupBtn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+/* Saved Groups List */
+.groupsList {
+    padding: 0.5rem 0.75rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+}
+
+.localStorageHint {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.35rem 0.6rem;
+    font-size: 0.7rem;
+    color: var(--text-color);
+    opacity: 0.5;
+    font-style: italic;
+}
+
+.groupItem {
+    display: flex;
+    align-items: center;
+    background-color: var(--bg-color);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    overflow: hidden;
+    transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.groupItem:hover {
+    border-color: var(--primary);
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+}
+
+.groupLoadBtn {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.6rem 0.5rem 0.6rem 0.75rem;
+    background: none;
+    border: none;
+    color: var(--text-color);
+    cursor: pointer;
+    text-align: left;
+    transition: background-color 0.15s;
+    min-width: 0;
+}
+
+.groupLoadBtn:hover {
+    background-color: var(--item-hover);
+}
+
+.groupName {
+    font-size: 0.85rem;
+    font-weight: 500;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.groupMeta {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 0.7rem;
+    color: var(--text-color);
+    opacity: 0.5;
+    flex-shrink: 0;
+    margin-left: 0.5rem;
+}
+
+.groupDeleteBtn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.55rem 0.6rem;
+    background: none;
+    border: none;
+    border-left: 1px solid var(--border-color);
+    color: var(--text-color);
+    opacity: 0.35;
+    cursor: pointer;
+    transition: opacity 0.2s, color 0.2s, background-color 0.15s;
+    flex-shrink: 0;
+}
+
+.groupDeleteBtn:hover {
+    opacity: 1;
+    color: #ef4444;
+    background-color: rgba(239, 68, 68, 0.08);
+}
+
 /* Mobile Specific Details */
 .mobileHeader {
     display: none;

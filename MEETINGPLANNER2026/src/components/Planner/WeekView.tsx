@@ -1,5 +1,12 @@
-import { FreeSlot, BlockedSlot } from '../../hooks/useMeetingPlanner';
+import { useState, useRef } from 'react';
+import { createPortal } from 'react-dom';
+import { FreeSlot, BlockedSlot, BlockedDetail } from '../../hooks/useMeetingPlanner';
 import styles from './WeekView.module.css';
+
+interface PopoverData {
+    details: BlockedDetail[];
+    rect: DOMRect;
+}
 
 interface Props {
     weekDate: Date;
@@ -10,6 +17,21 @@ interface Props {
 }
 
 export function WeekView({ weekDate, meetingOptions, blockedSlots, onWeekDateChange, onSlotClick }: Props) {
+    const [popover, setPopover] = useState<PopoverData | null>(null);
+    const hideTimeout = useRef<number | null>(null);
+
+    const showPopover = (details: BlockedDetail[], el: HTMLElement) => {
+        if (hideTimeout.current) { clearTimeout(hideTimeout.current); hideTimeout.current = null; }
+        setPopover({ details, rect: el.getBoundingClientRect() });
+    };
+
+    const scheduleHide = () => {
+        hideTimeout.current = window.setTimeout(() => setPopover(null), 200);
+    };
+
+    const cancelHide = () => {
+        if (hideTimeout.current) { clearTimeout(hideTimeout.current); hideTimeout.current = null; }
+    };
     // Helper to get Mon-Fri dates
     const getDays = () => {
         const d = new Date(weekDate);
@@ -107,19 +129,30 @@ export function WeekView({ weekDate, meetingOptions, blockedSlots, onWeekDateCha
                                 ))}
 
                                 {/* Blocked slots (behind free slots) */}
-                                {dayBlocked.map((bs, idx) => (
-                                    <div
-                                        key={`blocked-${idx}`}
-                                        className={styles.blockedSlot}
-                                        style={{
-                                            top: `${getPosition(bs.start)}%`,
-                                            height: `${getDuration(bs.start, bs.end)}%`
-                                        }}
-                                        title={bs.reason}
-                                    >
-                                        <span className={styles.blockedText}>{bs.reason}</span>
-                                    </div>
-                                ))}
+                                {dayBlocked.map((bs, idx) => {
+                                    const slotKey = `${dateStr}-blocked-${idx}`;
+                                    const details = bs.details && bs.details.length > 0 ? bs.details : undefined;
+
+                                    return (
+                                        <div
+                                            key={slotKey}
+                                            className={styles.blockedSlot}
+                                            style={{
+                                                top: `${getPosition(bs.start)}%`,
+                                                height: `${getDuration(bs.start, bs.end)}%`
+                                            }}
+                                        >
+                                            <span className={styles.blockedText}>{bs.reason}</span>
+                                            {details && (
+                                                <span
+                                                    className={styles.infoIcon}
+                                                    onMouseEnter={(e) => showPopover(details, e.currentTarget as HTMLElement)}
+                                                    onMouseLeave={scheduleHide}
+                                                >i</span>
+                                            )}
+                                        </div>
+                                    );
+                                })}
 
                                 {/* Free slots */}
                                 {slots.map((slot, idx) => (
@@ -141,6 +174,31 @@ export function WeekView({ weekDate, meetingOptions, blockedSlots, onWeekDateCha
                     );
                 })}
             </div>
+
+            {/* Popover portal - renders above everything */}
+            {popover && createPortal(
+                <div
+                    className={styles.blockedPopover}
+                    style={{
+                        top: popover.rect.bottom + 4,
+                        left: popover.rect.left + popover.rect.width / 2,
+                    }}
+                    onMouseEnter={cancelHide}
+                    onMouseLeave={scheduleHide}
+                >
+                    <div className={styles.popoverTitle}>Roosterdetails</div>
+                    {popover.details.map((d, di) => (
+                        <div key={di} className={styles.popoverEntry}>
+                            <strong>{d.name}</strong>
+                            <span className={styles.popoverTime}>{d.start} – {d.end}</span>
+                            {d.lessonText && <span>{d.lessonText}</span>}
+                            {d.lessonInfo && <span className={styles.popoverInfo}>{d.lessonInfo}</span>}
+                            {!d.lessonText && !d.lessonInfo && <span className={styles.popoverInfo}>bezet</span>}
+                        </div>
+                    ))}
+                </div>,
+                document.body
+            )}
 
             {/* Mobile List View */}
             <div className={styles.listContainer}>

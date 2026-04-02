@@ -42,6 +42,13 @@ export interface GridEntry {
     // ... other fields as needed
 }
 
+export interface SavedGroup {
+    id: string;
+    name: string;
+    teacherIds: number[];
+    classIds: number[];
+}
+
 export interface RosterEntry {
     id: number;
     start: string; // ISO DateTime
@@ -50,4 +57,6 @@ export interface RosterEntry {
     teachers: UntisResource[];
     rooms: UntisResource[];
     subjects: UntisResource[];
+    lessonText?: string;  // e.g. "Wiskunde 3A"
+    lessonInfo?: string;  // extra info from Untis
 }

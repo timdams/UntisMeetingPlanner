@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { Teacher, ClassGroup } from '../../types';
-import { Search, ChevronDown, ChevronRight, User, Users, X } from 'lucide-react';
+import { Teacher, ClassGroup, SavedGroup } from '../../types';
+import { Search, ChevronDown, ChevronRight, User, Users, X, Save, FolderOpen, Trash2, HardDrive } from 'lucide-react';
 import clsx from 'clsx';
 import styles from './PlannerSidebar.module.css';
 
@@ -13,17 +13,24 @@ interface Props {
     onToggleClass: (c: ClassGroup) => void;
     isOpenOnMobile: boolean;
     onCloseMobile: () => void;
+    savedGroups: SavedGroup[];
+    onSaveGroup: (name: string) => void;
+    onLoadGroup: (group: SavedGroup) => void;
+    onDeleteGroup: (id: string) => void;
 }
 
 export function PlannerSidebar({
     teachers, classes,
     selectedTeachers, selectedClasses,
     onToggleTeacher, onToggleClass,
-    isOpenOnMobile, onCloseMobile
+    isOpenOnMobile, onCloseMobile,
+    savedGroups, onSaveGroup, onLoadGroup, onDeleteGroup
 }: Props) {
     const [query, setQuery] = useState('');
     const [expandTeachers, setExpandTeachers] = useState(true);
     const [expandClasses, setExpandClasses] = useState(false);
+    const [expandGroups, setExpandGroups] = useState(true);
+    const [newGroupName, setNewGroupName] = useState('');
 
     const filteredTeachers = teachers.filter(t =>
         t.displayName.toLowerCase().includes(query.toLowerCase()) ||
@@ -81,10 +88,79 @@ export function PlannerSidebar({
                                 </button>
                             ))}
                         </div>
+                        <div className={styles.saveGroupRow}>
+                            <input
+                                type="text"
+                                placeholder="Naam voor deze groep..."
+                                value={newGroupName}
+                                onChange={e => setNewGroupName(e.target.value)}
+                                className={styles.saveGroupInput}
+                                onKeyDown={e => {
+                                    if (e.key === 'Enter' && newGroupName.trim()) {
+                                        onSaveGroup(newGroupName.trim());
+                                        setNewGroupName('');
+                                    }
+                                }}
+                            />
+                            <button
+                                className={styles.saveGroupBtn}
+                                disabled={!newGroupName.trim()}
+                                onClick={() => {
+                                    if (newGroupName.trim()) {
+                                        onSaveGroup(newGroupName.trim());
+                                        setNewGroupName('');
+                                    }
+                                }}
+                                title="Selectie bewaren"
+                            >
+                                <Save size={14} />
+                                Bewaren
+                            </button>
+                        </div>
                     </div>
                 )}
 
                 <div className={styles.scrollArea}>
+                    {savedGroups.length > 0 && (
+                        <div className={styles.section}>
+                            <button className={styles.sectionHeader} onClick={() => setExpandGroups(!expandGroups)}>
+                                {expandGroups ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                                <FolderOpen size={16} className="mr-2" />
+                                Bewaarde groepen ({savedGroups.length})
+                            </button>
+                            {expandGroups && (
+                                <div className={styles.groupsList}>
+                                    <div className={styles.localStorageHint}>
+                                        <HardDrive size={12} />
+                                        Enkel bewaard in deze browser
+                                    </div>
+                                    {savedGroups.map(g => (
+                                        <div key={g.id} className={styles.groupItem}>
+                                            <button
+                                                className={styles.groupLoadBtn}
+                                                onClick={() => onLoadGroup(g)}
+                                                title={`${g.teacherIds.length} leerkracht(en), ${g.classIds.length} klas(sen)`}
+                                            >
+                                                <span className={styles.groupName}>{g.name}</span>
+                                                <span className={styles.groupMeta}>
+                                                    {g.teacherIds.length > 0 && <><User size={11} /> {g.teacherIds.length}</>}
+                                                    {g.classIds.length > 0 && <><Users size={11} /> {g.classIds.length}</>}
+                                                </span>
+                                            </button>
+                                            <button
+                                                className={styles.groupDeleteBtn}
+                                                onClick={() => onDeleteGroup(g.id)}
+                                                title="Groep verwijderen"
+                                            >
+                                                <Trash2 size={14} />
+                                            </button>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    )}
+
                     <div className={styles.section}>
                         <button className={styles.sectionHeader} onClick={() => setExpandTeachers(!expandTeachers)}>
                             {expandTeachers ? <ChevronDown size={16} /> : <ChevronRight size={16} />}

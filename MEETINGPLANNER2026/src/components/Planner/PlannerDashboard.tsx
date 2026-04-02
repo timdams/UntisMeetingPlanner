@@ -1,10 +1,11 @@
 import { useMeetingPlanner, FreeSlot } from '../../hooks/useMeetingPlanner';
+import { useSavedGroups } from '../../hooks/useSavedGroups';
 import { PlannerSidebar } from './PlannerSidebar';
 import { WeekView } from './WeekView';
 import { Loader2, Filter, Info } from 'lucide-react';
 import styles from './PlannerDashboard.module.css';
 import { useState } from 'react';
-import { Teacher } from '../../types';
+import { Teacher, SavedGroup } from '../../types';
 
 function generateIcs(slot: FreeSlot, teachers: Teacher[]): string {
     const uid = `meeting-${slot.day}-${slot.start.replace(':', '')}-${Date.now()}@untisMeetingPlanner`;
@@ -49,7 +50,18 @@ function downloadIcs(slot: FreeSlot, teachers: Teacher[]) {
 
 export function PlannerDashboard() {
     const planner = useMeetingPlanner();
+    const { groups, saveGroup, deleteGroup } = useSavedGroups();
     const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+
+    const handleSaveGroup = (name: string) => {
+        saveGroup(name, planner.selectedTeachers, planner.selectedClasses);
+    };
+
+    const handleLoadGroup = (group: SavedGroup) => {
+        const teachers = planner.teachers.filter(t => group.teacherIds.includes(t.id));
+        const classes = planner.classes.filter(c => group.classIds.includes(c.id));
+        planner.setSelection(teachers, classes);
+    };
 
     return (
         <div className={styles.dashboard}>
@@ -62,6 +74,10 @@ export function PlannerDashboard() {
                 onToggleClass={planner.toggleClass}
                 isOpenOnMobile={isMobileSidebarOpen}
                 onCloseMobile={() => setIsMobileSidebarOpen(false)}
+                savedGroups={groups}
+                onSaveGroup={handleSaveGroup}
+                onLoadGroup={handleLoadGroup}
+                onDeleteGroup={deleteGroup}
             />
 
             <div className={styles.main}>
