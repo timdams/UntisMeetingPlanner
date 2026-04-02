@@ -238,20 +238,16 @@ class UntisService {
                     endTime = `${isoDate}T${endTime}:00`;
                 }
 
-                // Extract subject name from position1 (type SUBJECT)
+                // Scan all position fields for SUBJECT and CLASS entries
                 const subjects: string[] = [];
-                if (ge.position1 && Array.isArray(ge.position1)) {
-                    for (const p of ge.position1) {
+                const classNames: string[] = [];
+                for (const posKey of ['position1', 'position2', 'position3', 'position4', 'position5']) {
+                    const pos = ge[posKey];
+                    if (!pos || !Array.isArray(pos)) continue;
+                    for (const p of pos) {
                         if (p.current?.type === 'SUBJECT' && p.current.displayName) {
                             subjects.push(p.current.displayName);
                         }
-                    }
-                }
-
-                // Extract class names from position1 (type CLASS)
-                const classNames: string[] = [];
-                if (ge.position1 && Array.isArray(ge.position1)) {
-                    for (const p of ge.position1) {
                         if (p.current?.type === 'CLASS' && p.current.displayName) {
                             classNames.push(p.current.displayName);
                         }
