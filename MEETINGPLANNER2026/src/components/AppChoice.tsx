@@ -33,9 +33,8 @@ export function AppChoice({ onSelect }: AppChoiceProps) {
                         <Route size={40} className={styles.icon} />
                         <div className={styles.optionTitle}>Traject Planner</div>
                         <div className={styles.optionDesc}>
-                            Binnenkort beschikbaar.
+                            Stel een individueel studentrooster samen uit OLODs van verschillende klasgroepen.
                         </div>
-                        <span className={styles.badge}>Coming soon</span>
                     </button>
                 </div>
             </div>

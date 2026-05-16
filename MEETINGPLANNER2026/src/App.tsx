@@ -3,6 +3,7 @@ import "./App.css";
 import { Login } from "./components/Login";
 import { AppChoice } from "./components/AppChoice";
 import { PlannerDashboard } from "./components/Planner/PlannerDashboard";
+import { TrajectPlanner } from "./components/Traject/TrajectPlanner";
 
 type View = 'choice' | 'meeting' | 'traject';
 
@@ -24,13 +25,7 @@ function App() {
         <AppChoice onSelect={(choice) => setView(choice)} />
       )}
       {view === 'meeting' && <PlannerDashboard />}
-      {view === 'traject' && (
-        <div style={{ padding: '2rem', textAlign: 'center' }}>
-          <h2>Traject Planner</h2>
-          <p>Deze functie wordt later toegevoegd.</p>
-          <button onClick={() => setView('choice')}>Terug</button>
-        </div>
-      )}
+      {view === 'traject' && <TrajectPlanner onBack={() => setView('choice')} />}
     </div>
   );
 }

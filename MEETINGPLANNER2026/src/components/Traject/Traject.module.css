@@ -1,0 +1,564 @@
+:global(.animate-spin) {
+    animation: trajectSpin 1s linear infinite;
+}
+
+@keyframes trajectSpin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+/* ===== Layout ===== */
+.page {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    background-color: var(--bg-color);
+}
+
+.topbar {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid var(--border-color);
+    background-color: var(--secondary);
+    flex-shrink: 0;
+}
+
+.topbarTitle {
+    font-weight: 700;
+    font-size: 1.05rem;
+    color: var(--text-color);
+}
+
+.topbarSpacer {
+    flex: 1;
+}
+
+.tabs {
+    display: flex;
+    gap: 0.25rem;
+}
+
+.tab {
+    background: transparent;
+    border: 1px solid transparent;
+    color: var(--text-color);
+    padding: 0.4rem 0.8rem;
+    border-radius: var(--border-radius);
+    font-weight: 500;
+    cursor: pointer;
+}
+
+.tab:hover {
+    background-color: var(--item-hover);
+}
+
+.tabActive {
+    background-color: var(--bg-color);
+    border-color: var(--border-color);
+    color: var(--primary);
+}
+
+.toolbarBtn {
+    background-color: var(--bg-color);
+    border: 1px solid var(--border-color);
+    color: var(--text-color);
+    padding: 0.4rem 0.8rem;
+    border-radius: var(--border-radius);
+    font-weight: 500;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+.toolbarBtn:hover {
+    border-color: var(--primary);
+}
+
+.toolbarBtnDanger {
+    color: var(--primary);
+    border-color: rgba(255, 0, 0, 0.3);
+}
+
+.toolbarBtnDanger:hover {
+    background-color: var(--selected-bg);
+}
+
+/* ===== Settings screen ===== */
+.settings {
+    padding: 1.5rem;
+    overflow: auto;
+    flex: 1;
+}
+
+.settingsSection {
+    margin-bottom: 2rem;
+}
+
+.settingsTitle {
+    font-size: 1.1rem;
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+    color: var(--text-color);
+}
+
+.settingsHint {
+    font-size: 0.85rem;
+    color: #64748b;
+    margin-bottom: 0.75rem;
+}
+
+.dateRow {
+    display: flex;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
+.dateField {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.dateField label {
+    font-size: 0.85rem;
+    color: var(--text-color);
+}
+
+.searchInput {
+    width: 100%;
+    max-width: 380px;
+    margin-bottom: 0.75rem;
+}
+
+.klasList {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 0.4rem;
+    max-height: 60vh;
+    overflow: auto;
+    padding: 0.5rem;
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    background-color: var(--bg-color);
+}
+
+.klasRow {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.35rem 0.5rem;
+    border-radius: 6px;
+    cursor: pointer;
+    user-select: none;
+}
+
+.klasRow:hover {
+    background-color: var(--item-hover);
+}
+
+.klasRowChecked {
+    background-color: var(--selected-bg);
+}
+
+/* ===== Workbench ===== */
+.workbench {
+    display: grid;
+    grid-template-columns: 200px 1fr 460px;
+    gap: 0.75rem;
+    padding: 0.75rem;
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.panel {
+    background-color: var(--bg-color);
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.panelHeader {
+    padding: 0.5rem 0.75rem;
+    border-bottom: 1px solid var(--border-color);
+    font-weight: 600;
+    font-size: 0.9rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    background-color: var(--secondary);
+}
+
+.panelBody {
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
+    padding: 0.5rem;
+}
+
+.panelBodyFlex {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+/* Klasgroep selector list */
+.selectorItem {
+    display: block;
+    width: 100%;
+    text-align: left;
+    border: 1px solid transparent;
+    background: transparent;
+    padding: 0.4rem 0.5rem;
+    border-radius: 6px;
+    cursor: pointer;
+    margin-bottom: 0.15rem;
+    color: var(--text-color);
+    font-size: 0.9rem;
+}
+
+.selectorItem:hover {
+    background-color: var(--item-hover);
+}
+
+.selectorItemActive {
+    background-color: var(--selected-bg);
+    border-color: var(--selected-border);
+    color: var(--primary);
+    font-weight: 600;
+}
+
+.emptyState {
+    padding: 1rem;
+    color: #64748b;
+    font-size: 0.9rem;
+    text-align: center;
+}
+
+/* ===== Rooster grid (panel B) ===== */
+.weekNav {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.4rem 0.5rem;
+    border-bottom: 1px solid var(--border-color);
+    background-color: var(--bg-color);
+}
+
+.weekNav button {
+    padding: 0.25rem 0.6rem;
+    font-size: 0.85rem;
+}
+
+.weekNavTitle {
+    font-weight: 600;
+    font-size: 0.9rem;
+}
+
+.roosterGrid {
+    flex: 1;
+    min-height: 0;
+    display: grid;
+    grid-template-columns: 50px repeat(5, 1fr);
+    grid-template-rows: 28px 1fr;
+    overflow: hidden;
+}
+
+.roosterHeader {
+    background-color: var(--secondary);
+    border-bottom: 1px solid var(--border-color);
+    border-right: 1px solid var(--border-color);
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-align: center;
+    padding: 4px 2px;
+    color: var(--text-color);
+}
+
+.roosterTimeCol {
+    border-right: 1px solid var(--border-color);
+    position: relative;
+}
+
+.roosterDayCol {
+    border-right: 1px solid var(--border-color);
+    position: relative;
+}
+
+.roosterTimeLabel {
+    position: absolute;
+    left: 4px;
+    font-size: 0.7rem;
+    color: #64748b;
+    transform: translateY(-50%);
+}
+
+.roosterGridLine {
+    position: absolute;
+    left: 0;
+    right: 0;
+    border-top: 1px dashed #e2e8f0;
+    pointer-events: none;
+}
+
+.roosterBlok {
+    position: absolute;
+    left: 2px;
+    right: 2px;
+    border-radius: 4px;
+    padding: 2px 4px;
+    font-size: 0.7rem;
+    line-height: 1.15;
+    color: white;
+    cursor: pointer;
+    overflow: hidden;
+    border: 2px solid transparent;
+    box-sizing: border-box;
+    background-color: #94a3b8;
+}
+
+.roosterBlokSelected {
+    border-color: #111827;
+    box-shadow: 0 0 0 1px white inset;
+}
+
+.roosterBlokTime {
+    font-weight: 600;
+    font-size: 0.65rem;
+    opacity: 0.9;
+}
+
+/* ===== Overzicht (panel C) ===== */
+.overzichtScroll {
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
+    padding: 0.5rem;
+}
+
+.weekRow {
+    display: grid;
+    grid-template-columns: 60px 1fr;
+    gap: 0.4rem;
+    margin-bottom: 0.6rem;
+    padding-bottom: 0.6rem;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.weekLabel {
+    font-size: 0.7rem;
+    color: var(--text-color);
+    font-weight: 600;
+    padding-top: 0.2rem;
+}
+
+.weekLabel small {
+    display: block;
+    color: #64748b;
+    font-weight: 400;
+}
+
+.miniWeek {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 1px;
+    background-color: var(--border-color);
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    overflow: hidden;
+    height: 120px;
+}
+
+.miniDay {
+    background-color: var(--bg-color);
+    position: relative;
+}
+
+.miniDayHeader {
+    font-size: 0.6rem;
+    text-align: center;
+    padding: 1px 0;
+    background-color: var(--secondary);
+    color: var(--text-color);
+    border-bottom: 1px solid var(--border-color);
+    height: 12px;
+    line-height: 11px;
+}
+
+.miniDayBody {
+    position: absolute;
+    top: 13px;
+    bottom: 0;
+    left: 0;
+    right: 0;
+}
+
+.miniBlok {
+    position: absolute;
+    left: 1px;
+    right: 1px;
+    border-radius: 2px;
+    box-sizing: border-box;
+}
+
+.miniBlokConflict {
+    outline: 2px solid #DC2626;
+    outline-offset: -1px;
+    z-index: 2;
+}
+
+/* Tooltip */
+.miniBlok[data-tip]:hover::after {
+    content: attr(data-tip);
+    position: fixed;
+    background-color: #111827;
+    color: white;
+    font-size: 0.75rem;
+    padding: 4px 8px;
+    border-radius: 4px;
+    white-space: pre-line;
+    pointer-events: none;
+    z-index: 100;
+    max-width: 240px;
+    transform: translate(8px, 8px);
+}
+
+/* Conflicts panel */
+.conflicts {
+    border-top: 1px solid var(--border-color);
+    background-color: var(--secondary);
+}
+
+.conflictsHeader {
+    padding: 0.5rem 0.75rem;
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 0.85rem;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+.conflictsHeaderError {
+    color: var(--primary);
+}
+
+.conflictsList {
+    max-height: 200px;
+    overflow: auto;
+    padding: 0 0.75rem 0.75rem;
+}
+
+.conflictItem {
+    background-color: var(--bg-color);
+    border: 1px solid var(--border-color);
+    border-left: 3px solid var(--primary);
+    padding: 0.5rem;
+    border-radius: 4px;
+    font-size: 0.8rem;
+    margin-bottom: 0.4rem;
+}
+
+.conflictItem > div {
+    padding: 1px 0;
+}
+
+/* Legend / status row */
+.legendRow {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    padding: 0.5rem 0.75rem;
+    border-top: 1px solid var(--border-color);
+    background-color: var(--secondary);
+}
+
+.legendChip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    font-size: 0.75rem;
+    color: var(--text-color);
+}
+
+.legendSwatch {
+    width: 12px;
+    height: 12px;
+    border-radius: 3px;
+}
+
+/* ===== Print ===== */
+@media print {
+    body {
+        background-color: white !important;
+    }
+    .topbar,
+    .workbench > .panel:not(:last-child),
+    .weekNav,
+    .conflictsHeader,
+    .legendRow {
+        display: none !important;
+    }
+    .page {
+        height: auto;
+        display: block;
+    }
+    .workbench {
+        display: block;
+        padding: 0;
+    }
+    .panel {
+        border: none;
+    }
+    .panelHeader {
+        display: none;
+    }
+    .overzichtScroll {
+        overflow: visible;
+    }
+    .weekRow {
+        page-break-inside: avoid;
+    }
+    .miniBlok {
+        print-color-adjust: exact;
+        -webkit-print-color-adjust: exact;
+    }
+    .printOnly {
+        display: block !important;
+    }
+}
+
+.printOnly {
+    display: none;
+}
+
+.printHeader {
+    padding: 1rem;
+}
+
+.printHeader h1 {
+    margin: 0;
+    font-size: 1.4rem;
+}
+
+.printLegend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    padding: 0.5rem 1rem;
+    margin-top: 1rem;
+    border-top: 1px solid #cbd5e1;
+}
+
+.printConflicts {
+    padding: 0.5rem 1rem;
+    page-break-before: always;
+}
