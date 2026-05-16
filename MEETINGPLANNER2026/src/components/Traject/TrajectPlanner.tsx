@@ -6,7 +6,9 @@ import { TrajectSettingsView } from './TrajectSettings';
 import { KlasgroepSelector } from './KlasgroepSelector';
 import { KlasgroepRooster } from './KlasgroepRooster';
 import { StudentOverzicht } from './StudentOverzicht';
+import { TrajectPrintView } from './TrajectPrintView';
 import { parseIsoDate } from './dateUtils';
+import { backupFilename, buildBackup, downloadBackup, parseBackup } from './trajectBackup';
 
 type Tab = 'werkblad' | 'instellingen';
 
@@ -15,9 +17,10 @@ interface Props {
 }
 
 export function TrajectPlanner({ onBack }: Props) {
-    const { settings, toggleKlasgroep, setSemesterStart, setSemesterEind } = useTrajectSettings();
-    const { traject, toggle, isSelected, reset } = useStudentTraject();
-    const { ensureColor, colorOf } = useKleurMap();
+    const { settings, toggleKlasgroep, setSemesterStart, setSemesterEind, replaceSettings } =
+        useTrajectSettings();
+    const { traject, toggle, isSelected, reset, replaceTraject } = useStudentTraject();
+    const { map: kleurmap, ensureColor, colorOf, replaceMap } = useKleurMap();
 
     const [tab, setTab] = useState<Tab>(
         settings.mijnOpleidingKlasgroepen.length === 0 ? 'instellingen' : 'werkblad'
@@ -49,9 +52,32 @@ export function TrajectPlanner({ onBack }: Props) {
         window.print();
     };
 
+    const handleExport = () => {
+        const backup = buildBackup(settings, traject, kleurmap);
+        downloadBackup(backupFilename(), backup);
+    };
+
+    const handleImport = async (file: File): Promise<boolean> => {
+        const text = await file.text();
+        const backup = parseBackup(text);
+        const confirmMsg =
+            traject.length > 0 || settings.mijnOpleidingKlasgroepen.length > 0
+                ? 'Importeren overschrijft je huidige instellingen, traject en kleurmap. Doorgaan?'
+                : 'Back-up importeren?';
+        if (!window.confirm(confirmMsg)) {
+            return false;
+        }
+        replaceSettings(backup.settings);
+        replaceTraject(backup.traject);
+        replaceMap(backup.kleurmap);
+        return true;
+    };
+
     const initialWeek = parseIsoDate(settings.semesterStart);
 
     return (
+      <>
+        <div className={styles.screenRoot}>
         <div className={styles.page}>
             <div className={styles.topbar}>
                 <button className={styles.toolbarBtn} onClick={onBack}>
@@ -94,6 +120,8 @@ export function TrajectPlanner({ onBack }: Props) {
                     onToggleKlasgroep={toggleKlasgroep}
                     onSemesterStartChange={setSemesterStart}
                     onSemesterEindChange={setSemesterEind}
+                    onExport={handleExport}
+                    onImport={handleImport}
                 />
             ) : (
                 <div className={styles.workbench}>
@@ -120,5 +148,8 @@ export function TrajectPlanner({ onBack }: Props) {
                 </div>
             )}
         </div>
+        </div>
+        <TrajectPrintView traject={traject} settings={settings} />
+      </>
     );
 }

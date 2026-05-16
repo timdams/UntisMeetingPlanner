@@ -170,15 +170,6 @@ export function StudentOverzicht({
                 </span>
             </div>
 
-            {/* Print-only header */}
-            <div className={`${styles.printOnly} ${styles.printHeader}`}>
-                <h1>Studenttraject</h1>
-                <div>
-                    Semester {formatDateBE(start)} – {formatDateBE(eind)}
-                    {' · '}Afgedrukt op {new Date().toLocaleDateString('nl-BE')}
-                </div>
-            </div>
-
             <div className={styles.panelBodyFlex}>
                 {error && <div className={styles.emptyState}>{error}</div>}
 
@@ -284,24 +275,6 @@ export function StudentOverzicht({
                 </div>
             )}
 
-            {/* Print-only: conflict list + legend */}
-            {conflicts.length > 0 && (
-                <div className={`${styles.printOnly} ${styles.printConflicts}`}>
-                    <h2>Conflicten ({conflicts.length})</h2>
-                    {conflicts.map((c, i) => (
-                        <div key={i} className={styles.conflictItem}>
-                            <div>
-                                <strong>{c.a.olodNaam}</strong> ({c.a.klasgroep}) ·{' '}
-                                {formatDateTime(c.a.start)} – {formatTime(c.a.eind)}
-                            </div>
-                            <div>
-                                <strong>{c.b.olodNaam}</strong> ({c.b.klasgroep}) ·{' '}
-                                {formatDateTime(c.b.start)} – {formatTime(c.b.eind)}
-                            </div>
-                        </div>
-                    ))}
-                </div>
-            )}
         </div>
     );
 }

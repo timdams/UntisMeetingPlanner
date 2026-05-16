@@ -67,7 +67,11 @@ export function useTrajectSettings() {
         setSettings(s => ({ ...s, semesterEind: iso }));
     }, []);
 
-    return { settings, toggleKlasgroep, setSemesterStart, setSemesterEind };
+    const replaceSettings = useCallback((next: TrajectSettings) => {
+        setSettings(next);
+    }, []);
+
+    return { settings, toggleKlasgroep, setSemesterStart, setSemesterEind, replaceSettings };
 }
 
 function sameSelectie(a: OLODSelectie, b: OLODSelectie) {
@@ -97,7 +101,11 @@ export function useStudentTraject() {
 
     const reset = useCallback(() => setTraject([]), []);
 
-    return { traject, toggle, isSelected, reset };
+    const replaceTraject = useCallback((next: StudentTraject) => {
+        setTraject(next);
+    }, []);
+
+    return { traject, toggle, isSelected, reset, replaceTraject };
 }
 
 export function useKleurMap() {
@@ -120,5 +128,9 @@ export function useKleurMap() {
         return map[olodNaam] ?? PALETTE[0];
     }, [map]);
 
-    return { map, ensureColor, colorOf };
+    const replaceMap = useCallback((next: KleurMap) => {
+        setMap(next);
+    }, []);
+
+    return { map, ensureColor, colorOf, replaceMap };
 }

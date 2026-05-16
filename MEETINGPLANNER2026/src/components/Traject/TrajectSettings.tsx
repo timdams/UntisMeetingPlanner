@@ -1,14 +1,16 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { TrajectSettings } from './types';
 import { trajectUntisService } from './trajectService';
 import styles from './Traject.module.css';
-import { Loader2 } from 'lucide-react';
+import { AlertTriangle, Download, Loader2, Upload } from 'lucide-react';
 
 interface Props {
     settings: TrajectSettings;
     onToggleKlasgroep: (k: string) => void;
     onSemesterStartChange: (iso: string) => void;
     onSemesterEindChange: (iso: string) => void;
+    onExport: () => void;
+    onImport: (file: File) => Promise<boolean>;
 }
 
 export function TrajectSettingsView({
@@ -16,11 +18,15 @@ export function TrajectSettingsView({
     onToggleKlasgroep,
     onSemesterStartChange,
     onSemesterEindChange,
+    onExport,
+    onImport,
 }: Props) {
     const [allKlasgroepen, setAllKlasgroepen] = useState<string[]>([]);
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [filter, setFilter] = useState('');
+    const [importMsg, setImportMsg] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
+    const fileInputRef = useRef<HTMLInputElement | null>(null);
 
     useEffect(() => {
         setBusy(true);
@@ -35,8 +41,73 @@ export function TrajectSettingsView({
     const f = filter.trim().toLowerCase();
     const visible = f ? allKlasgroepen.filter(k => k.toLowerCase().includes(f)) : allKlasgroepen;
 
+    const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        e.target.value = '';
+        if (!file) return;
+        setImportMsg(null);
+        try {
+            const applied = await onImport(file);
+            if (applied) {
+                setImportMsg({ kind: 'ok', text: `Back-up geïmporteerd uit "${file.name}".` });
+            }
+        } catch (err) {
+            const msg = err instanceof Error ? err.message : 'Onbekende fout bij importeren.';
+            setImportMsg({ kind: 'err', text: msg });
+        }
+    };
+
     return (
         <div className={styles.settings}>
+            <div className={styles.backupWarning}>
+                <AlertTriangle size={18} />
+                <div>
+                    <strong>Bewaar je back-up regelmatig.</strong> Alle instellingen, het
+                    studenttraject en de OLOD-kleurmap worden enkel in <em>deze browser</em>{' '}
+                    bijgehouden (localStorage). Bij het wissen van je browsergegevens, een ander
+                    toestel of een andere gebruiker is alles weg. Exporteer hieronder een
+                    back-upbestand en bewaar het veilig.
+                </div>
+            </div>
+
+            <div className={styles.settingsSection}>
+                <div className={styles.settingsTitle}>Back-up & herstel</div>
+                <div className={styles.settingsHint}>
+                    Het JSON-bestand bevat de semesterperiode, de geselecteerde klasgroepen,
+                    het volledige studenttraject en de kleurmap. Importeren overschrijft de
+                    huidige gegevens.
+                </div>
+                <div className={styles.backupRow}>
+                    <button className={styles.toolbarBtn} onClick={onExport}>
+                        <Download size={14} /> Exporteer back-up
+                    </button>
+                    <button
+                        className={styles.toolbarBtn}
+                        onClick={() => fileInputRef.current?.click()}
+                    >
+                        <Upload size={14} /> Importeer back-up...
+                    </button>
+                    <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept="application/json,.json"
+                        onChange={handleFileChange}
+                        style={{ display: 'none' }}
+                    />
+                </div>
+                {importMsg && (
+                    <div
+                        className={
+                            importMsg.kind === 'ok'
+                                ? styles.importMsgOk
+                                : styles.importMsgErr
+                        }
+                    >
+                        {importMsg.text}
+                    </div>
+                )}
+            </div>
+
             <div className={styles.settingsSection}>
                 <div className={styles.settingsTitle}>Semesterperiode</div>
                 <div className={styles.settingsHint}>
