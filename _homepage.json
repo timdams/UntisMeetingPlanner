@@ -1,0 +1,43 @@
+{
+  "name": "UntisMeetingPlanner",
+  "tech": "TypeScript",
+  "techDetail": "TypeScript / React 19.1.0 / Vite",
+  "branch": "main",
+  "lastCommit": "2026-04-02",
+  "lastCommitMsg": "bezetreden",
+  "lastCommitHash": "07328c1",
+  "hasGit": true,
+  "remote": "https://github.com/timdams/UntisMeetingPlanner",
+  "tag": "beta",
+  "recentCommits": [
+    {
+      "hash": "07328c1",
+      "msg": "bezetreden"
+    },
+    {
+      "hash": "0c314eb",
+      "msg": "groepen meer info"
+    },
+    {
+      "hash": "36807bc",
+      "msg": "cloudflare howto"
+    },
+    {
+      "hash": "d69b179",
+      "msg": "alle logins"
+    },
+    {
+      "hash": "a20e0a5",
+      "msg": "arceerde waarom niet beschikbaar"
+    }
+  ],
+  "workspace": null,
+  "noteFiles": [],
+  "path": "UntisMeetingPlanner",
+  "desc": "Deze applicatie is ontworpen om eenvoudig een vrij meetingmoment te zoeken in de rooster van 1 of meerdere collega's en klasgroepen. De typische usecase hiervan is studentenparticipatie vergaderingen ",
+  "category": "Roostering",
+  "status": "active",
+  "tags": [],
+  "aiSummary": null,
+  "customNotes": null
+}
