@@ -1,12 +1,12 @@
 import { useState } from 'react';
-import { Printer, RotateCcw, Settings as SettingsIcon, LayoutGrid, ArrowLeft, Palette } from 'lucide-react';
+import { Printer, RotateCcw, Settings as SettingsIcon, LayoutGrid, ArrowLeft, Palette, Copy, Check } from 'lucide-react';
 import styles from './Traject.module.css';
 import { useKleurMap, useStudentTraject, useTrajectSettings } from './hooks';
 import { TrajectSettingsView } from './TrajectSettings';
 import { KlasgroepSelector } from './KlasgroepSelector';
 import { KlasgroepRooster } from './KlasgroepRooster';
 import { StudentOverzicht } from './StudentOverzicht';
-import { TrajectPrintView } from './TrajectPrintView';
+import { TrajectPrintView, buildTrajectClipboardText } from './TrajectPrintView';
 import { parseIsoDate } from './dateUtils';
 import { backupFilename, buildBackup, downloadBackup, parseBackup } from './trajectBackup';
 
@@ -28,6 +28,7 @@ export function TrajectPlanner({ onBack }: Props) {
     const [actieveKlasgroep, setActieveKlasgroep] = useState<string | null>(
         settings.mijnOpleidingKlasgroepen[0] ?? null
     );
+    const [copied, setCopied] = useState(false);
 
     // Keep active klasgroep valid when the shortlist changes
     if (
@@ -59,6 +60,27 @@ export function TrajectPlanner({ onBack }: Props) {
 
     const handlePrint = () => {
         window.print();
+    };
+
+    const handleCopy = async () => {
+        const text = buildTrajectClipboardText(traject, settings);
+        try {
+            await navigator.clipboard.writeText(text);
+        } catch {
+            const ta = document.createElement('textarea');
+            ta.value = text;
+            ta.style.position = 'fixed';
+            ta.style.left = '-9999px';
+            document.body.appendChild(ta);
+            ta.select();
+            try {
+                document.execCommand('copy');
+            } finally {
+                document.body.removeChild(ta);
+            }
+        }
+        setCopied(true);
+        window.setTimeout(() => setCopied(false), 1500);
     };
 
     const handleExport = () => {
@@ -123,8 +145,18 @@ export function TrajectPlanner({ onBack }: Props) {
                     onClick={handleResetColors}
                     disabled={Object.keys(kleurmap).length === 0}
                     title="Wis de opgeslagen kleurmap en wijs nieuwe unieke kleuren toe"
+                    style={{ display: 'none' }}
                 >
                     <Palette size={14} /> Reset kleuren
+                </button>
+                <button
+                    className={styles.toolbarBtn}
+                    onClick={handleCopy}
+                    disabled={traject.length === 0}
+                    title="Kopieer het studenttraject (zoals het wordt afgedrukt) naar het klembord"
+                >
+                    {copied ? <Check size={14} /> : <Copy size={14} />}
+                    {copied ? 'Gekopieerd!' : 'Kopieer naar klembord'}
                 </button>
                 <button className={styles.toolbarBtn} onClick={handlePrint}>
                     <Printer size={14} /> Print / PDF
@@ -146,6 +178,9 @@ export function TrajectPlanner({ onBack }: Props) {
                         klasgroepen={settings.mijnOpleidingKlasgroepen}
                         actief={actieveKlasgroep}
                         onSelect={setActieveKlasgroep}
+                        traject={traject}
+                        colorOf={colorOf}
+                        onRemoveOlod={toggle}
                     />
                     <KlasgroepRooster
                         klasgroep={actieveKlasgroep}

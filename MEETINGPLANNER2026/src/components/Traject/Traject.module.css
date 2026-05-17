@@ -283,6 +283,123 @@
     font-weight: 600;
 }
 
+/* Klasgroep selector — split panel: klasgroepen list on top, geselecteerde OLODs below */
+.selectorList {
+    flex: 1 1 40%;
+    min-height: 0;
+    overflow: auto;
+    padding: 0.5rem;
+}
+
+.olodListHeader {
+    padding: 0.4rem 0.6rem;
+    border-top: 1px solid var(--border-color);
+    border-bottom: 1px solid var(--border-color);
+    background-color: var(--secondary);
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--text-color);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.4rem;
+}
+
+.olodListCount {
+    background-color: var(--bg-color);
+    border: 1px solid var(--border-color);
+    border-radius: 999px;
+    padding: 0 0.45rem;
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: var(--text-color);
+    min-width: 18px;
+    text-align: center;
+}
+
+.olodList {
+    flex: 1 1 60%;
+    min-height: 0;
+    overflow: auto;
+    padding: 0.4rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.olodListEmpty {
+    color: #64748b;
+    font-size: 0.78rem;
+    padding: 0.5rem;
+    text-align: center;
+}
+
+.olodListItem {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.3rem 0.35rem;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    background-color: var(--bg-color);
+    min-width: 0;
+}
+
+.olodListItem:hover {
+    border-color: var(--primary);
+}
+
+.olodListSwatch {
+    flex-shrink: 0;
+    width: 10px;
+    height: 10px;
+    border-radius: 3px;
+}
+
+.olodListText {
+    flex: 1;
+    min-width: 0;
+    line-height: 1.2;
+}
+
+.olodListName {
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--text-color);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.olodListKlas {
+    font-size: 0.7rem;
+    color: #64748b;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.olodListRemove {
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    padding: 0;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 4px;
+    color: #64748b;
+    cursor: pointer;
+}
+
+.olodListRemove:hover {
+    background-color: var(--selected-bg);
+    color: var(--primary);
+    border-color: rgba(255, 0, 0, 0.3);
+}
+
 .emptyState {
     padding: 1rem;
     color: #64748b;
