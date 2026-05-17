@@ -37,6 +37,21 @@ export function AppChoice({ onSelect }: AppChoiceProps) {
                         </div>
                     </button>
                 </div>
+
+                <div className={styles.bmcWrapper}>
+                    <p className={styles.bmcNote}>
+                       Deze tools bouw ik in mijn vrije tijd met behulp van AI. Heb je er iets aan? Met een kleine bijdrage help je mijn AI-abonnement betalen, zodat er nieuwe tools kunnen blijven volgen. Bedankt! 🙏
+                    </p>
+                    <a
+                        href="https://www.buymeacoffee.com/timdams"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className={styles.bmcButton}
+                    >
+                        <span className={styles.bmcEmoji}>🥤</span>
+                        <span>Buy me a fristi</span>
+                    </a>
+                </div>
             </div>
         </div>
     );
