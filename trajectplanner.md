@@ -26,7 +26,7 @@ Geïmplementeerd in [MEETINGPLANNER2026/src/components/Traject/types.ts](MEETING
 type Lesblok = {
   klasgroep: string;        // bv. "2 TI A" (displayName uit Untis)
   olodNaam: string;         // bv. "Web Development" (eerste subject uit lessonText)
-  type: "theorie" | "lab";  // heuristisch uit naam: /\blab(o)?\b/i → "lab"
+  type?: string;            // ruwe Untis INFO-tag, bv. "Theorie", "Labo"; undefined als onbekend
   start: Date;
   eind: Date;
   lokaal?: string;          // momenteel niet gevuld door de adapter

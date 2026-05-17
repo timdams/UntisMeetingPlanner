@@ -1,9 +1,7 @@
-export type LesblokType = "theorie" | "lab";
-
 export interface Lesblok {
     klasgroep: string;
     olodNaam: string;
-    type: LesblokType;
+    type?: string;        // ruwe INFO-tag uit Untis, bv. "Theorie", "Labo"; undefined als onbekend
     start: Date;
     eind: Date;
     lokaal?: string;

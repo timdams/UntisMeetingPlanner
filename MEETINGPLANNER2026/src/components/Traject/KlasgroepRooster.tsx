@@ -148,7 +148,7 @@ export function KlasgroepRooster({
                                                 height: `${heightPct(b.start, b.eind)}%`,
                                                 backgroundColor: colorOf(b.olodNaam),
                                             }}
-                                            title={`${b.olodNaam} (${b.type})\n${formatTime(b.start)}–${formatTime(b.eind)}${b.lokaal ? '\n' + b.lokaal : ''}`}
+                                            title={`${b.olodNaam}${b.type ? ` (${b.type})` : ''}\n${formatTime(b.start)}–${formatTime(b.eind)}${b.lokaal ? '\n' + b.lokaal : ''}`}
                                             onClick={() => onToggle(sel)}
                                         >
                                             <div className={styles.roosterBlokTime}>

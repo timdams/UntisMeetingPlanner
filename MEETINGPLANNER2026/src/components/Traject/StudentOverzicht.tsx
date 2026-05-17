@@ -211,7 +211,7 @@ export function StudentOverzicht({
                                                             const conflictsFor = conflictMap.get(b);
                                                             const conflict = !!conflictsFor;
                                                             const baseTip =
-                                                                `${b.olodNaam}\n${b.klasgroep} · ${b.type}` +
+                                                                `${b.olodNaam}\n${b.klasgroep}${b.type ? ` · ${b.type}` : ''}` +
                                                                 `\n${formatTime(b.start)}–${formatTime(b.eind)}` +
                                                                 (b.lokaal ? `\n${b.lokaal}` : '');
                                                             const conflictTip = conflictsFor
@@ -219,7 +219,7 @@ export function StudentOverzicht({
                                                                   conflictsFor
                                                                       .map(
                                                                           o =>
-                                                                              `• ${o.olodNaam} (${o.klasgroep})` +
+                                                                              `• ${o.olodNaam} (${o.klasgroep}${o.type ? `, ${o.type}` : ''})` +
                                                                               ` · ${formatTime(o.start)}–${formatTime(o.eind)}`
                                                                       )
                                                                       .join('\n')

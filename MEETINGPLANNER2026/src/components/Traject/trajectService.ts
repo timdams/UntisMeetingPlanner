@@ -1,11 +1,6 @@
 import { untisService } from '../../services/UntisService';
 import { ClassGroup } from '../../types';
-import { Lesblok, LesblokType, TrajectUntisService } from './types';
-
-function detectType(name: string | undefined): LesblokType {
-    if (!name) return 'theorie';
-    return /\blab(o)?\b/i.test(name) ? 'lab' : 'theorie';
-}
+import { Lesblok, TrajectUntisService } from './types';
 
 interface RangeCache {
     van: number;
@@ -60,7 +55,7 @@ class TrajectUntisAdapter implements TrajectUntisService {
             return {
                 klasgroep,
                 olodNaam: olod,
-                type: detectType(e.lessonText),
+                type: e.info?.trim() || undefined,
                 start: new Date(e.start),
                 eind: new Date(e.end),
                 lokaal: undefined,

@@ -59,4 +59,5 @@ export interface RosterEntry {
     subjects: UntisResource[];
     lessonText?: string;  // e.g. "Wiskunde 3A"
     lessonInfo?: string;  // extra info from Untis
+    info?: string;        // INFO-type label uit positions, bv. "Theorie", "Labo"
 }

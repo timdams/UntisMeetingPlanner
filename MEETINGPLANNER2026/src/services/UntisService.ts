@@ -238,9 +238,10 @@ class UntisService {
                     endTime = `${isoDate}T${endTime}:00`;
                 }
 
-                // Scan all position fields for SUBJECT and CLASS entries
+                // Scan all position fields for SUBJECT, CLASS and INFO entries
                 const subjects: string[] = [];
                 const classNames: string[] = [];
+                const infos: string[] = [];
                 for (const posKey of ['position1', 'position2', 'position3', 'position4', 'position5']) {
                     const pos = ge[posKey];
                     if (!pos || !Array.isArray(pos)) continue;
@@ -251,6 +252,9 @@ class UntisService {
                         if (p.current?.type === 'CLASS' && p.current.displayName) {
                             classNames.push(p.current.displayName);
                         }
+                        if (p.current?.type === 'INFO' && p.current.displayName) {
+                            infos.push(p.current.displayName);
+                        }
                     }
                 }
 
@@ -258,6 +262,7 @@ class UntisService {
                 const lessonInfo = classNames.length > 0
                     ? classNames.join(', ')
                     : ge.lessonInfo || undefined;
+                const info = infos.length > 0 ? infos.join(', ') : undefined;
 
                 entries.push({
                     id: ge.ids ? ge.ids[0] : 0, // Use first ID or 0
@@ -269,6 +274,7 @@ class UntisService {
                     subjects: [],
                     lessonText,
                     lessonInfo,
+                    info,
                 });
             }
         }
