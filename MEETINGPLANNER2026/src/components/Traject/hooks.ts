@@ -5,11 +5,15 @@ const KEY_SETTINGS = 'traject_settings';
 const KEY_TRAJECT = 'traject_student';
 const KEY_KLEUR = 'traject_kleurmap';
 
-const PALETTE = [
-    '#E11D48', '#2563EB', '#059669', '#D97706', '#7C3AED',
-    '#0891B2', '#DB2777', '#65A30D', '#EA580C', '#0D9488',
-    '#9333EA', '#CA8A04',
-];
+// Genereert een unieke kleur per allocatie-index via golden-angle hue-distributie.
+// Combineert met drie (saturation, lightness)-banden zodat ook hue-buren visueel verschillen.
+function allocateColor(index: number): string {
+    const hue = (index * 137.508) % 360;
+    const band = index % 3;
+    const sat = band === 0 ? 70 : band === 1 ? 82 : 55;
+    const light = band === 0 ? 48 : band === 1 ? 38 : 58;
+    return `hsl(${hue.toFixed(1)}, ${sat}%, ${light}%)`;
+}
 
 function todayIso(): string {
     return new Date().toISOString().slice(0, 10);
@@ -115,22 +119,24 @@ export function useKleurMap() {
         persist(KEY_KLEUR, map);
     }, [map]);
 
-    const ensureColor = useCallback((olodNaam: string): string => {
-        if (map[olodNaam]) return map[olodNaam];
-        // Allocate next color in palette (cycle if exhausted)
-        const used = new Set(Object.values(map));
-        const free = PALETTE.find(c => !used.has(c)) ?? PALETTE[Object.keys(map).length % PALETTE.length];
-        setMap(m => (m[olodNaam] ? m : { ...m, [olodNaam]: free }));
-        return free;
-    }, [map]);
+    const ensureColor = useCallback((olodNaam: string): void => {
+        setMap(m => {
+            if (m[olodNaam]) return m;
+            return { ...m, [olodNaam]: allocateColor(Object.keys(m).length) };
+        });
+    }, []);
 
     const colorOf = useCallback((olodNaam: string): string => {
-        return map[olodNaam] ?? PALETTE[0];
+        return map[olodNaam] ?? allocateColor(0);
     }, [map]);
 
     const replaceMap = useCallback((next: KleurMap) => {
         setMap(next);
     }, []);
 
-    return { map, ensureColor, colorOf, replaceMap };
+    const resetColors = useCallback(() => {
+        setMap({});
+    }, []);
+
+    return { map, ensureColor, colorOf, replaceMap, resetColors };
 }

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Printer, RotateCcw, Settings as SettingsIcon, LayoutGrid, ArrowLeft } from 'lucide-react';
+import { Printer, RotateCcw, Settings as SettingsIcon, LayoutGrid, ArrowLeft, Palette } from 'lucide-react';
 import styles from './Traject.module.css';
 import { useKleurMap, useStudentTraject, useTrajectSettings } from './hooks';
 import { TrajectSettingsView } from './TrajectSettings';
@@ -20,7 +20,7 @@ export function TrajectPlanner({ onBack }: Props) {
     const { settings, toggleKlasgroep, setSemesterStart, setSemesterEind, replaceSettings } =
         useTrajectSettings();
     const { traject, toggle, isSelected, reset, replaceTraject } = useStudentTraject();
-    const { map: kleurmap, ensureColor, colorOf, replaceMap } = useKleurMap();
+    const { map: kleurmap, ensureColor, colorOf, replaceMap, resetColors } = useKleurMap();
 
     const [tab, setTab] = useState<Tab>(
         settings.mijnOpleidingKlasgroepen.length === 0 ? 'instellingen' : 'werkblad'
@@ -46,6 +46,15 @@ export function TrajectPlanner({ onBack }: Props) {
             `Weet je zeker dat je het volledige studenttraject wil wissen? (${traject.length} OLODs)`
         );
         if (ok) reset();
+    };
+
+    const handleResetColors = () => {
+        const count = Object.keys(kleurmap).length;
+        if (count === 0) return;
+        const ok = window.confirm(
+            `Kleurmap wissen en opnieuw genereren? (${count} kleuren worden opnieuw toegewezen zodra de OLODs in beeld komen)`
+        );
+        if (ok) resetColors();
     };
 
     const handlePrint = () => {
@@ -108,6 +117,14 @@ export function TrajectPlanner({ onBack }: Props) {
                     disabled={traject.length === 0}
                 >
                     <RotateCcw size={14} /> Reset traject
+                </button>
+                <button
+                    className={styles.toolbarBtn}
+                    onClick={handleResetColors}
+                    disabled={Object.keys(kleurmap).length === 0}
+                    title="Wis de opgeslagen kleurmap en wijs nieuwe unieke kleuren toe"
+                >
+                    <Palette size={14} /> Reset kleuren
                 </button>
                 <button className={styles.toolbarBtn} onClick={handlePrint}>
                     <Printer size={14} /> Print / PDF
