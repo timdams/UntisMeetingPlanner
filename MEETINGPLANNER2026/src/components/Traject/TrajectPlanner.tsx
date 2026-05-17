@@ -150,6 +150,7 @@ export function TrajectPlanner({ onBack }: Props) {
                     <KlasgroepRooster
                         klasgroep={actieveKlasgroep}
                         initialWeek={initialWeek}
+                        mijnOpleidingKlasgroepen={settings.mijnOpleidingKlasgroepen}
                         isSelected={isSelected}
                         colorOf={colorOf}
                         ensureColor={ensureColor}
