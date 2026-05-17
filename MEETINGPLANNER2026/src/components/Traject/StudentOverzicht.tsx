@@ -137,13 +137,18 @@ export function StudentOverzicht({
     }, [blokkenPerKlas, traject, start, eind]);
 
     const conflicts = useMemo(() => detectConflicts(effectieveBlokken), [effectieveBlokken]);
-    const conflictPairs = useMemo(() => {
-        const set = new Set<Lesblok>();
+    const conflictMap = useMemo(() => {
+        const map = new Map<Lesblok, Lesblok[]>();
+        const push = (key: Lesblok, val: Lesblok) => {
+            const arr = map.get(key);
+            if (arr) arr.push(val);
+            else map.set(key, [val]);
+        };
         conflicts.forEach(c => {
-            set.add(c.a);
-            set.add(c.b);
+            push(c.a, c.b);
+            push(c.b, c.a);
         });
-        return set;
+        return map;
     }, [conflicts]);
 
     const weken = useMemo(() => weeksBetween(start, eind), [start, eind]);
@@ -203,11 +208,23 @@ export function StudentOverzicht({
                                                     </div>
                                                     <div className={styles.miniDayBody}>
                                                         {dayBlokken.map((b, bi) => {
-                                                            const conflict = conflictPairs.has(b);
-                                                            const tip =
+                                                            const conflictsFor = conflictMap.get(b);
+                                                            const conflict = !!conflictsFor;
+                                                            const baseTip =
                                                                 `${b.olodNaam}\n${b.klasgroep} · ${b.type}` +
                                                                 `\n${formatTime(b.start)}–${formatTime(b.eind)}` +
                                                                 (b.lokaal ? `\n${b.lokaal}` : '');
+                                                            const conflictTip = conflictsFor
+                                                                ? '\n\n⚠ Conflict met:\n' +
+                                                                  conflictsFor
+                                                                      .map(
+                                                                          o =>
+                                                                              `• ${o.olodNaam} (${o.klasgroep})` +
+                                                                              ` · ${formatTime(o.start)}–${formatTime(o.eind)}`
+                                                                      )
+                                                                      .join('\n')
+                                                                : '';
+                                                            const tip = baseTip + conflictTip;
                                                             return (
                                                                 <div
                                                                     key={bi}
