@@ -12,6 +12,7 @@ import {
 } from './dateUtils';
 import styles from './Traject.module.css';
 import { Loader2, ChevronLeft, ChevronRight } from 'lucide-react';
+import { LesblokIcon } from './LesblokIcon';
 
 interface Props {
     klasgroep: string | null;
@@ -152,6 +153,7 @@ export function KlasgroepRooster({
                                             onClick={() => onToggle(sel)}
                                         >
                                             <div className={styles.roosterBlokTime}>
+                                                <LesblokIcon type={b.type} size={11} className={styles.roosterBlokIcon} />
                                                 {formatTime(b.start)}
                                             </div>
                                             <div>{b.olodNaam}</div>

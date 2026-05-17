@@ -381,6 +381,14 @@
     font-weight: 600;
     font-size: 0.65rem;
     opacity: 0.9;
+    display: flex;
+    align-items: center;
+    gap: 3px;
+}
+
+.roosterBlokIcon {
+    flex-shrink: 0;
+    opacity: 0.95;
 }
 
 /* ===== Overzicht (panel C) ===== */
@@ -454,6 +462,16 @@
     right: 1px;
     border-radius: 2px;
     box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+}
+
+.miniBlokIcon {
+    color: rgba(255, 255, 255, 0.95);
+    filter: drop-shadow(0 0 1px rgba(0, 0, 0, 0.45));
+    flex-shrink: 0;
 }
 
 .miniBlokConflict {

@@ -15,6 +15,7 @@ import {
 } from './dateUtils';
 import styles from './Traject.module.css';
 import { AlertTriangle, ChevronDown, ChevronRight, Loader2 } from 'lucide-react';
+import { LesblokIcon } from './LesblokIcon';
 
 interface Props {
     traject: StudentTraject;
@@ -235,7 +236,14 @@ export function StudentOverzicht({
                                                                         height: `${heightPct(b.start, b.eind)}%`,
                                                                         backgroundColor: colorOf(b.olodNaam),
                                                                     }}
-                                                                />
+                                                                >
+                                                                    <LesblokIcon
+                                                                        type={b.type}
+                                                                        size={10}
+                                                                        strokeWidth={2.5}
+                                                                        className={styles.miniBlokIcon}
+                                                                    />
+                                                                </div>
                                                             );
                                                         })}
                                                     </div>
