@@ -9,6 +9,9 @@ const SCHOOL = 'ap';
 class UntisService {
     private bearerToken: string | null = null;
     private isAuthenticated = false;
+    private lastUsername: string | null = null;
+    private lastPassword: string | null = null;
+    private reAuthPromise: Promise<boolean> | null = null;
 
     // Helper to build headers
     private getHeaders() {
@@ -23,6 +26,15 @@ class UntisService {
     }
 
     async login(username: string, password: string): Promise<{ success: boolean; error?: string; rawResponses?: any; exception?: any }> {
+        const result = await this.performLogin(username, password);
+        if (result.success) {
+            this.lastUsername = username;
+            this.lastPassword = password;
+        }
+        return result;
+    }
+
+    private async performLogin(username: string, password: string): Promise<{ success: boolean; error?: string; rawResponses?: any; exception?: any }> {
         try {
             const debugData: any = {};
 
@@ -114,9 +126,34 @@ class UntisService {
         return null; // Return null intentionally so login() fails gracefully
     }
 
+    // Try to silently re-authenticate with the credentials cached in memory
+    // from the last successful login(). Deduplicates concurrent attempts so
+    // a burst of parallel requests only triggers one re-auth round-trip.
+    private trySilentReAuth(): Promise<boolean> {
+        if (!this.lastUsername || !this.lastPassword) return Promise.resolve(false);
+        if (this.reAuthPromise) return this.reAuthPromise;
+
+        console.log('[UntisService] Session expired — attempting silent re-auth');
+        this.reAuthPromise = this.performLogin(this.lastUsername, this.lastPassword)
+            .then(r => {
+                if (r.success) console.log('[UntisService] Silent re-auth OK');
+                else console.warn('[UntisService] Silent re-auth failed:', r.error);
+                return r.success;
+            })
+            .catch(e => {
+                console.warn('[UntisService] Silent re-auth threw:', e);
+                return false;
+            })
+            .finally(() => { this.reAuthPromise = null; });
+        return this.reAuthPromise;
+    }
+
     // Generic fetch wrapper
-    private async apiFetch<T>(endpoint: string): Promise<T> {
-        if (!this.isAuthenticated) throw new Error("Not authenticated");
+    private async apiFetch<T>(endpoint: string, retried = false): Promise<T> {
+        if (!this.isAuthenticated) {
+            const reAuthed = await this.trySilentReAuth();
+            if (!reAuthed) throw new Error("Not authenticated");
+        }
 
         const url = `${BASE_URL}${endpoint}`;
         const headers = this.getHeaders();
@@ -135,6 +172,10 @@ class UntisService {
                 if (resp.status === 401 || resp.status === 403) {
                     this.isAuthenticated = false;
                     this.bearerToken = null;
+                    if (!retried) {
+                        const reAuthed = await this.trySilentReAuth();
+                        if (reAuthed) return this.apiFetch<T>(endpoint, true);
+                    }
                     throw new Error("Session expired");
                 }
                 throw new Error(`API Error: ${resp.status}`);

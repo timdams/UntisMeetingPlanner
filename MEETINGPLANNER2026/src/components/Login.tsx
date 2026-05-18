@@ -116,13 +116,15 @@ export function Login({ onLoginSuccess }: LoginProps) {
     return (
         <div className={styles.loginContainer}>
             <div className={styles.card}>
-                <h1 className={styles.title}>Untis Meeting Planner</h1>
+                <h1 className={styles.title}>Untis meeting- en trajectplanner</h1>
                 <div className={styles.disclaimer}>
-                    Deze applicatie is gemaakt door <strong>Tim Dams</strong> en is <strong>géén</strong> officieel product van AP Hogeschool en Untis.
+                    Deze applicatie is gemaakt door <strong>Tim Dams</strong> en is <strong>géén</strong> officieel product van AP Hogeschool of Untis.
                 </div>
                 <div className={styles.browserWarning}>
-                    Momenteel werkt deze app enkel in <strong>Chrome, Edge en Brave</strong>.<br />
-                    Safari wordt nog niet ondersteund (login zal niet lukken).
+                    Momenteel werkt deze app enkel in <strong>Chrome, Edge en Brave</strong>.
+                    Safari wordt niet ondersteund (login zal mogelijk niet lukken).<br/><br/>
+
+                   <strong>⚠️ Het kan gebeuren dat de login een fout geeft, ook al kloppen je logingegevens. Probeer gewoon nog eens. Dit is een gekende bug.</strong>
                 </div>
                 <form onSubmit={handleLogin} className={styles.form}>
                     <div className={styles.inputGroup}>
