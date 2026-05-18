@@ -6,6 +6,8 @@ const BASE_URL = 'https://untis-proxy.untisproxydams.workers.dev'; // Removed /W
 const TENANT_ID = '3257400';
 const SCHOOL = 'ap';
 
+const SESSION_CRED_KEY = 'untis_session_creds';
+
 class UntisService {
     private bearerToken: string | null = null;
     private isAuthenticated = false;
@@ -30,8 +32,42 @@ class UntisService {
         if (result.success) {
             this.lastUsername = username;
             this.lastPassword = password;
+            try {
+                sessionStorage.setItem(SESSION_CRED_KEY, JSON.stringify({ u: username, p: password }));
+            } catch {
+                // sessionStorage unavailable (private mode etc.) — no-op
+            }
         }
         return result;
+    }
+
+    // Attempt to restore an authenticated session using credentials previously
+    // stashed in sessionStorage on login(). Used on app startup so that a page
+    // refresh (F5) does not boot the user back to the login screen.
+    async restoreSession(): Promise<boolean> {
+        if (this.isAuthenticated) return true;
+        let raw: string | null = null;
+        try {
+            raw = sessionStorage.getItem(SESSION_CRED_KEY);
+        } catch {
+            return false;
+        }
+        if (!raw) return false;
+        try {
+            const { u, p } = JSON.parse(raw);
+            if (!u || !p) return false;
+            const result = await this.performLogin(u, p);
+            if (result.success) {
+                this.lastUsername = u;
+                this.lastPassword = p;
+                return true;
+            }
+            // Stored creds no longer valid (password changed etc.) — drop them
+            try { sessionStorage.removeItem(SESSION_CRED_KEY); } catch { /* ignore */ }
+            return false;
+        } catch {
+            return false;
+        }
     }
 
     private async performLogin(username: string, password: string): Promise<{ success: boolean; error?: string; rawResponses?: any; exception?: any }> {
