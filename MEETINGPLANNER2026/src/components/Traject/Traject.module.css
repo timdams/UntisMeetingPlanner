@@ -691,9 +691,21 @@
 }
 
 .miniBlokConflict {
-    outline: 2px solid #DC2626;
+    outline: 3px dashed #DC2626;
     outline-offset: -1px;
     z-index: 2;
+}
+
+.miniBlokConflictIcon {
+    position: absolute;
+    top: 1px;
+    right: 1px;
+    color: #DC2626;
+    background-color: #ffffff;
+    border-radius: 50%;
+    padding: 1px;
+    z-index: 3;
+    filter: drop-shadow(0 0 1px rgba(0, 0, 0, 0.45));
 }
 
 /* Tooltip */

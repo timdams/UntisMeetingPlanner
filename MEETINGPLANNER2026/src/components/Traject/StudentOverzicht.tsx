@@ -243,6 +243,13 @@ export function StudentOverzicht({
                                                                         strokeWidth={2.5}
                                                                         className={styles.miniBlokIcon}
                                                                     />
+                                                                    {conflict && (
+                                                                        <AlertTriangle
+                                                                            size={10}
+                                                                            strokeWidth={2.5}
+                                                                            className={styles.miniBlokConflictIcon}
+                                                                        />
+                                                                    )}
                                                                 </div>
                                                             );
                                                         })}
