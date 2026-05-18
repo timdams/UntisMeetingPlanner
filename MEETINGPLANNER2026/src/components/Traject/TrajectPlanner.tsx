@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Printer, RotateCcw, Settings as SettingsIcon, LayoutGrid, ArrowLeft, Palette, Copy, Check } from 'lucide-react';
 import styles from './Traject.module.css';
 import { useKleurMap, useStudentTraject, useTrajectSettings } from './hooks';
@@ -14,6 +14,58 @@ type Tab = 'werkblad' | 'instellingen';
 
 interface Props {
     onBack: () => void;
+}
+
+const PANEL_A_MIN = 140;
+const PANEL_A_MAX = 420;
+const PANEL_C_MIN = 280;
+const PANEL_C_MAX = 900;
+const PANEL_B_MIN = 320;
+const KEY_PANEL_A = 'traject_panelA_width';
+const KEY_PANEL_C = 'traject_panelC_width';
+
+function clamp(v: number, lo: number, hi: number) {
+    return Math.max(lo, Math.min(hi, v));
+}
+
+interface SplitterProps {
+    orientation: 'left' | 'right'; // which side this splitter resizes (left=A, right=C)
+    onDelta: (dx: number) => void;
+}
+
+function Splitter({ orientation, onDelta }: SplitterProps) {
+    const [active, setActive] = useState(false);
+    const onPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+        e.preventDefault();
+        const target = e.currentTarget;
+        target.setPointerCapture(e.pointerId);
+        setActive(true);
+        let lastX = e.clientX;
+        const move = (ev: PointerEvent) => {
+            const dx = ev.clientX - lastX;
+            lastX = ev.clientX;
+            // For the right splitter, dragging right shrinks panel C → invert.
+            onDelta(orientation === 'left' ? dx : -dx);
+        };
+        const up = (ev: PointerEvent) => {
+            try { target.releasePointerCapture(ev.pointerId); } catch { /* ignored */ }
+            target.removeEventListener('pointermove', move);
+            target.removeEventListener('pointerup', up);
+            target.removeEventListener('pointercancel', up);
+            setActive(false);
+        };
+        target.addEventListener('pointermove', move);
+        target.addEventListener('pointerup', up);
+        target.addEventListener('pointercancel', up);
+    };
+    return (
+        <div
+            className={`${styles.splitter} ${active ? styles.splitterActive : ''}`}
+            onPointerDown={onPointerDown}
+            role="separator"
+            aria-orientation="vertical"
+        />
+    );
 }
 
 export function TrajectPlanner({ onBack }: Props) {
@@ -35,6 +87,37 @@ export function TrajectPlanner({ onBack }: Props) {
         settings.mijnOpleidingKlasgroepen[0] ?? null
     );
     const [copied, setCopied] = useState(false);
+
+    const [panelAWidth, setPanelAWidth] = useState<number>(() => {
+        const raw = localStorage.getItem(KEY_PANEL_A);
+        const n = raw ? Number(raw) : NaN;
+        return Number.isFinite(n) ? clamp(n, PANEL_A_MIN, PANEL_A_MAX) : 200;
+    });
+    const [panelCWidth, setPanelCWidth] = useState<number>(() => {
+        const raw = localStorage.getItem(KEY_PANEL_C);
+        const n = raw ? Number(raw) : NaN;
+        return Number.isFinite(n) ? clamp(n, PANEL_C_MIN, PANEL_C_MAX) : 460;
+    });
+    useEffect(() => { localStorage.setItem(KEY_PANEL_A, String(panelAWidth)); }, [panelAWidth]);
+    useEffect(() => { localStorage.setItem(KEY_PANEL_C, String(panelCWidth)); }, [panelCWidth]);
+
+    const workbenchRef = useRef<HTMLDivElement | null>(null);
+    const adjustPanelA = (dx: number) => {
+        setPanelAWidth(prev => {
+            const next = clamp(prev + dx, PANEL_A_MIN, PANEL_A_MAX);
+            const total = workbenchRef.current?.clientWidth ?? 0;
+            const remaining = total - next - panelCWidth - 12; // 12 = two 6px splitters
+            return remaining < PANEL_B_MIN ? prev : next;
+        });
+    };
+    const adjustPanelC = (dx: number) => {
+        setPanelCWidth(prev => {
+            const next = clamp(prev + dx, PANEL_C_MIN, PANEL_C_MAX);
+            const total = workbenchRef.current?.clientWidth ?? 0;
+            const remaining = total - panelAWidth - next - 12;
+            return remaining < PANEL_B_MIN ? prev : next;
+        });
+    };
 
     // Keep active klasgroep valid when the shortlist changes
     if (
@@ -180,7 +263,13 @@ export function TrajectPlanner({ onBack }: Props) {
                     onImport={handleImport}
                 />
             ) : (
-                <div className={styles.workbench}>
+                <div
+                    ref={workbenchRef}
+                    className={styles.workbench}
+                    style={{
+                        gridTemplateColumns: `${panelAWidth}px 6px minmax(${PANEL_B_MIN}px, 1fr) 6px ${panelCWidth}px`,
+                    }}
+                >
                     <KlasgroepSelector
                         klasgroepen={settings.mijnOpleidingKlasgroepen}
                         actief={actieveKlasgroep}
@@ -189,6 +278,7 @@ export function TrajectPlanner({ onBack }: Props) {
                         colorOf={colorOf}
                         onRemoveOlod={toggle}
                     />
+                    <Splitter orientation="left" onDelta={adjustPanelA} />
                     <KlasgroepRooster
                         klasgroep={actieveKlasgroep}
                         initialWeek={initialWeek}
@@ -198,6 +288,7 @@ export function TrajectPlanner({ onBack }: Props) {
                         ensureColor={ensureColor}
                         onToggle={toggle}
                     />
+                    <Splitter orientation="right" onDelta={adjustPanelC} />
                     <StudentOverzicht
                         traject={traject}
                         semesterStart={settings.semesterStart}
