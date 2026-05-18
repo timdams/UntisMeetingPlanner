@@ -13,6 +13,30 @@
     min-height: 0;
 }
 
+.topbar {
+    display: flex;
+    align-items: center;
+    margin-bottom: 0.75rem;
+}
+
+.backBtn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    background-color: var(--secondary);
+    color: var(--text-color);
+    border: 1px solid var(--border-color);
+    padding: 0.4rem 0.75rem;
+    border-radius: var(--border-radius);
+    cursor: pointer;
+    font-size: 0.85rem;
+    font-weight: 500;
+}
+
+.backBtn:hover {
+    background-color: var(--selected-bg);
+}
+
 .toolbar {
     margin-bottom: 1rem;
     display: flex;

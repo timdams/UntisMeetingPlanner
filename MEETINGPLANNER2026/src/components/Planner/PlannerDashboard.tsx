@@ -2,7 +2,7 @@ import { useMeetingPlanner, FreeSlot } from '../../hooks/useMeetingPlanner';
 import { useSavedGroups } from '../../hooks/useSavedGroups';
 import { PlannerSidebar } from './PlannerSidebar';
 import { WeekView } from './WeekView';
-import { Loader2, Filter, Info } from 'lucide-react';
+import { Loader2, Filter, Info, ArrowLeft } from 'lucide-react';
 import styles from './PlannerDashboard.module.css';
 import { useState } from 'react';
 import { Teacher, SavedGroup } from '../../types';
@@ -48,7 +48,11 @@ function downloadIcs(slot: FreeSlot, teachers: Teacher[]) {
     URL.revokeObjectURL(url);
 }
 
-export function PlannerDashboard() {
+interface Props {
+    onBack: () => void;
+}
+
+export function PlannerDashboard({ onBack }: Props) {
     const planner = useMeetingPlanner();
     const { groups, saveGroup, deleteGroup } = useSavedGroups();
     const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
@@ -81,6 +85,12 @@ export function PlannerDashboard() {
             />
 
             <div className={styles.main}>
+                <div className={styles.topbar}>
+                    <button className={styles.backBtn} onClick={onBack}>
+                        <ArrowLeft size={14} /> Terug
+                    </button>
+                </div>
+
                 {planner.error && <div className={styles.error}>{planner.error}</div>}
 
                 <div className={styles.infoBanner}>

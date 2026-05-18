@@ -24,7 +24,7 @@ function App() {
       {view === 'choice' && (
         <AppChoice onSelect={(choice) => setView(choice)} />
       )}
-      {view === 'meeting' && <PlannerDashboard />}
+      {view === 'meeting' && <PlannerDashboard onBack={() => setView('choice')} />}
       {view === 'traject' && <TrajectPlanner onBack={() => setView('choice')} />}
     </div>
   );
