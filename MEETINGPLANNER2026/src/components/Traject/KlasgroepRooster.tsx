@@ -13,6 +13,7 @@ import {
 import styles from './Traject.module.css';
 import { Loader2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { LesblokIcon } from './LesblokIcon';
+import { layoutDay } from './layout';
 
 interface Props {
     klasgroep: string | null;
@@ -207,6 +208,7 @@ export function KlasgroepRooster({
 
                     {dagen.map((d, idx) => {
                         const dayBlokken = blokken.filter(b => sameDay(b.start, d));
+                        const laidOut = layoutDay(dayBlokken);
                         return (
                             <div key={idx} className={styles.roosterDayCol}>
                                 {Array.from({ length: DAY_END_HOUR - DAY_START_HOUR }).map((_, i) => (
@@ -216,9 +218,11 @@ export function KlasgroepRooster({
                                         style={{ top: `${((i + 1) * 60 / TOTAL_MIN) * 100}%` }}
                                     />
                                 ))}
-                                {dayBlokken.map((b, i) => {
+                                {laidOut.map(({ blok: b, col, cols }, i) => {
                                     const sel = { klasgroep: b.klasgroep, olodNaam: b.olodNaam };
                                     const selected = isSelected(sel);
+                                    const widthPct = 100 / cols;
+                                    const leftPct = col * widthPct;
                                     return (
                                         <div
                                             key={i}
@@ -226,6 +230,8 @@ export function KlasgroepRooster({
                                             style={{
                                                 top: `${topPct(b.start)}%`,
                                                 height: `${heightPct(b.start, b.eind)}%`,
+                                                left: `calc(${leftPct}% + 2px)`,
+                                                width: `calc(${widthPct}% - 4px)`,
                                                 backgroundColor: colorOf(b.olodNaam),
                                             }}
                                             onClick={() => onToggle(sel)}
@@ -363,12 +369,15 @@ function MiniWeek({
             <div className={styles.hoverMiniWeek}>
                 {dagen.map((d, di) => {
                     const dayBlokken = allBlokken.filter(b => sameDay(b.start, d));
+                    const laidOut = layoutDay(dayBlokken);
                     return (
                         <div key={di} className={styles.miniDay}>
                             <div className={styles.miniDayHeader}>{DAG_HEADERS[di]}</div>
                             <div className={styles.miniDayBody}>
-                                {dayBlokken.map((b, bi) => {
+                                {laidOut.map(({ blok: b, col, cols }, bi) => {
                                     const isMatch = b.olodNaam === highlightOlod;
+                                    const widthPct = 100 / cols;
+                                    const leftPct = col * widthPct;
                                     return (
                                         <div
                                             key={bi}
@@ -376,6 +385,8 @@ function MiniWeek({
                                             style={{
                                                 top: `${topPct(b.start)}%`,
                                                 height: `${heightPct(b.start, b.eind)}%`,
+                                                left: `calc(${leftPct}% + 1px)`,
+                                                width: `calc(${widthPct}% - 2px)`,
                                                 backgroundColor: isMatch
                                                     ? colorOf(b.olodNaam)
                                                     : undefined,

@@ -17,8 +17,14 @@ interface Props {
 }
 
 export function TrajectPlanner({ onBack }: Props) {
-    const { settings, toggleKlasgroep, setSemesterStart, setSemesterEind, replaceSettings } =
-        useTrajectSettings();
+    const {
+        settings,
+        toggleKlasgroep,
+        setSemesterStart,
+        setSemesterEind,
+        replaceSettings,
+        clearKlasgroepen,
+    } = useTrajectSettings();
     const { traject, toggle, isSelected, reset, replaceTraject } = useStudentTraject();
     const { map: kleurmap, ensureColor, colorOf, replaceMap, resetColors } = useKleurMap();
 
@@ -167,6 +173,7 @@ export function TrajectPlanner({ onBack }: Props) {
                 <TrajectSettingsView
                     settings={settings}
                     onToggleKlasgroep={toggleKlasgroep}
+                    onClearKlasgroepen={clearKlasgroepen}
                     onSemesterStartChange={setSemesterStart}
                     onSemesterEindChange={setSemesterEind}
                     onExport={handleExport}

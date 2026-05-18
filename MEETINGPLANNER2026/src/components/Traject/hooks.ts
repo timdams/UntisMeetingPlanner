@@ -75,7 +75,18 @@ export function useTrajectSettings() {
         setSettings(next);
     }, []);
 
-    return { settings, toggleKlasgroep, setSemesterStart, setSemesterEind, replaceSettings };
+    const clearKlasgroepen = useCallback(() => {
+        setSettings(s => ({ ...s, mijnOpleidingKlasgroepen: [] }));
+    }, []);
+
+    return {
+        settings,
+        toggleKlasgroep,
+        setSemesterStart,
+        setSemesterEind,
+        replaceSettings,
+        clearKlasgroepen,
+    };
 }
 
 function sameSelectie(a: OLODSelectie, b: OLODSelectie) {

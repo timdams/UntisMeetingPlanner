@@ -2,11 +2,12 @@ import { useEffect, useRef, useState } from 'react';
 import { TrajectSettings } from './types';
 import { trajectUntisService } from './trajectService';
 import styles from './Traject.module.css';
-import { AlertTriangle, Download, Loader2, Upload } from 'lucide-react';
+import { AlertTriangle, Download, Loader2, RotateCcw, Upload } from 'lucide-react';
 
 interface Props {
     settings: TrajectSettings;
     onToggleKlasgroep: (k: string) => void;
+    onClearKlasgroepen: () => void;
     onSemesterStartChange: (iso: string) => void;
     onSemesterEindChange: (iso: string) => void;
     onExport: () => void;
@@ -16,6 +17,7 @@ interface Props {
 export function TrajectSettingsView({
     settings,
     onToggleKlasgroep,
+    onClearKlasgroepen,
     onSemesterStartChange,
     onSemesterEindChange,
     onExport,
@@ -40,6 +42,15 @@ export function TrajectSettingsView({
     const selected = new Set(settings.mijnOpleidingKlasgroepen);
     const f = filter.trim().toLowerCase();
     const visible = f ? allKlasgroepen.filter(k => k.toLowerCase().includes(f)) : allKlasgroepen;
+
+    const handleClearKlasgroepen = () => {
+        const count = settings.mijnOpleidingKlasgroepen.length;
+        if (count === 0) return;
+        const ok = window.confirm(
+            `Alle ${count} geselecteerde klasgroepen deselecteren?`
+        );
+        if (ok) onClearKlasgroepen();
+    };
 
     const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -134,8 +145,18 @@ export function TrajectSettingsView({
             </div>
 
             <div className={styles.settingsSection}>
-                <div className={styles.settingsTitle}>
-                    Mijn opleiding — klasgroepen ({settings.mijnOpleidingKlasgroepen.length} geselecteerd)
+                <div className={styles.settingsTitleRow}>
+                    <div className={styles.settingsTitle}>
+                        Mijn opleiding — klasgroepen ({settings.mijnOpleidingKlasgroepen.length} geselecteerd)
+                    </div>
+                    <button
+                        className={`${styles.toolbarBtn} ${styles.toolbarBtnDanger}`}
+                        onClick={handleClearKlasgroepen}
+                        disabled={settings.mijnOpleidingKlasgroepen.length === 0}
+                        title="Deselecteer alle klasgroepen"
+                    >
+                        <RotateCcw size={14} /> Alles deselecteren
+                    </button>
                 </div>
                 <div className={styles.settingsHint}>
                     Vink de klasgroepen aan die tot jouw opleiding behoren. Enkel deze

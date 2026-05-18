@@ -16,6 +16,7 @@ import {
 import styles from './Traject.module.css';
 import { AlertTriangle, ChevronDown, ChevronRight, Loader2 } from 'lucide-react';
 import { LesblokIcon } from './LesblokIcon';
+import { layoutDay } from './layout';
 
 interface Props {
     traject: StudentTraject;
@@ -202,15 +203,18 @@ export function StudentOverzicht({
                                     <div className={styles.miniWeek}>
                                         {dagen.map((dag, di) => {
                                             const dayBlokken = wkBlokken.filter(b => sameDay(b.start, dag));
+                                            const laidOut = layoutDay(dayBlokken);
                                             return (
                                                 <div key={di} className={styles.miniDay}>
                                                     <div className={styles.miniDayHeader}>
                                                         {DAG_HEADERS[di]}
                                                     </div>
                                                     <div className={styles.miniDayBody}>
-                                                        {dayBlokken.map((b, bi) => {
+                                                        {laidOut.map(({ blok: b, col, cols }, bi) => {
                                                             const conflictsFor = conflictMap.get(b);
                                                             const conflict = !!conflictsFor;
+                                                            const widthPct = 100 / cols;
+                                                            const leftPct = col * widthPct;
                                                             const baseTip =
                                                                 `${b.olodNaam}\n${b.klasgroep}${b.type ? ` · ${b.type}` : ''}` +
                                                                 `\n${formatTime(b.start)}–${formatTime(b.eind)}` +
@@ -234,6 +238,8 @@ export function StudentOverzicht({
                                                                     style={{
                                                                         top: `${topPct(b.start)}%`,
                                                                         height: `${heightPct(b.start, b.eind)}%`,
+                                                                        left: `calc(${leftPct}% + 1px)`,
+                                                                        width: `calc(${widthPct}% - 2px)`,
                                                                         backgroundColor: colorOf(b.olodNaam),
                                                                     }}
                                                                 >
