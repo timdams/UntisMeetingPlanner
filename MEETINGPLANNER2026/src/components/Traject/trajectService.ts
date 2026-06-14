@@ -10,14 +10,26 @@ interface RangeCache {
 
 class TrajectUntisAdapter implements TrajectUntisService {
     private classCache: ClassGroup[] | null = null;
+    private classesInflight: Promise<ClassGroup[]> | null = null;
     private rangeByKlasgroep = new Map<string, RangeCache>();
     private inflight = new Map<string, Promise<Lesblok[]>>();
 
     private async classes(): Promise<ClassGroup[]> {
-        if (!this.classCache) {
-            this.classCache = await untisService.getClasses();
+        if (this.classCache) return this.classCache;
+        // Dedupe concurrent callers: meerdere klasgroep-kolommen vragen tegelijk
+        // de klassenlijst op. Zonder deze guard vuren we identieke filter-requests
+        // parallel af, wat Untis met een 400 beantwoordt.
+        if (!this.classesInflight) {
+            this.classesInflight = untisService.getClasses()
+                .then(cs => {
+                    this.classCache = cs;
+                    return cs;
+                })
+                .finally(() => {
+                    this.classesInflight = null;
+                });
         }
-        return this.classCache;
+        return this.classesInflight;
     }
 
     async getKlasgroepen(): Promise<string[]> {
@@ -99,6 +111,7 @@ class TrajectUntisAdapter implements TrajectUntisService {
 
     invalidate() {
         this.classCache = null;
+        this.classesInflight = null;
         this.rangeByKlasgroep.clear();
         this.inflight.clear();
     }
