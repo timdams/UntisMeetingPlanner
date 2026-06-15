@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { untisService } from '../services/UntisService';
-import { User, Lock, Loader2 } from 'lucide-react';
+import { User, Lock, Loader2, Info } from 'lucide-react';
 import clsx from 'clsx';
 import styles from './Login.module.css';
 
@@ -131,7 +131,7 @@ export function Login({ onLoginSuccess }: LoginProps) {
                         <User size={20} className={styles.icon} />
                         <input
                             type="text"
-                            placeholder="Login (bv. p87879@ap.be of student.grad.inf)"
+                            placeholder="Login (bv. p87879@ap.be)"
                             value={username}
                             onChange={(e) => setUsername(e.target.value)}
                             disabled={isBusy}
@@ -176,6 +176,12 @@ export function Login({ onLoginSuccess }: LoginProps) {
                         </button>
                     )}
                 </form>
+                <span className={styles.infoHint}>
+                    <Info size={12} className={styles.infoIcon} />
+                    <span className={styles.tooltip}>
+                        Default login — login: <strong>student.grad.inf</strong>, wachtwoord: <strong>12345678</strong>
+                    </span>
+                </span>
             </div>
         </div>
     );

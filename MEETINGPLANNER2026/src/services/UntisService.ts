@@ -70,6 +70,18 @@ class UntisService {
         }
     }
 
+    // Clear the authenticated session: in-memory token/credentials and the
+    // credentials stashed in sessionStorage. After this the user is back to
+    // square one and must log in again.
+    logout(): void {
+        this.bearerToken = null;
+        this.isAuthenticated = false;
+        this.lastUsername = null;
+        this.lastPassword = null;
+        this.reAuthPromise = null;
+        try { sessionStorage.removeItem(SESSION_CRED_KEY); } catch { /* ignore */ }
+    }
+
     private async performLogin(username: string, password: string): Promise<{ success: boolean; error?: string; rawResponses?: any; exception?: any }> {
         try {
             const debugData: any = {};
@@ -220,6 +232,43 @@ class UntisService {
         } catch (err: any) {
             console.error(`[UntisService] Fetch failed for ${url}`, err);
             throw err;
+        }
+    }
+
+    /**
+     * Probe whether the current account may use the Meeting Planner.
+     *
+     * The planner's first call is getTeachers() → the TEACHER timetable/filter
+     * endpoint, which returns 403 FORBIDDEN for accounts without sufficient
+     * rights (e.g. student logins). We probe that exact endpoint once and treat
+     * a 403 as "no access". Network/other errors fall back to "available" so a
+     * transient glitch never hides the planner from a teacher.
+     *
+     * Uses a raw fetch (not apiFetch) on purpose: apiFetch treats a 403 as a
+     * session expiry and wipes the auth token, which would needlessly force a
+     * re-auth for the (still perfectly valid) Traject Planner session.
+     */
+    async checkMeetingPlannerAccess(): Promise<boolean> {
+        if (!this.isAuthenticated) {
+            const reAuthed = await this.trySilentReAuth();
+            if (!reAuthed) return false;
+        }
+
+        const start = new Date().toISOString().split('T')[0];
+        const end = new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0];
+        const url = `${BASE_URL}/WebUntis/api/rest/view/v1/timetable/filter?start=${start}&end=${end}&resourceType=TEACHER&timetableType=STANDARD`;
+
+        try {
+            const resp = await fetch(url, {
+                method: 'GET',
+                headers: this.getHeaders(),
+                credentials: 'include',
+            });
+            // 403 = authenticated but no rights on the teacher filter (student accounts).
+            if (resp.status === 403) return false;
+            return true;
+        } catch {
+            return true;
         }
     }
 

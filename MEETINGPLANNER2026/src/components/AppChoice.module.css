@@ -8,6 +8,7 @@
 }
 
 .card {
+    position: relative;
     background-color: var(--bg-color);
     padding: 2.5rem;
     border-radius: 16px;
@@ -18,6 +19,31 @@
     display: flex;
     flex-direction: column;
     align-items: center;
+}
+
+.logoutButton {
+    position: absolute;
+    top: 1rem;
+    right: 1rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    background-color: transparent;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 0.4rem 0.7rem;
+    font-family: inherit;
+    font-size: 0.8rem;
+    font-weight: 500;
+    color: #64748b;
+    cursor: pointer;
+    transition: color 0.15s, border-color 0.15s, background-color 0.15s;
+}
+
+.logoutButton:hover {
+    color: var(--primary);
+    border-color: var(--primary);
+    background-color: var(--secondary);
 }
 
 .title {
@@ -67,6 +93,19 @@
     transform: translateY(-2px);
     border-color: var(--primary);
     box-shadow: 0 6px 14px rgba(0, 0, 0, 0.08);
+}
+
+.optionDisabled,
+.optionDisabled:hover {
+    cursor: not-allowed;
+    opacity: 0.55;
+    transform: none;
+    border-color: var(--border-color);
+    box-shadow: none;
+}
+
+.optionDisabled .badge {
+    background: #94a3b8;
 }
 
 .icon {

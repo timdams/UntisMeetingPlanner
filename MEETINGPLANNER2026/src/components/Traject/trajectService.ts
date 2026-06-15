@@ -1,11 +1,50 @@
 import { untisService } from '../../services/UntisService';
-import { ClassGroup } from '../../types';
+import { ClassGroup, RosterEntry } from '../../types';
 import { Lesblok, TrajectUntisService } from './types';
 
 interface RangeCache {
     van: number;
     tot: number;
     blokken: Lesblok[];
+}
+
+// Untis weigert (400 MULTIPLE_SCHOOLYEARS_IN_RANGE) zodra één request meer dan
+// één schooljaar omspant. De cutoff naar het nieuwe academiejaar ligt op
+// 21 september — vanaf dan telt een datum bij het volgende schooljaar. Een
+// semesterbereik kan over die grens heen lopen, dus splitsen we het bereik op
+// 21 september en bevragen we elk segment apart.
+//
+// We mikken de segmentgrenzen op 12:00 lokaal: getRoster serialiseert met
+// toISOString() (UTC), en vanaf het middaguur blijft de kalenderdatum in elke
+// realistische tijdzone gelijk — zo valt de splitsing exact op 21 september
+// zonder off-by-one.
+const SCHOOLJAAR_CUTOFF_MAAND = 8; // maand 8 = september
+const SCHOOLJAAR_CUTOFF_DAG = 21;
+
+function atNoon(d: Date): Date {
+    return new Date(d.getFullYear(), d.getMonth(), d.getDate(), 12, 0, 0, 0);
+}
+
+function schooljaarGrensNa(d: Date): Date {
+    const cutoffDitJaar = new Date(d.getFullYear(), SCHOOLJAAR_CUTOFF_MAAND, SCHOOLJAAR_CUTOFF_DAG, 12, 0, 0, 0);
+    return d.getTime() < cutoffDitJaar.getTime()
+        ? cutoffDitJaar
+        : new Date(d.getFullYear() + 1, SCHOOLJAAR_CUTOFF_MAAND, SCHOOLJAAR_CUTOFF_DAG, 12, 0, 0, 0);
+}
+
+function splitOpSchooljaar(van: Date, tot: Date): Array<{ van: Date; tot: Date }> {
+    const segments: Array<{ van: Date; tot: Date }> = [];
+    const eind = atNoon(tot);
+    let segStart = atNoon(van);
+    while (segStart.getTime() <= eind.getTime()) {
+        const syEnd = new Date(schooljaarGrensNa(segStart)); // cutoff van het volgende schooljaar
+        syEnd.setDate(syEnd.getDate() - 1);                  // → laatste dag van dit schooljaar (20 sep)
+        const segEnd = syEnd.getTime() < eind.getTime() ? syEnd : eind;
+        segments.push({ van: segStart, tot: segEnd });
+        segStart = new Date(segEnd);
+        segStart.setDate(segStart.getDate() + 1);
+    }
+    return segments;
 }
 
 class TrajectUntisAdapter implements TrajectUntisService {
@@ -61,7 +100,33 @@ class TrajectUntisAdapter implements TrajectUntisService {
         const match = cs.find(c => c.displayName === klasgroep);
         if (!match) return [];
 
-        const entries = await untisService.getRoster(match.id, 'CLASS', van, tot);
+        // Splits het bereik op schooljaargrenzen: één segment binnen één
+        // schooljaar → één call (ongewijzigd gedrag); een semester over
+        // 21 september heen → meerdere calls die Untis wél accepteert.
+        const segmenten = splitOpSchooljaar(van, tot);
+        const perSegment = await Promise.allSettled(
+            segmenten.map(seg => untisService.getRoster(match.id, 'CLASS', seg.van, seg.tot))
+        );
+
+        // Een segment kan ontbreken — bv. NOT_FOUND wanneer het rooster van een
+        // nog niet gepubliceerd schooljaar wordt opgevraagd. Toon dan gewoon wat
+        // er wél is; faal enkel als geen enkel segment lukte (dan bubbelt de
+        // eerste fout door zodat StudentOverzicht een nette melding kan tonen).
+        const entries: RosterEntry[] = [];
+        let geslaagd = 0;
+        let eersteFout: unknown = null;
+        for (const r of perSegment) {
+            if (r.status === 'fulfilled') {
+                geslaagd++;
+                entries.push(...r.value);
+            } else if (eersteFout === null) {
+                eersteFout = r.reason;
+            }
+        }
+        if (geslaagd === 0 && eersteFout !== null) {
+            throw eersteFout;
+        }
+
         const blokken: Lesblok[] = entries.map(e => {
             const olod = (e.lessonText?.split(',')[0]?.trim()) || 'Onbekend';
             return {

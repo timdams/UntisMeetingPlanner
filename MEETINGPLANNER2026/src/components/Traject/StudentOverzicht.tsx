@@ -110,7 +110,13 @@ export function StudentOverzicht({
                 setBlokkenPerKlas(map);
             })
             .catch(e => {
-                if (!cancelled) setError(e?.message ?? 'Rooster ophalen mislukt');
+                if (cancelled) return;
+                // Untis weigert bereiken die nog niet beschikbaar zijn met een
+                // 400 (meerdere schooljaren) of 404 (rooster nog niet
+                // gepubliceerd); toon testers geen rauwe API-fout.
+                const msg: string = e?.message ?? '';
+                const nogNietBeschikbaar = msg.includes('400') || msg.includes('404');
+                setError(nogNietBeschikbaar ? 'later beschikbaar' : (msg || 'Rooster ophalen mislukt'));
             })
             .finally(() => {
                 if (!cancelled) setBusy(false);

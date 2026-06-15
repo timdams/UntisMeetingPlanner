@@ -1,27 +1,44 @@
-import { CalendarDays, Route } from 'lucide-react';
+import { CalendarDays, Route, LogOut } from 'lucide-react';
 import styles from './AppChoice.module.css';
 
 interface AppChoiceProps {
+    // null = beschikbaarheid wordt nog gecontroleerd; false = geen toegang (bv. student).
+    meetingAvailable: boolean | null;
     onSelect: (choice: 'meeting' | 'traject') => void;
+    onLogout: () => void;
 }
 
-export function AppChoice({ onSelect }: AppChoiceProps) {
+export function AppChoice({ meetingAvailable, onSelect, onLogout }: AppChoiceProps) {
+    const meetingDisabled = meetingAvailable === false;
     return (
         <div className={styles.container}>
             <div className={styles.card}>
+                <button
+                    type="button"
+                    className={styles.logoutButton}
+                    onClick={onLogout}
+                >
+                    <LogOut size={16} />
+                    <span>Afmelden</span>
+                </button>
                 <h1 className={styles.title}>Wat wil je doen?</h1>
                 <p className={styles.subtitle}>Kies een van de onderstaande opties.</p>
 
                 <div className={styles.options}>
                     <button
                         type="button"
-                        className={styles.option}
+                        className={`${styles.option} ${meetingDisabled ? styles.optionDisabled : ''}`}
                         onClick={() => onSelect('meeting')}
+                        disabled={meetingDisabled}
+                        aria-disabled={meetingDisabled}
                     >
+                        {meetingDisabled && <div className={styles.badge}>Niet beschikbaar</div>}
                         <CalendarDays size={40} className={styles.icon} />
                         <div className={styles.optionTitle}>Meeting Planner</div>
                         <div className={styles.optionDesc}>
-                            Plan vergaderingen op basis van de Untis-uurroosters.
+                            {meetingDisabled
+                                ? 'Niet beschikbaar voor dit account — je hebt geen toegang tot de lerarenroosters.'
+                                : 'Plan vergaderingen op basis van de Untis-uurroosters.'}
                         </div>
                     </button>
 
