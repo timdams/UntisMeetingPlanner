@@ -10,6 +10,12 @@ const SESSION_CRED_KEY = 'untis_session_creds';
 
 class UntisService {
     private bearerToken: string | null = null;
+    // Raw WebUntis session cookie string, captured server-side at login and
+    // replayed on every request via the x-untis-session header. This bypasses
+    // the browser cookie jar entirely (Safari ITP / Chrome 3rd-party-cookie
+    // blocking / managed-Chrome policy would otherwise drop the proxy's
+    // third-party JSESSIONID, leaving every call unauthenticated).
+    private sessionId: string | null = null;
     private isAuthenticated = false;
     private lastUsername: string | null = null;
     private lastPassword: string | null = null;
@@ -23,6 +29,9 @@ class UntisService {
         };
         if (this.bearerToken) {
             headers['Authorization'] = `Bearer ${String(this.bearerToken).trim()}`;
+        }
+        if (this.sessionId) {
+            headers['x-untis-session'] = this.sessionId;
         }
         return headers;
     }
@@ -75,6 +84,7 @@ class UntisService {
     // square one and must log in again.
     logout(): void {
         this.bearerToken = null;
+        this.sessionId = null;
         this.isAuthenticated = false;
         this.lastUsername = null;
         this.lastPassword = null;
@@ -86,64 +96,53 @@ class UntisService {
         try {
             const debugData: any = {};
 
-            // 1. Warmup
-            try {
-                const w = await fetch(`${BASE_URL}/WebUntis/?school=${SCHOOL}`, {
-                    method: 'GET',
-                    headers: { 'tenant-id': TENANT_ID }
-                });
-                debugData.warmup = { status: w.status, ok: w.ok };
-            } catch (e) {
-                console.warn("Warmup failed:", e);
-                debugData.warmup = { error: e instanceof Error ? e.message : 'Unknown warmup error' };
-            }
-
-            // 2. Login POST (application/x-www-form-urlencoded)
+            // Single server-side login round-trip. The worker performs
+            // warmup -> j_spring_security_check -> token/new with a server-side
+            // cookie jar, then returns the JWT plus the raw session cookie
+            // string. This removes the dependency on the browser storing the
+            // proxy's third-party cookie (the root cause of the "Ongeldige
+            // logingegevens" failures on Safari and cookie-restricted Chrome).
             const params = new URLSearchParams();
             params.append('school', SCHOOL);
             params.append('j_username', username);
             params.append('j_password', password);
             params.append('token', '');
 
-            const loginResp = await fetch(`${BASE_URL}/WebUntis/j_spring_security_check`, {
+            const resp = await fetch(`${BASE_URL}/WebUntis/safari_login`, {
                 method: 'POST',
                 headers: {
                     'tenant-id': TENANT_ID,
                     'Content-Type': 'application/x-www-form-urlencoded'
                 },
                 body: params.toString(),
-                credentials: 'include' // THIS WAS OMIT! Browser wouldn't save the login cookie!
             });
 
-            debugData.loginResp = { status: loginResp.status, ok: loginResp.ok, redirected: loginResp.redirected, url: loginResp.url };
-            if (!loginResp.ok) {
-                console.warn("Login POST status:", loginResp.status);
+            debugData.loginRoute = { status: resp.status, ok: resp.ok };
+
+            if (!resp.ok) {
+                const txt = await resp.text().catch(() => '');
+                debugData.loginRoute.body = txt.substring(0, 1000);
+                return { success: false, error: `Login route failed: ${resp.status}`, rawResponses: debugData };
             }
 
-            // 3. Get Token using the established session cookie
-            const tokenResp = await fetch(`${BASE_URL}/WebUntis/api/token/new`, {
-                method: 'GET',
-                headers: { 'tenant-id': TENANT_ID },
-                credentials: 'include' // The proxy needs to handle cookie passing if we use omit, or we use 'include' if proxy forwards it
-            });
-
-            debugData.tokenResp = { status: tokenResp.status, ok: tokenResp.ok };
-            if (!tokenResp.ok) {
-                const txt = await tokenResp.text().catch(() => '');
-                debugData.tokenResp.body = txt.substring(0, 1000); // Only capture partial if it's huge
-                return { success: false, error: `Token fetch failed: ${tokenResp.status}`, rawResponses: debugData };
+            const data = await resp.json().catch(() => null);
+            if (!data) {
+                return { success: false, error: "Login route gaf geen geldige JSON terug.", rawResponses: debugData };
             }
 
-            const body = await tokenResp.text();
-            debugData.tokenResp.bodySample = body.substring(0, 500);
-            this.bearerToken = this.extractToken(body);
+            debugData.loginRoute.serverDebug = data.debug;
+            const tokenBody: string = typeof data.tokenBody === 'string' ? data.tokenBody : '';
+            debugData.loginRoute.bodySample = tokenBody.substring(0, 500);
 
-            if (this.bearerToken) {
+            this.bearerToken = this.extractToken(tokenBody);
+            this.sessionId = typeof data.sessionId === 'string' && data.sessionId.length > 0 ? data.sessionId : null;
+
+            if (this.bearerToken && this.sessionId) {
                 this.isAuthenticated = true;
                 return { success: true };
             }
 
-            console.error("Failed to parse token from response body:", body);
+            console.error("Failed to parse token from response body:", tokenBody);
             return { success: false, error: "Ongeldige logingegevens (of API weigerde toegang).", rawResponses: debugData };
         } catch (e: any) {
             console.error("Login Exception Detail:", e);
