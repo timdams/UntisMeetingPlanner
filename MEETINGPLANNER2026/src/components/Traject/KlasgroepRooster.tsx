@@ -4,9 +4,11 @@ import { trajectUntisService } from './trajectService';
 import {
     addDays,
     DAG_HEADERS,
+    DAY_START_HOUR,
     formatDateBE,
     formatTime,
     fridayEndOf,
+    gridEndHour,
     mondayOf,
     sameDay,
 } from './dateUtils';
@@ -25,21 +27,17 @@ interface Props {
     onToggle: (sel: OLODSelectie) => void;
 }
 
-const DAY_START_HOUR = 8;
-const DAY_END_HOUR = 18;
-const TOTAL_MIN = (DAY_END_HOUR - DAY_START_HOUR) * 60;
-
-function topPct(d: Date): number {
+function topPct(d: Date, totalMin: number): number {
     const m = (d.getHours() - DAY_START_HOUR) * 60 + d.getMinutes();
-    return Math.max(0, (m / TOTAL_MIN) * 100);
+    return Math.max(0, (m / totalMin) * 100);
 }
 
-function heightPct(start: Date, eind: Date): number {
+function heightPct(start: Date, eind: Date, totalMin: number): number {
     const m =
         (eind.getHours() - DAY_START_HOUR) * 60 +
         eind.getMinutes() -
         ((start.getHours() - DAY_START_HOUR) * 60 + start.getMinutes());
-    return Math.max(1, (m / TOTAL_MIN) * 100);
+    return Math.max(1, (m / totalMin) * 100);
 }
 
 interface HoverInfo {
@@ -137,6 +135,11 @@ export function KlasgroepRooster({
         [weekMonday]
     );
 
+    // Grid loopt standaard tot 18u; rekt uit tot max 22u zodra deze week een
+    // avondschoolblok bevat dat later eindigt.
+    const dayEndHour = useMemo(() => gridEndHour(blokken), [blokken]);
+    const totalMin = (dayEndHour - DAY_START_HOUR) * 60;
+
     const prevWeek = () => setWeekMonday(w => addDays(w, -7));
     const nextWeek = () => setWeekMonday(w => addDays(w, 7));
 
@@ -195,11 +198,11 @@ export function KlasgroepRooster({
                     ))}
 
                     <div className={styles.roosterTimeCol}>
-                        {Array.from({ length: DAY_END_HOUR - DAY_START_HOUR + 1 }).map((_, i) => (
+                        {Array.from({ length: dayEndHour - DAY_START_HOUR + 1 }).map((_, i) => (
                             <div
                                 key={i}
                                 className={styles.roosterTimeLabel}
-                                style={{ top: `${(i * 60 / TOTAL_MIN) * 100}%` }}
+                                style={{ top: `${(i * 60 / totalMin) * 100}%` }}
                             >
                                 {DAY_START_HOUR + i}:00
                             </div>
@@ -211,11 +214,11 @@ export function KlasgroepRooster({
                         const laidOut = layoutDay(dayBlokken);
                         return (
                             <div key={idx} className={styles.roosterDayCol}>
-                                {Array.from({ length: DAY_END_HOUR - DAY_START_HOUR }).map((_, i) => (
+                                {Array.from({ length: dayEndHour - DAY_START_HOUR }).map((_, i) => (
                                     <div
                                         key={i}
                                         className={styles.roosterGridLine}
-                                        style={{ top: `${((i + 1) * 60 / TOTAL_MIN) * 100}%` }}
+                                        style={{ top: `${((i + 1) * 60 / totalMin) * 100}%` }}
                                     />
                                 ))}
                                 {laidOut.map(({ blok: b, col, cols }, i) => {
@@ -228,8 +231,8 @@ export function KlasgroepRooster({
                                             key={i}
                                             className={`${styles.roosterBlok} ${selected ? styles.roosterBlokSelected : ''}`}
                                             style={{
-                                                top: `${topPct(b.start)}%`,
-                                                height: `${heightPct(b.start, b.eind)}%`,
+                                                top: `${topPct(b.start, totalMin)}%`,
+                                                height: `${heightPct(b.start, b.eind, totalMin)}%`,
                                                 left: `calc(${leftPct}% + 2px)`,
                                                 width: `calc(${widthPct}% - 4px)`,
                                                 backgroundColor: colorOf(b.olodNaam),
@@ -363,6 +366,11 @@ function MiniWeek({
         [weekMonday]
     );
 
+    const totalMin = useMemo(
+        () => (gridEndHour(allBlokken) - DAY_START_HOUR) * 60,
+        [allBlokken]
+    );
+
     return (
         <div className={styles.hoverMiniCol}>
             <div className={styles.hoverMiniLabel}>{klasgroep}</div>
@@ -383,8 +391,8 @@ function MiniWeek({
                                             key={bi}
                                             className={`${styles.hoverMiniBlok} ${isMatch ? styles.hoverMiniBlokMatch : styles.hoverMiniBlokDim}`}
                                             style={{
-                                                top: `${topPct(b.start)}%`,
-                                                height: `${heightPct(b.start, b.eind)}%`,
+                                                top: `${topPct(b.start, totalMin)}%`,
+                                                height: `${heightPct(b.start, b.eind, totalMin)}%`,
                                                 left: `calc(${leftPct}% + 1px)`,
                                                 width: `calc(${widthPct}% - 2px)`,
                                                 backgroundColor: isMatch

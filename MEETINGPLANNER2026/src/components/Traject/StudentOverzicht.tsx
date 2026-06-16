@@ -4,10 +4,12 @@ import { trajectUntisService } from './trajectService';
 import {
     addDays,
     DAG_HEADERS,
+    DAY_START_HOUR,
     formatDateBE,
     formatDateTime,
     formatTime,
     fridayEndOf,
+    gridEndHour,
     isoWeekNumber,
     parseIsoDate,
     sameDay,
@@ -26,21 +28,17 @@ interface Props {
     ensureColor: (olodNaam: string) => void;
 }
 
-const DAY_START_HOUR = 8;
-const DAY_END_HOUR = 18;
-const TOTAL_MIN = (DAY_END_HOUR - DAY_START_HOUR) * 60;
-
-function topPct(d: Date): number {
+function topPct(d: Date, totalMin: number): number {
     const m = (d.getHours() - DAY_START_HOUR) * 60 + d.getMinutes();
-    return Math.max(0, Math.min(100, (m / TOTAL_MIN) * 100));
+    return Math.max(0, Math.min(100, (m / totalMin) * 100));
 }
 
-function heightPct(start: Date, eind: Date): number {
+function heightPct(start: Date, eind: Date, totalMin: number): number {
     const m =
         (eind.getHours() - DAY_START_HOUR) * 60 +
         eind.getMinutes() -
         ((start.getHours() - DAY_START_HOUR) * 60 + start.getMinutes());
-    return Math.max(2, Math.min(100, (m / TOTAL_MIN) * 100));
+    return Math.max(2, Math.min(100, (m / totalMin) * 100));
 }
 
 function overlapt(a: Lesblok, b: Lesblok): boolean {
@@ -144,6 +142,13 @@ export function StudentOverzicht({
         return out;
     }, [blokkenPerKlas, traject, start, eind]);
 
+    // Alle weekstroken delen dezelfde hoogte: standaard tot 18u, uitgerekt tot
+    // max 22u zodra het traject een avondschoolblok bevat dat later eindigt.
+    const totalMin = useMemo(
+        () => (gridEndHour(effectieveBlokken) - DAY_START_HOUR) * 60,
+        [effectieveBlokken]
+    );
+
     const conflicts = useMemo(() => detectConflicts(effectieveBlokken), [effectieveBlokken]);
     const conflictMap = useMemo(() => {
         const map = new Map<Lesblok, Lesblok[]>();
@@ -242,8 +247,8 @@ export function StudentOverzicht({
                                                                     className={`${styles.miniBlok} ${conflict ? styles.miniBlokConflict : ''}`}
                                                                     data-tip={tip}
                                                                     style={{
-                                                                        top: `${topPct(b.start)}%`,
-                                                                        height: `${heightPct(b.start, b.eind)}%`,
+                                                                        top: `${topPct(b.start, totalMin)}%`,
+                                                                        height: `${heightPct(b.start, b.eind, totalMin)}%`,
                                                                         left: `calc(${leftPct}% + 1px)`,
                                                                         width: `calc(${widthPct}% - 2px)`,
                                                                         backgroundColor: colorOf(b.olodNaam),

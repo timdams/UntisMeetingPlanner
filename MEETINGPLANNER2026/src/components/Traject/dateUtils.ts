@@ -1,4 +1,29 @@
+import type { Lesblok } from './types';
+
 export const DAG_HEADERS = ['Ma', 'Di', 'Wo', 'Do', 'Vr'];
+
+/** Vroegste uur dat de roostergrid toont. */
+export const DAY_START_HOUR = 8;
+/** Standaard laatste uur (dagschool). */
+export const DEFAULT_DAY_END_HOUR = 18;
+/** Hoogste uur waartoe de grid mag uitrekken (avondschool). */
+export const MAX_DAY_END_HOUR = 22;
+
+/**
+ * Bepaalt tot welk uur de roostergrid moet lopen voor een set lesblokken.
+ * Standaard tot {@link DEFAULT_DAY_END_HOUR} (18u); zodra minstens één blok
+ * later eindigt (avondschool) rekt de grid op tot het volgende hele uur,
+ * begrensd op {@link MAX_DAY_END_HOUR} (22u).
+ */
+export function gridEndHour(blokken: Lesblok[]): number {
+    let latestMin = DEFAULT_DAY_END_HOUR * 60;
+    for (const b of blokken) {
+        const m = b.eind.getHours() * 60 + b.eind.getMinutes();
+        if (m > latestMin) latestMin = m;
+    }
+    const uur = Math.ceil(latestMin / 60);
+    return Math.min(MAX_DAY_END_HOUR, Math.max(DEFAULT_DAY_END_HOUR, uur));
+}
 
 export function mondayOf(date: Date): Date {
     const d = new Date(date);
