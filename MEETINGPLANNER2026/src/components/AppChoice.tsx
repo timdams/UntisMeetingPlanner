@@ -1,4 +1,4 @@
-import { CalendarDays, Route, LogOut } from 'lucide-react';
+import { CalendarDays, Route, LogOut, ExternalLink } from 'lucide-react';
 import styles from './AppChoice.module.css';
 
 interface AppChoiceProps {
@@ -53,6 +53,18 @@ export function AppChoice({ meetingAvailable, onSelect, onLogout }: AppChoicePro
                             Stel een individueel studentrooster samen uit OLODs van verschillende klasgroepen.
                         </div>
                     </button>
+                </div>
+
+                <div className={styles.moreToolsWrapper}>
+                    <a
+                        href="https://timdams.github.io/TimsTools/docs/category/tools"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className={styles.moreToolsButton}
+                    >
+                        <ExternalLink size={15} />
+                        <span>Bekijk meer tools van Tim Dams</span>
+                    </a>
                 </div>
 
                 <div className={styles.bmcWrapper}>

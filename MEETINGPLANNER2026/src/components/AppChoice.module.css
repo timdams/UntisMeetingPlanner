@@ -139,6 +139,34 @@
     letter-spacing: 0.5px;
 }
 
+.moreToolsWrapper {
+    margin-top: 1.75rem;
+    display: flex;
+    justify-content: center;
+}
+
+.moreToolsButton {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    background-color: transparent;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 0.5rem 1rem;
+    font-family: inherit;
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: #64748b;
+    text-decoration: none;
+    transition: color 0.15s, border-color 0.15s, background-color 0.15s;
+}
+
+.moreToolsButton:hover {
+    color: var(--primary);
+    border-color: var(--primary);
+    background-color: var(--secondary);
+}
+
 .bmcWrapper {
     margin-top: 4rem;
     display: flex;
