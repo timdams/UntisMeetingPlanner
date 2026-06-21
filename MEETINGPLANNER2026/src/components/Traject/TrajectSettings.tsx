@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { TrajectSettings } from './types';
 import { trajectUntisService } from './trajectService';
+import { buildShareUrl, copyToClipboard } from './trajectShare';
 import styles from './Traject.module.css';
-import { AlertTriangle, Download, Loader2, RotateCcw, Upload } from 'lucide-react';
+import { AlertTriangle, Check, Copy, Download, Link2, Loader2, RotateCcw, Upload } from 'lucide-react';
 
 interface Props {
     settings: TrajectSettings;
@@ -28,6 +29,8 @@ export function TrajectSettingsView({
     const [error, setError] = useState<string | null>(null);
     const [filter, setFilter] = useState('');
     const [importMsg, setImportMsg] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
+    const [shareUrl, setShareUrl] = useState<string | null>(null);
+    const [shareCopied, setShareCopied] = useState(false);
     const fileInputRef = useRef<HTMLInputElement | null>(null);
 
     useEffect(() => {
@@ -67,6 +70,24 @@ export function TrajectSettingsView({
             setImportMsg({ kind: 'err', text: msg });
         }
     };
+
+    const flashCopied = () => {
+        setShareCopied(true);
+        window.setTimeout(() => setShareCopied(false), 1500);
+    };
+
+    const handleGenerateLink = async () => {
+        if (settings.mijnOpleidingKlasgroepen.length === 0) return;
+        const url = buildShareUrl(settings);
+        setShareUrl(url);
+        if (await copyToClipboard(url)) flashCopied();
+    };
+
+    const handleCopyShare = async () => {
+        if (shareUrl && (await copyToClipboard(shareUrl))) flashCopied();
+    };
+
+    const noKlasgroepen = settings.mijnOpleidingKlasgroepen.length === 0;
 
     return (
         <div className={styles.settings}>
@@ -199,6 +220,51 @@ export function TrajectSettingsView({
                             <div className={styles.emptyState}>Geen klasgroepen gevonden.</div>
                         )}
                     </div>
+                )}
+            </div>
+
+            <div className={styles.settingsSection}>
+                <div className={styles.settingsTitle}>Deel met student</div>
+                <div className={styles.settingsHint}>
+                    Genereer een link met de hierboven geselecteerde klasgroepen en de
+                    semesterperiode. Een student die via deze link inlogt, ziet meteen de
+                    juiste klasgroepen in het werkblad en hoeft niets in te stellen. De
+                    student kiest daarna zelf zijn vakken — jouw eigen traject wordt niet
+                    meegestuurd.
+                </div>
+                <div className={styles.backupRow}>
+                    <button
+                        className={styles.toolbarBtn}
+                        onClick={handleGenerateLink}
+                        disabled={noKlasgroepen}
+                        title={
+                            noKlasgroepen
+                                ? 'Selecteer eerst minstens één klasgroep'
+                                : 'Genereer en kopieer een student-link'
+                        }
+                    >
+                        <Link2 size={14} /> Genereer student-link
+                    </button>
+                    {shareUrl && (
+                        <button className={styles.toolbarBtn} onClick={handleCopyShare}>
+                            {shareCopied ? <Check size={14} /> : <Copy size={14} />}
+                            {shareCopied ? 'Gekopieerd!' : 'Kopieer link'}
+                        </button>
+                    )}
+                </div>
+                {noKlasgroepen && (
+                    <div className={styles.settingsHint}>
+                        Selecteer eerst minstens één klasgroep hierboven.
+                    </div>
+                )}
+                {shareUrl && (
+                    <input
+                        className={styles.shareUrlInput}
+                        type="text"
+                        readOnly
+                        value={shareUrl}
+                        onFocus={e => e.currentTarget.select()}
+                    />
                 )}
             </div>
         </div>

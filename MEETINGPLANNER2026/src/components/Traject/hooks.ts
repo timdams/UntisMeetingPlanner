@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { TrajectSettings, StudentTraject, KleurMap, OLODSelectie } from './types';
+import type { TrajectPreset } from './trajectShare';
 
 const KEY_SETTINGS = 'traject_settings';
 const KEY_TRAJECT = 'traject_student';
@@ -36,6 +37,26 @@ function loadJSON<T>(key: string, fallback: T): T {
 
 function persist<T>(key: string, value: T) {
     localStorage.setItem(key, JSON.stringify(value));
+}
+
+/**
+ * Past een gedeelde preset (klasgroep-shortlist + semesterperiode) toe op de
+ * opgeslagen instellingen. Wordt door {@link App} aangeroepen vóór React de
+ * hooks initialiseert, zodat een student via een trajectbegeleider-link meteen
+ * de juiste klasgroepen ziet. Het studenttraject en de kleurmap blijven ongemoeid.
+ */
+export function applyTrajectSettingsPreset(preset: TrajectPreset): void {
+    const current = loadJSON<TrajectSettings>(KEY_SETTINGS, {
+        mijnOpleidingKlasgroepen: [],
+        semesterStart: todayIso(),
+        semesterEind: plusMonthsIso(5),
+    });
+    persist(KEY_SETTINGS, {
+        ...current,
+        mijnOpleidingKlasgroepen: preset.mijnOpleidingKlasgroepen,
+        semesterStart: preset.semesterStart,
+        semesterEind: preset.semesterEind,
+    });
 }
 
 export function useTrajectSettings() {

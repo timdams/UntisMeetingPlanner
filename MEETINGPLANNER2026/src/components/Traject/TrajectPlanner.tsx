@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Printer, RotateCcw, Settings as SettingsIcon, LayoutGrid, ArrowLeft, Palette, Copy, Check } from 'lucide-react';
+import { Printer, RotateCcw, Settings as SettingsIcon, LayoutGrid, ArrowLeft, Palette, Copy, Check, Info, X } from 'lucide-react';
 import styles from './Traject.module.css';
 import { useKleurMap, useStudentTraject, useTrajectSettings } from './hooks';
 import { TrajectSettingsView } from './TrajectSettings';
@@ -14,6 +14,9 @@ type Tab = 'werkblad' | 'instellingen';
 
 interface Props {
     onBack: () => void;
+    // True wanneer de student via een trajectbegeleider-link binnenkwam en de
+    // klasgroepen + semesterperiode dus al voor hem zijn klaargezet.
+    presetApplied?: boolean;
 }
 
 const PANEL_A_MIN = 140;
@@ -68,7 +71,7 @@ function Splitter({ orientation, onDelta }: SplitterProps) {
     );
 }
 
-export function TrajectPlanner({ onBack }: Props) {
+export function TrajectPlanner({ onBack, presetApplied = false }: Props) {
     const {
         settings,
         toggleKlasgroep,
@@ -87,6 +90,7 @@ export function TrajectPlanner({ onBack }: Props) {
         settings.mijnOpleidingKlasgroepen[0] ?? null
     );
     const [copied, setCopied] = useState(false);
+    const [bannerDismissed, setBannerDismissed] = useState(false);
 
     const [panelAWidth, setPanelAWidth] = useState<number>(() => {
         const raw = localStorage.getItem(KEY_PANEL_A);
@@ -251,6 +255,24 @@ export function TrajectPlanner({ onBack }: Props) {
                     <Printer size={14} /> Print / PDF
                 </button>
             </div>
+
+            {presetApplied && !bannerDismissed && (
+                <div className={styles.presetBanner}>
+                    <Info size={18} />
+                    <div className={styles.presetBannerText}>
+                        <strong>Klaargezet door je trajectbegeleider.</strong> De klasgroepen
+                        en semesterperiode zijn al ingesteld — kies meteen je vakken in het
+                        werkblad. Je hoeft niets in de instellingen aan te passen.
+                    </div>
+                    <button
+                        className={styles.presetBannerClose}
+                        onClick={() => setBannerDismissed(true)}
+                        aria-label="Melding sluiten"
+                    >
+                        <X size={16} />
+                    </button>
+                </div>
+            )}
 
             {tab === 'instellingen' ? (
                 <TrajectSettingsView

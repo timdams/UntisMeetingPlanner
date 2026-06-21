@@ -95,6 +95,63 @@
     background-color: var(--selected-bg);
 }
 
+/* ===== Preset-banner (student kwam via trajectbegeleider-link) ===== */
+.presetBanner {
+    display: flex;
+    gap: 0.75rem;
+    align-items: flex-start;
+    padding: 0.7rem 1rem;
+    margin: 0.75rem 1rem 0;
+    background-color: #EFF6FF;
+    border: 1px solid #3B82F6;
+    border-left: 4px solid #1D4ED8;
+    border-radius: var(--border-radius);
+    color: #1E3A8A;
+    font-size: 0.88rem;
+    line-height: 1.4;
+    flex-shrink: 0;
+}
+
+.presetBanner strong {
+    color: #1E3A8A;
+}
+
+.presetBannerText {
+    flex: 1;
+}
+
+.presetBannerClose {
+    flex-shrink: 0;
+    background: transparent;
+    border: none;
+    color: #1E3A8A;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    padding: 2px;
+    border-radius: 4px;
+    opacity: 0.7;
+}
+
+.presetBannerClose:hover {
+    opacity: 1;
+    background-color: rgba(29, 78, 216, 0.12);
+}
+
+/* Read-only veld met de gegenereerde student-link */
+.shareUrlInput {
+    width: 100%;
+    margin-top: 0.6rem;
+    font-family: monospace;
+    font-size: 0.8rem;
+    padding: 0.45rem 0.6rem;
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    background-color: var(--secondary);
+    color: var(--text-color);
+    box-sizing: border-box;
+}
+
 /* ===== Settings screen ===== */
 .settings {
     padding: 1.5rem;

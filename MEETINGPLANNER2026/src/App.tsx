@@ -4,6 +4,8 @@ import { Login } from "./components/Login";
 import { AppChoice } from "./components/AppChoice";
 import { PlannerDashboard } from "./components/Planner/PlannerDashboard";
 import { TrajectPlanner } from "./components/Traject/TrajectPlanner";
+import { applyTrajectSettingsPreset } from "./components/Traject/hooks";
+import { clearTrajectPresetFromUrl, readTrajectPresetFromUrl } from "./components/Traject/trajectShare";
 import { untisService } from "./services/UntisService";
 
 type View = 'choice' | 'meeting' | 'traject';
@@ -18,10 +20,20 @@ function readStoredView(): View {
   return 'choice';
 }
 
+// Een trajectbegeleider kan een student een link sturen met de klasgroep-shortlist
+// en semesterperiode al ingevuld. Verbruik die preset één keer bij het laden van
+// de module — vóór React rendert — zodat de instellingen-hook de juiste waarden
+// meteen inleest en de student rechtstreeks in het werkblad belandt.
+const INITIAL_PRESET = readTrajectPresetFromUrl();
+if (INITIAL_PRESET) {
+  applyTrajectSettingsPreset(INITIAL_PRESET);
+  clearTrajectPresetFromUrl();
+}
+
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isRestoring, setIsRestoring] = useState(true);
-  const [view, setView] = useState<View>(readStoredView);
+  const [view, setView] = useState<View>(() => (INITIAL_PRESET ? 'traject' : readStoredView()));
   // null = nog aan het controleren, true/false = resultaat van de rechtencheck.
   const [meetingAvailable, setMeetingAvailable] = useState<boolean | null>(null);
 
@@ -84,7 +96,9 @@ function App() {
         />
       )}
       {view === 'meeting' && meetingAvailable !== false && <PlannerDashboard onBack={() => setView('choice')} />}
-      {view === 'traject' && <TrajectPlanner onBack={() => setView('choice')} />}
+      {view === 'traject' && (
+        <TrajectPlanner onBack={() => setView('choice')} presetApplied={INITIAL_PRESET !== null} />
+      )}
     </div>
   );
 }
