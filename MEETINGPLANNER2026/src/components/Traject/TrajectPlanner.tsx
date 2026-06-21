@@ -204,8 +204,12 @@ export function TrajectPlanner({ onBack, presetApplied = false }: Props) {
         <div className={styles.screenRoot}>
         <div className={styles.page}>
             <div className={styles.topbar}>
-                <button className={styles.toolbarBtn} onClick={onBack}>
-                    <ArrowLeft size={14} /> Terug
+                <button
+                    className={styles.toolbarBtn}
+                    onClick={onBack}
+                    title="Terug naar het hoofdmenu — kies een andere tool"
+                >
+                    <ArrowLeft size={14} /> Menu
                 </button>
                 <div className={styles.topbarTitle}>Trajectplanner</div>
 
@@ -283,6 +287,7 @@ export function TrajectPlanner({ onBack, presetApplied = false }: Props) {
                     onSemesterEindChange={setSemesterEind}
                     onExport={handleExport}
                     onImport={handleImport}
+                    onDone={() => setTab('werkblad')}
                 />
             ) : (
                 <div

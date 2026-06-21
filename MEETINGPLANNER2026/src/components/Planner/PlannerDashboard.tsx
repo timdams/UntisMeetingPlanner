@@ -87,7 +87,7 @@ export function PlannerDashboard({ onBack }: Props) {
             <div className={styles.main}>
                 <div className={styles.topbar}>
                     <button className={styles.backBtn} onClick={onBack}>
-                        <ArrowLeft size={14} /> Terug
+                        <ArrowLeft size={14} /> Menu
                     </button>
                 </div>
 

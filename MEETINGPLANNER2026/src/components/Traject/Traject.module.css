@@ -159,6 +159,31 @@
     flex: 1;
 }
 
+/* "Klaar"-balk bovenaan de instellingen: duidelijke weg terug naar het werkblad,
+   los van de "Menu"-knop linksboven (die de hele module verlaat). */
+.settingsDoneBar {
+    display: flex;
+    margin-bottom: 1.25rem;
+}
+
+.settingsDoneBtn {
+    background-color: var(--primary);
+    border: 1px solid var(--primary);
+    color: #fff;
+    padding: 0.5rem 1rem;
+    border-radius: var(--border-radius);
+    font-weight: 600;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+}
+
+.settingsDoneBtn:hover {
+    background-color: var(--primary-hover);
+    border-color: var(--primary-hover);
+}
+
 .backupWarning {
     display: flex;
     gap: 0.75rem;

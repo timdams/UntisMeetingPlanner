@@ -13,6 +13,7 @@ interface Props {
     onSemesterEindChange: (iso: string) => void;
     onExport: () => void;
     onImport: (file: File) => Promise<boolean>;
+    onDone: () => void;
 }
 
 export function TrajectSettingsView({
@@ -23,6 +24,7 @@ export function TrajectSettingsView({
     onSemesterEindChange,
     onExport,
     onImport,
+    onDone,
 }: Props) {
     const [allKlasgroepen, setAllKlasgroepen] = useState<string[]>([]);
     const [busy, setBusy] = useState(false);
@@ -91,6 +93,16 @@ export function TrajectSettingsView({
 
     return (
         <div className={styles.settings}>
+            <div className={styles.settingsDoneBar}>
+                <button
+                    className={styles.settingsDoneBtn}
+                    onClick={onDone}
+                    title="Sluit de instellingen en ga terug naar het werkblad"
+                >
+                    <Check size={16} /> Klaar — terug naar werkblad
+                </button>
+            </div>
+
             <div className={styles.backupWarning}>
                 <AlertTriangle size={18} />
                 <div>
