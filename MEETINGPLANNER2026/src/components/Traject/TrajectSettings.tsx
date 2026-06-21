@@ -3,7 +3,8 @@ import { TrajectSettings } from './types';
 import { trajectUntisService } from './trajectService';
 import { buildShareUrl, copyToClipboard } from './trajectShare';
 import styles from './Traject.module.css';
-import { AlertTriangle, Check, Copy, Download, Link2, Loader2, RotateCcw, Upload } from 'lucide-react';
+import { AlertTriangle, Check, Copy, Download, Link2, Loader2, QrCode, RotateCcw, Upload } from 'lucide-react';
+import { QRCodeCanvas } from 'qrcode.react';
 
 interface Props {
     settings: TrajectSettings;
@@ -33,6 +34,8 @@ export function TrajectSettingsView({
     const [importMsg, setImportMsg] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
     const [shareUrl, setShareUrl] = useState<string | null>(null);
     const [shareCopied, setShareCopied] = useState(false);
+    const [showQr, setShowQr] = useState(false);
+    const qrBoxRef = useRef<HTMLDivElement | null>(null);
     const fileInputRef = useRef<HTMLInputElement | null>(null);
 
     useEffect(() => {
@@ -88,6 +91,31 @@ export function TrajectSettingsView({
     const handleCopyShare = async () => {
         if (shareUrl && (await copyToClipboard(shareUrl))) flashCopied();
     };
+
+    const handleGenerateQr = () => {
+        if (settings.mijnOpleidingKlasgroepen.length === 0) return;
+        setShareUrl(buildShareUrl(settings));
+        setShowQr(true);
+    };
+
+    const handleDownloadQr = () => {
+        const canvas = qrBoxRef.current?.querySelector('canvas');
+        if (!canvas) return;
+        const a = document.createElement('a');
+        a.href = canvas.toDataURL('image/png');
+        a.download = 'trajectplanner-student-qr.png';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+    };
+
+    // Een gegenereerde link/QR is een momentopname van de instellingen; verberg ze
+    // zodra de klasgroepen of semesterperiode wijzigen, zodat de trajectbegeleider
+    // nooit per ongeluk een verouderde link of QR deelt.
+    useEffect(() => {
+        setShareUrl(null);
+        setShowQr(false);
+    }, [settings.mijnOpleidingKlasgroepen, settings.semesterStart, settings.semesterEind]);
 
     const noKlasgroepen = settings.mijnOpleidingKlasgroepen.length === 0;
 
@@ -257,6 +285,18 @@ export function TrajectSettingsView({
                     >
                         <Link2 size={14} /> Genereer student-link
                     </button>
+                    <button
+                        className={styles.toolbarBtn}
+                        onClick={handleGenerateQr}
+                        disabled={noKlasgroepen}
+                        title={
+                            noKlasgroepen
+                                ? 'Selecteer eerst minstens één klasgroep'
+                                : 'Toon de student-link als QR-code'
+                        }
+                    >
+                        <QrCode size={14} /> Genereer QR
+                    </button>
                     {shareUrl && (
                         <button className={styles.toolbarBtn} onClick={handleCopyShare}>
                             {shareCopied ? <Check size={14} /> : <Copy size={14} />}
@@ -277,6 +317,22 @@ export function TrajectSettingsView({
                         value={shareUrl}
                         onFocus={e => e.currentTarget.select()}
                     />
+                )}
+                {showQr && shareUrl && (
+                    <div className={styles.qrSection}>
+                        <div className={styles.qrBox} ref={qrBoxRef}>
+                            <QRCodeCanvas value={shareUrl} size={240} level="L" marginSize={2} />
+                        </div>
+                        <div className={styles.qrActions}>
+                            <button className={styles.toolbarBtn} onClick={handleDownloadQr}>
+                                <Download size={14} /> Download QR (PNG)
+                            </button>
+                        </div>
+                        <div className={styles.settingsHint}>
+                            Laat de student deze QR scannen met de telefooncamera, of deel de
+                            afbeelding. De QR opent dezelfde voorgeconfigureerde link.
+                        </div>
+                    </div>
                 )}
             </div>
         </div>

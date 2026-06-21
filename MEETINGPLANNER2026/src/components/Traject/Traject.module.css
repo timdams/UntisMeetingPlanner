@@ -138,6 +138,27 @@
     background-color: rgba(29, 78, 216, 0.12);
 }
 
+/* QR-code van de student-link */
+.qrSection {
+    margin-top: 0.85rem;
+}
+
+.qrBox {
+    display: inline-block;
+    padding: 12px;
+    background: #ffffff;
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    line-height: 0;
+}
+
+.qrActions {
+    display: flex;
+    gap: 0.5rem;
+    margin-top: 0.6rem;
+    margin-bottom: 0.5rem;
+}
+
 /* Read-only veld met de gegenereerde student-link */
 .shareUrlInput {
     width: 100%;
