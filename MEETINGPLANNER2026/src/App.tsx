@@ -4,7 +4,7 @@ import { Login } from "./components/Login";
 import { AppChoice } from "./components/AppChoice";
 import { PlannerDashboard } from "./components/Planner/PlannerDashboard";
 import { TrajectPlanner } from "./components/Traject/TrajectPlanner";
-import { applyTrajectSettingsPreset } from "./components/Traject/hooks";
+import { applyTrajectSettingsPreset, runTrajectMigrations } from "./components/Traject/hooks";
 import { clearTrajectPresetFromUrl, readTrajectPresetFromUrl } from "./components/Traject/trajectShare";
 import { untisService } from "./services/UntisService";
 
@@ -19,6 +19,11 @@ function readStoredView(): View {
   } catch { /* ignore */ }
   return 'choice';
 }
+
+// Eenmalige opkuis van opgeslagen traject-data (o.a. de klasgroep-shortlist van
+// het vorige academiejaar wissen). Moet vóór de preset draaien, zodat een verse
+// trajectbegeleider-link de klasgroepen van het nieuwe jaar wél mag invullen.
+runTrajectMigrations();
 
 // Een trajectbegeleider kan een student een link sturen met de klasgroep-shortlist
 // en semesterperiode al ingevuld. Verbruik die preset één keer bij het laden van

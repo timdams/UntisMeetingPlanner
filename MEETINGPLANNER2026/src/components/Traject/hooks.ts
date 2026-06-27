@@ -1,10 +1,17 @@
 import { useState, useEffect, useCallback } from 'react';
 import { TrajectSettings, StudentTraject, KleurMap, OLODSelectie } from './types';
 import type { TrajectPreset } from './trajectShare';
+import { defaultSemesterPeriode } from './academicYear';
 
 const KEY_SETTINGS = 'traject_settings';
 const KEY_TRAJECT = 'traject_student';
 const KEY_KLEUR = 'traject_kleurmap';
+const KEY_MIGRATION = 'traject_migration_version';
+
+// Verhoog dit nummer bij een breaking change in opgeslagen data. runTrajectMigrations()
+// draait dan eenmalig de bijhorende opkuis voor bestaande gebruikers.
+//   v1 — academiejaar-update: klasgroep-shortlist (oude resource-IDs) wissen.
+const CURRENT_MIGRATION = 1;
 
 // Genereert een unieke kleur per allocatie-index via golden-angle hue-distributie.
 // Combineert met drie (saturation, lightness)-banden zodat ook hue-buren visueel verschillen.
@@ -16,14 +23,16 @@ function allocateColor(index: number): string {
     return `hsl(${hue.toFixed(1)}, ${sat}%, ${light}%)`;
 }
 
-function todayIso(): string {
-    return new Date().toISOString().slice(0, 10);
-}
-
-function plusMonthsIso(months: number): string {
-    const d = new Date();
-    d.setMonth(d.getMonth() + months);
-    return d.toISOString().slice(0, 10);
+// Verse-start instellingen: lege klasgroep-shortlist + het lopende semester van
+// het geplande academiejaar (zie academicYear.ts). Reeds opgeslagen instellingen
+// in localStorage blijven ongemoeid — dit geldt enkel voor een eerste gebruik.
+function defaultSettings(): TrajectSettings {
+    const { start, eind } = defaultSemesterPeriode();
+    return {
+        mijnOpleidingKlasgroepen: [],
+        semesterStart: start,
+        semesterEind: eind,
+    };
 }
 
 function loadJSON<T>(key: string, fallback: T): T {
@@ -40,17 +49,54 @@ function persist<T>(key: string, value: T) {
 }
 
 /**
+ * Eenmalige migraties van in localStorage opgeslagen traject-data. Idempotent:
+ * wordt afgeschermd door een opgeslagen versienummer, dus draait per gebruiker
+ * maar één keer per migratie.
+ *
+ * Moet door {@link App} worden aangeroepen vóór {@link applyTrajectSettingsPreset},
+ * zodat een verse trajectbegeleider-link de zonet gewiste klasgroepen weer mag
+ * invullen (de preset bevat klasgroepen van het nieuwe academiejaar).
+ *
+ * v1 — na de academiejaar-update bevat de opgeslagen klasgroep-shortlist
+ * displayNames van het vorige jaar; de bijhorende resource-IDs kloppen niet meer.
+ * We wissen die selectie één keer zodat bestaande gebruikers hun klasgroepen
+ * opnieuw kiezen tegen het nieuwe jaar. Het studenttraject en de kleurmap blijven
+ * ongemoeid.
+ */
+export function runTrajectMigrations(): void {
+    let version = 0;
+    try {
+        version = Number(localStorage.getItem(KEY_MIGRATION)) || 0;
+    } catch {
+        return; // localStorage onbeschikbaar — niets te migreren
+    }
+    if (version >= CURRENT_MIGRATION) return;
+
+    try {
+        const raw = localStorage.getItem(KEY_SETTINGS);
+        if (raw) {
+            const parsed = JSON.parse(raw) as TrajectSettings;
+            if (
+                Array.isArray(parsed.mijnOpleidingKlasgroepen) &&
+                parsed.mijnOpleidingKlasgroepen.length > 0
+            ) {
+                persist(KEY_SETTINGS, { ...parsed, mijnOpleidingKlasgroepen: [] });
+            }
+        }
+        localStorage.setItem(KEY_MIGRATION, String(CURRENT_MIGRATION));
+    } catch {
+        // Schrijven mislukt — versie niet bumpen, volgende keer opnieuw proberen
+    }
+}
+
+/**
  * Past een gedeelde preset (klasgroep-shortlist + semesterperiode) toe op de
  * opgeslagen instellingen. Wordt door {@link App} aangeroepen vóór React de
  * hooks initialiseert, zodat een student via een trajectbegeleider-link meteen
  * de juiste klasgroepen ziet. Het studenttraject en de kleurmap blijven ongemoeid.
  */
 export function applyTrajectSettingsPreset(preset: TrajectPreset): void {
-    const current = loadJSON<TrajectSettings>(KEY_SETTINGS, {
-        mijnOpleidingKlasgroepen: [],
-        semesterStart: todayIso(),
-        semesterEind: plusMonthsIso(5),
-    });
+    const current = loadJSON<TrajectSettings>(KEY_SETTINGS, defaultSettings());
     persist(KEY_SETTINGS, {
         ...current,
         mijnOpleidingKlasgroepen: preset.mijnOpleidingKlasgroepen,
@@ -61,11 +107,7 @@ export function applyTrajectSettingsPreset(preset: TrajectPreset): void {
 
 export function useTrajectSettings() {
     const [settings, setSettings] = useState<TrajectSettings>(() =>
-        loadJSON<TrajectSettings>(KEY_SETTINGS, {
-            mijnOpleidingKlasgroepen: [],
-            semesterStart: todayIso(),
-            semesterEind: plusMonthsIso(5),
-        })
+        loadJSON<TrajectSettings>(KEY_SETTINGS, defaultSettings())
     );
 
     useEffect(() => {
@@ -92,6 +134,11 @@ export function useTrajectSettings() {
         setSettings(s => ({ ...s, semesterEind: iso }));
     }, []);
 
+    // Zet start én einde in één keer — gebruikt door de semester-snelkeuze.
+    const setSemesterPeriode = useCallback((start: string, eind: string) => {
+        setSettings(s => ({ ...s, semesterStart: start, semesterEind: eind }));
+    }, []);
+
     const replaceSettings = useCallback((next: TrajectSettings) => {
         setSettings(next);
     }, []);
@@ -105,6 +152,7 @@ export function useTrajectSettings() {
         toggleKlasgroep,
         setSemesterStart,
         setSemesterEind,
+        setSemesterPeriode,
         replaceSettings,
         clearKlasgroepen,
     };

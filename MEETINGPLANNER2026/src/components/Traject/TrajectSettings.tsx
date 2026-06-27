@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { TrajectSettings } from './types';
+import { ACADEMIEJAAR, matchtSemester } from './academicYear';
 import { trajectUntisService } from './trajectService';
+import { untisService } from '../../services/UntisService';
 import { buildShareUrl, copyToClipboard } from './trajectShare';
 import styles from './Traject.module.css';
 import { AlertTriangle, Check, Copy, Download, Link2, Loader2, QrCode, RotateCcw, Upload } from 'lucide-react';
@@ -12,6 +14,7 @@ interface Props {
     onClearKlasgroepen: () => void;
     onSemesterStartChange: (iso: string) => void;
     onSemesterEindChange: (iso: string) => void;
+    onSemesterPeriodeChange: (start: string, eind: string) => void;
     onExport: () => void;
     onImport: (file: File) => Promise<boolean>;
     onDone: () => void;
@@ -23,6 +26,7 @@ export function TrajectSettingsView({
     onClearKlasgroepen,
     onSemesterStartChange,
     onSemesterEindChange,
+    onSemesterPeriodeChange,
     onExport,
     onImport,
     onDone,
@@ -46,6 +50,10 @@ export function TrajectSettingsView({
             .catch(e => setError(e.message ?? 'Klasgroepen ophalen mislukt'))
             .finally(() => setBusy(false));
     }, []);
+
+    // Toon het werkelijk geresolveerde academiejaar uit de Untis-service; val
+    // terug op het geplande jaar (constante) zolang discovery niet klaar is.
+    const actiefJaar = untisService.getActiveSchoolYearName() ?? ACADEMIEJAAR.naam;
 
     const selected = new Set(settings.mijnOpleidingKlasgroepen);
     const f = filter.trim().toLowerCase();
@@ -129,6 +137,12 @@ export function TrajectSettingsView({
                 >
                     <Check size={16} /> Klaar — terug naar werkblad
                 </button>
+                <span
+                    className={styles.academiejaarBadge}
+                    title="Het academiejaar waarvan de klasgroepen en roosters geladen worden"
+                >
+                    Academiejaar {actiefJaar}
+                </span>
             </div>
 
             <div className={styles.backupWarning}>
@@ -183,7 +197,24 @@ export function TrajectSettingsView({
             <div className={styles.settingsSection}>
                 <div className={styles.settingsTitle}>Semesterperiode</div>
                 <div className={styles.settingsHint}>
-                    Het studenttraject wordt opgebouwd binnen deze periode.
+                    Het studenttraject wordt opgebouwd binnen deze periode. Kies een
+                    semester van academiejaar {ACADEMIEJAAR.naam} of stel de datums
+                    handmatig in.
+                </div>
+                <div className={styles.semesterBtnRow}>
+                    {ACADEMIEJAAR.semesters.map(sem => {
+                        const actief = matchtSemester(sem, settings.semesterStart, settings.semesterEind);
+                        return (
+                            <button
+                                key={sem.nummer}
+                                className={`${styles.toolbarBtn} ${actief ? styles.semesterBtnActief : ''}`}
+                                onClick={() => onSemesterPeriodeChange(sem.start, sem.eind)}
+                                title={`${sem.start} t/m ${sem.eind}`}
+                            >
+                                {sem.label}
+                            </button>
+                        );
+                    })}
                 </div>
                 <div className={styles.dateRow}>
                     <div className={styles.dateField}>

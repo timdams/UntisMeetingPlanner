@@ -4,7 +4,7 @@ function corsHeaders(reqOrigin) {
     return {
         'Access-Control-Allow-Origin': reqOrigin || '*',
         'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type, Authorization, tenant-id, x-untis-session',
+        'Access-Control-Allow-Headers': 'Content-Type, Authorization, tenant-id, x-untis-session, x-webuntis-api-school-year-id',
         'Access-Control-Allow-Credentials': 'true',
         'Access-Control-Max-Age': '86400',
     };

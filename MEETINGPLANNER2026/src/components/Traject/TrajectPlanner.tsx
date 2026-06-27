@@ -77,6 +77,7 @@ export function TrajectPlanner({ onBack, presetApplied = false }: Props) {
         toggleKlasgroep,
         setSemesterStart,
         setSemesterEind,
+        setSemesterPeriode,
         replaceSettings,
         clearKlasgroepen,
     } = useTrajectSettings();
@@ -285,6 +286,7 @@ export function TrajectPlanner({ onBack, presetApplied = false }: Props) {
                     onClearKlasgroepen={clearKlasgroepen}
                     onSemesterStartChange={setSemesterStart}
                     onSemesterEindChange={setSemesterEind}
+                    onSemesterPeriodeChange={setSemesterPeriode}
                     onExport={handleExport}
                     onImport={handleImport}
                     onDone={() => setTab('werkblad')}

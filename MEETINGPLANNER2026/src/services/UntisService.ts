@@ -8,6 +8,24 @@ const SCHOOL = 'ap';
 
 const SESSION_CRED_KEY = 'untis_session_creds';
 
+// School year the Traject Planner defaults to. Class/teacher resource IDs differ
+// per school year, so the picker in the settings must resolve against the same
+// year the rosters are fetched for. Set to the academic year we are planning.
+const PREFERRED_SCHOOL_YEAR_NAME = '2026/2027';
+
+// Hard override for the preferred school year ID. Leave null to auto-discover by
+// name. Only set this if discovery fails to find PREFERRED_SCHOOL_YEAR_NAME — read
+// the id from the network tab: the `x-webuntis-api-school-year-id` header that the
+// WebUntis site sends after toggling to 2026/2027.
+const PREFERRED_SCHOOL_YEAR_ID: number | null = null;
+
+interface SchoolYear {
+    id: number;
+    name: string;
+    start: string; // YYYY-MM-DD
+    end: string;   // YYYY-MM-DD
+}
+
 class UntisService {
     private bearerToken: string | null = null;
     // Raw WebUntis session cookie string, captured server-side at login and
@@ -20,12 +38,13 @@ class UntisService {
     private lastUsername: string | null = null;
     private lastPassword: string | null = null;
     private reAuthPromise: Promise<boolean> | null = null;
+    private schoolYears: SchoolYear[] = [];
+    private activeSchoolYearId: number | null = null;
 
-    // Helper to build headers
-    private getHeaders() {
+    // Helper to build headers, optionally scoped to a specific school year
+    private getHeaders(schoolYearId?: number | null) {
         const headers: Record<string, string> = {
             'tenant-id': TENANT_ID,
-            // 'Content-Type': 'application/json', // Not always needed, fetch sets it for JSON
         };
         if (this.bearerToken) {
             headers['Authorization'] = `Bearer ${String(this.bearerToken).trim()}`;
@@ -33,7 +52,54 @@ class UntisService {
         if (this.sessionId) {
             headers['x-untis-session'] = this.sessionId;
         }
+        const syId = schoolYearId ?? this.activeSchoolYearId;
+        if (syId !== null) {
+            headers['x-webuntis-api-school-year-id'] = String(syId);
+        }
         return headers;
+    }
+
+    // Returns the school year ID that contains the given date, or null if unknown
+    private schoolYearIdForDate(date: Date): number | null {
+        const iso = date.toISOString().split('T')[0];
+        const match = this.schoolYears.find(sy => iso >= sy.start && iso <= sy.end);
+        return match ? match.id : (this.activeSchoolYearId ?? null);
+    }
+
+    // The currently active school year object, if known.
+    private activeSchoolYear(): SchoolYear | null {
+        return this.schoolYears.find(y => y.id === this.activeSchoolYearId) ?? null;
+    }
+
+    // Public: the name of the resolved active school year (e.g. "2026/2027"),
+    // or null if discovery has not run / found nothing. Used by the UI to show
+    // which academic year the resource IDs belong to.
+    getActiveSchoolYearName(): string | null {
+        return this.activeSchoolYear()?.name ?? null;
+    }
+
+    // A short start/end date window that falls *inside* the active school year,
+    // for the resource filter (teachers/classes). Using a date in the wrong year
+    // returns the wrong year's resource IDs, so we anchor on the active year's
+    // start date. Falls back to today when no school year is known.
+    private resourceFilterWindow(): { start: string; end: string } {
+        const active = this.activeSchoolYear();
+        if (active) {
+            const start = new Date(active.start);
+            const end = new Date(start.getTime() + 7 * 86400000);
+            // Clamp the end to the school year end so we never straddle the boundary.
+            const yearEnd = new Date(active.end);
+            const endClamped = end.getTime() > yearEnd.getTime() ? yearEnd : end;
+            return { start: active.start, end: endClamped.toISOString().split('T')[0] };
+        }
+        const today = new Date().toISOString().split('T')[0];
+        const week = new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0];
+        return { start: today, end: week };
+    }
+
+    // Returns the school year ID appropriate for a date range (uses start date)
+    private schoolYearIdForRange(start: Date, _end: Date): number | null {
+        return this.schoolYearIdForDate(start);
     }
 
     async login(username: string, password: string): Promise<{ success: boolean; error?: string; rawResponses?: any; exception?: any }> {
@@ -46,6 +112,7 @@ class UntisService {
             } catch {
                 // sessionStorage unavailable (private mode etc.) — no-op
             }
+            await this.fetchSchoolYears();
         }
         return result;
     }
@@ -69,6 +136,7 @@ class UntisService {
             if (result.success) {
                 this.lastUsername = u;
                 this.lastPassword = p;
+                await this.fetchSchoolYears();
                 return true;
             }
             // Stored creds no longer valid (password changed etc.) — drop them
@@ -76,6 +144,118 @@ class UntisService {
             return false;
         } catch {
             return false;
+        }
+    }
+
+    // Normalize one raw school-year object (varies per endpoint) into SchoolYear.
+    // Handles both { dateRange: { start, end } } and { startDate, endDate } shapes.
+    private parseSchoolYear(sy: any): SchoolYear | null {
+        if (!sy || !sy.id) return null;
+        const start = sy.dateRange?.start ?? sy.startDate ?? sy.start ?? null;
+        const end = sy.dateRange?.end ?? sy.endDate ?? sy.end ?? null;
+        if (!start || !end) return null;
+        return { id: sy.id, name: sy.name ?? '', start, end };
+    }
+
+    // Fetch ALL available school years and store them, so every request can pick
+    // the correct x-webuntis-api-school-year-id for any date. Called once after a
+    // successful login.
+    //
+    // app/data only returns the *current* year, which is the previous academic
+    // year while we plan the next one — that is why the klasgroep IDs were wrong.
+    // We therefore query the dedicated /schoolyears endpoint (full list) first and
+    // fall back to app/data only if it yields nothing.
+    private async fetchSchoolYears(): Promise<void> {
+        try {
+            const years: SchoolYear[] = [];
+
+            // 1. Dedicated list endpoint — returns every school year with its id.
+            try {
+                const listResp = await fetch(`${BASE_URL}/WebUntis/api/rest/view/v1/schoolyears`, {
+                    method: 'GET',
+                    headers: this.getHeaders(null),
+                    credentials: 'include',
+                });
+                if (listResp.ok) {
+                    const listData = await listResp.json().catch(() => null);
+                    const arr: any[] = Array.isArray(listData)
+                        ? listData
+                        : (listData?.schoolYears ?? listData?.data ?? []);
+                    for (const sy of arr) {
+                        const parsed = this.parseSchoolYear(sy);
+                        if (parsed && !years.find(y => y.id === parsed.id)) years.push(parsed);
+                    }
+                }
+            } catch (e) {
+                console.warn('[UntisService] /schoolyears endpoint failed:', e);
+            }
+
+            // 2. app/data — for the current-year marker, and as a fallback source.
+            let currentId: number | null = null;
+            try {
+                const resp = await fetch(`${BASE_URL}/WebUntis/api/rest/view/v1/app/data`, {
+                    method: 'GET',
+                    headers: this.getHeaders(null),
+                    credentials: 'include',
+                });
+                if (resp.ok) {
+                    const data = await resp.json().catch(() => null);
+                    if (data) {
+                        const fallbackList: any[] = data.schoolYears ?? data.allSchoolYears ?? [];
+                        for (const sy of fallbackList) {
+                            const parsed = this.parseSchoolYear(sy);
+                            if (parsed && !years.find(y => y.id === parsed.id)) years.push(parsed);
+                        }
+                        const cur = this.parseSchoolYear(data.currentSchoolYear);
+                        if (cur) {
+                            currentId = cur.id;
+                            if (!years.find(y => y.id === cur.id)) years.push(cur);
+                        }
+                    }
+                }
+            } catch (e) {
+                console.warn('[UntisService] app/data endpoint failed:', e);
+            }
+
+            // Manual override wins even if discovery returned nothing usable.
+            if (PREFERRED_SCHOOL_YEAR_ID !== null) {
+                this.schoolYears = years;
+                this.activeSchoolYearId = PREFERRED_SCHOOL_YEAR_ID;
+                const ov = years.find(y => y.id === PREFERRED_SCHOOL_YEAR_ID);
+                console.log(
+                    `[UntisService] Using manual school-year override id=${PREFERRED_SCHOOL_YEAR_ID}` +
+                    (ov ? ` (${ov.name})` : ' (not in discovered list)')
+                );
+                return;
+            }
+
+            if (years.length === 0) {
+                console.warn('[UntisService] No school years discovered — leaving school-year header unset.');
+                return;
+            }
+
+            this.schoolYears = years;
+
+            // Pick the default: preferred year by name, else the newest by start
+            // date, else the API's current year.
+            const preferred = years.find(y => y.name === PREFERRED_SCHOOL_YEAR_NAME);
+            const newest = [...years].sort((a, b) => b.start.localeCompare(a.start))[0];
+            this.activeSchoolYearId = (preferred ?? newest)?.id ?? currentId ?? null;
+
+            const active = years.find(y => y.id === this.activeSchoolYearId);
+            console.log(
+                '[UntisService] School years loaded:',
+                years.map(y => `${y.name}(id=${y.id}, ${y.start}->${y.end})`).join(', '),
+                `— active: ${active ? `${active.name}(id=${active.id})` : this.activeSchoolYearId}`
+            );
+            if (!preferred) {
+                console.warn(
+                    `[UntisService] Preferred school year "${PREFERRED_SCHOOL_YEAR_NAME}" not found; ` +
+                    `defaulting to ${active ? active.name : this.activeSchoolYearId}.`
+                );
+            }
+        } catch (e) {
+            console.warn('[UntisService] Could not fetch school years:', e);
         }
     }
 
@@ -196,14 +376,14 @@ class UntisService {
     }
 
     // Generic fetch wrapper
-    private async apiFetch<T>(endpoint: string, retried = false): Promise<T> {
+    private async apiFetch<T>(endpoint: string, retried = false, schoolYearId?: number | null): Promise<T> {
         if (!this.isAuthenticated) {
             const reAuthed = await this.trySilentReAuth();
             if (!reAuthed) throw new Error("Not authenticated");
         }
 
         const url = `${BASE_URL}${endpoint}`;
-        const headers = this.getHeaders();
+        const headers = this.getHeaders(schoolYearId);
 
         console.log(`[UntisService] About to fetch URL:`, url);
         console.log(`[UntisService] With Headers:`, headers);
@@ -221,7 +401,7 @@ class UntisService {
                     this.bearerToken = null;
                     if (!retried) {
                         const reAuthed = await this.trySilentReAuth();
-                        if (reAuthed) return this.apiFetch<T>(endpoint, true);
+                        if (reAuthed) return this.apiFetch<T>(endpoint, true, schoolYearId);
                     }
                     throw new Error("Session expired");
                 }
@@ -273,22 +453,13 @@ class UntisService {
 
     // Resource Fetchers
     async getTeachers(): Promise<Teacher[]> {
-        // Corresponds to ResourceRequest(ResourceType.TEACHER)
-        // Need to check exact endpoint/response structure from C# DTOs
-        // Based on MainAPI.cs, it calls /WebUntis/api/rest/view/v1/timetable/filter
-        const start = new Date().toISOString().split('T')[0];
-        const end = new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0];
-
-        // resourceType: TEACHER (likely enum value? MainAPI says ResourceType.TEACHER)
-        // Checking MainAPI.cs: enum ResourceType { ROOM, TEACHER, CLASS, SUBJECT }
-        // Default C# enums start at 0? Need to verify untis expected values. 
-        // Usually Untis uses: CLASS=1, TEACHER=2, SUBJECT=3, ROOM=4
-        // But MainAPI.cs defines enum ResourceType { ROOM, TEACHER, CLASS, SUBJECT } 
-        // If it sends name, it's string. If int, it sends 0,1,2...
-        // MainAPI.cs: ResourceRequest(ResourceType.TEACHER).ToQueryString() -> &resourceType=TEACHER (string)
+        // The filter window must fall inside the active school year, otherwise
+        // Untis returns the resource IDs of whatever year the dates land in.
+        const { start, end } = this.resourceFilterWindow();
+        const syId = this.activeSchoolYearId;
 
         const q = `/WebUntis/api/rest/view/v1/timetable/filter?start=${start}&end=${end}&resourceType=TEACHER&timetableType=STANDARD`;
-        const data = await this.apiFetch<any>(q);
+        const data = await this.apiFetch<any>(q, false, syId);
 
         // Map DTO to domain
         return data.teachers.map((t: any) => ({
@@ -300,10 +471,13 @@ class UntisService {
     }
 
     async getClasses(): Promise<ClassGroup[]> {
-        const start = new Date().toISOString().split('T')[0];
-        const end = new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0];
+        // See getTeachers: anchor the window inside the active school year so the
+        // klasgroep IDs belong to the year we are planning, not the previous one.
+        const { start, end } = this.resourceFilterWindow();
+        const syId = this.activeSchoolYearId;
+
         const q = `/WebUntis/api/rest/view/v1/timetable/filter?start=${start}&end=${end}&resourceType=CLASS&timetableType=STANDARD`;
-        const data = await this.apiFetch<any>(q);
+        const data = await this.apiFetch<any>(q, false, syId);
 
         return data.classes.map((c: any) => ({
             id: c.class.id,
@@ -321,7 +495,8 @@ class UntisService {
         // MainAPI.cs: format=2
         const q = `/WebUntis/api/rest/view/v1/timetable/entries?start=${s}&end=${e}&format=2&resourceType=${type}&timetableType=STANDARD&resources=${resourceId}`;
 
-        const data = await this.apiFetch<any>(q);
+        const syId = this.schoolYearIdForRange(start, end);
+        const data = await this.apiFetch<any>(q, false, syId);
 
         // Map RosterData (data.days[].gridEntries[]) to RosterEntry[]
         if (!data || !data.days) {
