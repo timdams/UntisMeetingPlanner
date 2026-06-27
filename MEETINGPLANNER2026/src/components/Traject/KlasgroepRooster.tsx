@@ -13,9 +13,14 @@ import {
     sameDay,
 } from './dateUtils';
 import styles from './Traject.module.css';
-import { Loader2, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Loader2, ChevronLeft, ChevronRight, CalendarClock } from 'lucide-react';
 import { LesblokIcon } from './LesblokIcon';
 import { layoutDay } from './layout';
+import { defaultRoosterWeek } from './academicYear';
+
+// Untis geeft 404 op roosterdata van een week buiten het geselecteerde
+// academiejaar. We vangen die specifiek op met een begrijpelijke melding.
+const OUTSIDE_YEAR_MSG = 'Deze week valt buiten het geselecteerde academiejaar. Ga naar een week van het juiste academiejaar.';
 
 interface Props {
     klasgroep: string | null;
@@ -83,7 +88,10 @@ export function KlasgroepRooster({
                 setBlokken(bs);
                 bs.forEach(b => ensureColor(b.olodNaam));
             })
-            .catch(e => setError(e?.message ?? 'Rooster ophalen mislukt'))
+            .catch(e => {
+                const msg: string = e?.message ?? '';
+                setError(msg.includes('404') ? OUTSIDE_YEAR_MSG : (msg || 'Rooster ophalen mislukt'));
+            })
             .finally(() => setBusy(false));
     }, [klasgroep, weekMonday]);
 
@@ -187,7 +195,18 @@ export function KlasgroepRooster({
                     Selecteer een klasgroep links om het rooster te bekijken.
                 </div>
             ) : error ? (
-                <div className={styles.emptyState}>{error}</div>
+                <div className={styles.emptyState}>
+                    {error}
+                    {error === OUTSIDE_YEAR_MSG && (
+                        <button
+                            className={styles.toolbarBtn}
+                            style={{ marginTop: '0.75rem' }}
+                            onClick={() => setWeekMonday(mondayOf(defaultRoosterWeek()))}
+                        >
+                            <CalendarClock size={14} /> Ga naar {formatDateBE(mondayOf(defaultRoosterWeek()))}
+                        </button>
+                    )}
+                </div>
             ) : (
                 <div className={styles.roosterGrid}>
                     <div className={styles.roosterHeader}></div>

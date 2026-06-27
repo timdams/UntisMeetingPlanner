@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { TrajectSettings, StudentTraject, KleurMap, OLODSelectie } from './types';
 import type { TrajectPreset } from './trajectShare';
-import { defaultSemesterPeriode } from './academicYear';
+import { defaultSemesterPeriode, valtBinnenAcademiejaar } from './academicYear';
+import { parseIsoDate } from './dateUtils';
 
 const KEY_SETTINGS = 'traject_settings';
 const KEY_TRAJECT = 'traject_student';
@@ -11,7 +12,9 @@ const KEY_MIGRATION = 'traject_migration_version';
 // Verhoog dit nummer bij een breaking change in opgeslagen data. runTrajectMigrations()
 // draait dan eenmalig de bijhorende opkuis voor bestaande gebruikers.
 //   v1 — academiejaar-update: klasgroep-shortlist (oude resource-IDs) wissen.
-const CURRENT_MIGRATION = 1;
+//   v2 — semesterperiode die buiten het academiejaar valt (oude today-based
+//        default) resetten naar het lopende semester van het nieuwe jaar.
+const CURRENT_MIGRATION = 2;
 
 // Genereert een unieke kleur per allocatie-index via golden-angle hue-distributie.
 // Combineert met drie (saturation, lightness)-banden zodat ook hue-buren visueel verschillen.
@@ -60,8 +63,16 @@ function persist<T>(key: string, value: T) {
  * v1 — na de academiejaar-update bevat de opgeslagen klasgroep-shortlist
  * displayNames van het vorige jaar; de bijhorende resource-IDs kloppen niet meer.
  * We wissen die selectie één keer zodat bestaande gebruikers hun klasgroepen
- * opnieuw kiezen tegen het nieuwe jaar. Het studenttraject en de kleurmap blijven
- * ongemoeid.
+ * opnieuw kiezen tegen het nieuwe jaar.
+ *
+ * v2 — de oude today-based standaard semesterperiode valt in het vorige
+ * academiejaar (start = dag van installatie). Valt start of einde buiten het
+ * nieuwe academiejaar, dan resetten we de periode naar het lopende semester,
+ * zodat zowel het klasgroeprooster als het studentoverzicht in het juiste jaar
+ * openen. Een periode die al binnen het academiejaar valt (bewust ingesteld)
+ * laten we ongemoeid.
+ *
+ * Het studenttraject en de kleurmap blijven in beide gevallen ongemoeid.
  */
 export function runTrajectMigrations(): void {
     let version = 0;
@@ -76,12 +87,30 @@ export function runTrajectMigrations(): void {
         const raw = localStorage.getItem(KEY_SETTINGS);
         if (raw) {
             const parsed = JSON.parse(raw) as TrajectSettings;
+            let next = parsed;
+
+            // v1 — klasgroep-shortlist van vorig academiejaar wissen.
             if (
-                Array.isArray(parsed.mijnOpleidingKlasgroepen) &&
-                parsed.mijnOpleidingKlasgroepen.length > 0
+                version < 1 &&
+                Array.isArray(next.mijnOpleidingKlasgroepen) &&
+                next.mijnOpleidingKlasgroepen.length > 0
             ) {
-                persist(KEY_SETTINGS, { ...parsed, mijnOpleidingKlasgroepen: [] });
+                next = { ...next, mijnOpleidingKlasgroepen: [] };
             }
+
+            // v2 — semesterperiode buiten het academiejaar resetten.
+            if (version < 2) {
+                const startBuiten =
+                    !next.semesterStart || !valtBinnenAcademiejaar(parseIsoDate(next.semesterStart));
+                const eindBuiten =
+                    !next.semesterEind || !valtBinnenAcademiejaar(parseIsoDate(next.semesterEind));
+                if (startBuiten || eindBuiten) {
+                    const { start, eind } = defaultSemesterPeriode();
+                    next = { ...next, semesterStart: start, semesterEind: eind };
+                }
+            }
+
+            if (next !== parsed) persist(KEY_SETTINGS, next);
         }
         localStorage.setItem(KEY_MIGRATION, String(CURRENT_MIGRATION));
     } catch {

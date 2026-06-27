@@ -7,6 +7,8 @@
 // UntisService, zodat de roosterdata (klasgroep-/leraar-IDs) en de
 // semesterperiode hetzelfde jaar betreffen.
 
+import { parseIsoDate } from './dateUtils';
+
 export interface SemesterDef {
     nummer: 1 | 2;
     label: string;
@@ -47,4 +49,27 @@ export function defaultSemesterPeriode(today: Date = new Date()): { start: strin
 // zodat de UI de actieve snelkeuze-knop kan markeren.
 export function matchtSemester(sem: SemesterDef, start: string, eind: string): boolean {
     return sem.start === start && sem.eind === eind;
+}
+
+// Start- en einddatum van het volledige academiejaar (eerste semester-start t/m
+// laatste semester-einde).
+export function academiejaarStartDatum(): Date {
+    return parseIsoDate(ACADEMIEJAAR.semesters[0].start);
+}
+export function academiejaarEindDatum(): Date {
+    return parseIsoDate(ACADEMIEJAAR.semesters[ACADEMIEJAAR.semesters.length - 1].eind);
+}
+
+// True wanneer de gegeven datum binnen het academiejaar valt.
+export function valtBinnenAcademiejaar(d: Date): boolean {
+    return d.getTime() >= academiejaarStartDatum().getTime()
+        && d.getTime() <= academiejaarEindDatum().getTime();
+}
+
+// De week waarop de rooster-weergave standaard opent: de huidige week als
+// vandaag binnen het academiejaar valt, anders de eerste week van het
+// academiejaar. Zo belandt een gebruiker die vóór de jaarstart plant niet in
+// het vorige academiejaar (wat 404's op de roosterdata gaf).
+export function defaultRoosterWeek(today: Date = new Date()): Date {
+    return valtBinnenAcademiejaar(today) ? today : academiejaarStartDatum();
 }

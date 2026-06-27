@@ -7,7 +7,7 @@ import { KlasgroepSelector } from './KlasgroepSelector';
 import { KlasgroepRooster } from './KlasgroepRooster';
 import { StudentOverzicht } from './StudentOverzicht';
 import { TrajectPrintView, buildTrajectClipboardText } from './TrajectPrintView';
-import { parseIsoDate } from './dateUtils';
+import { defaultRoosterWeek } from './academicYear';
 import { backupFilename, buildBackup, downloadBackup, parseBackup } from './trajectBackup';
 
 type Tab = 'werkblad' | 'instellingen';
@@ -198,7 +198,10 @@ export function TrajectPlanner({ onBack, presetApplied = false }: Props) {
         return true;
     };
 
-    const initialWeek = parseIsoDate(settings.semesterStart);
+    // Open het rooster op de huidige week als die binnen het academiejaar valt,
+    // anders op de eerste week van het academiejaar (niet op een week uit het
+    // vorige jaar, wat 404's op de roosterdata gaf).
+    const initialWeek = defaultRoosterWeek();
 
     return (
       <>
