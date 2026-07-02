@@ -18,6 +18,11 @@ export interface SemesterDef {
 
 export const ACADEMIEJAAR = {
     naam: '2026/2027',
+    // Effectieve start van de eerste lesweek (na de voorbereidingsdagen/het
+    // onthaal) — meestal midden september. De roosterweergave opent hier
+    // standaard op in plaats van op de officiële semesterstart (1 september),
+    // zodat gebruikers niet elke keer een paar lege weken moeten doorklikken.
+    effectieveLesStart: '2026-09-19',
     semesters: [
         { nummer: 1, label: 'Semester 1', start: '2026-09-01', eind: '2027-02-01' },
         { nummer: 2, label: 'Semester 2', start: '2027-02-01', eind: '2027-07-01' },
@@ -59,6 +64,9 @@ export function academiejaarStartDatum(): Date {
 export function academiejaarEindDatum(): Date {
     return parseIsoDate(ACADEMIEJAAR.semesters[ACADEMIEJAAR.semesters.length - 1].eind);
 }
+export function effectieveLesStartDatum(): Date {
+    return parseIsoDate(ACADEMIEJAAR.effectieveLesStart);
+}
 
 // True wanneer de gegeven datum binnen het academiejaar valt.
 export function valtBinnenAcademiejaar(d: Date): boolean {
@@ -66,10 +74,16 @@ export function valtBinnenAcademiejaar(d: Date): boolean {
         && d.getTime() <= academiejaarEindDatum().getTime();
 }
 
-// De week waarop de rooster-weergave standaard opent: de huidige week als
-// vandaag binnen het academiejaar valt, anders de eerste week van het
-// academiejaar. Zo belandt een gebruiker die vóór de jaarstart plant niet in
-// het vorige academiejaar (wat 404's op de roosterdata gaf).
+// De week waarop de rooster-weergave standaard opent. Vóór de effectieve
+// lesstart (zie ACADEMIEJAAR.effectieveLesStart) tonen we meteen die eerste
+// lesweek — zowel wanneer vandaag vóór het academiejaar valt (dan zou anders
+// 1 september getoond worden) als wanneer vandaag al wél binnen het
+// academiejaar valt maar nog vóór de effectieve lesstart (bv. tijdens de
+// voorbereidingsdagen). Zo moet een gebruiker niet elke keer een paar lege
+// weken doorklikken. Ná de effectieve lesstart, binnen het academiejaar,
+// tonen we gewoon de huidige week.
 export function defaultRoosterWeek(today: Date = new Date()): Date {
-    return valtBinnenAcademiejaar(today) ? today : academiejaarStartDatum();
+    const lesStart = effectieveLesStartDatum();
+    if (!valtBinnenAcademiejaar(today)) return lesStart;
+    return today.getTime() < lesStart.getTime() ? lesStart : today;
 }

@@ -10,7 +10,9 @@ import {
     fridayEndOf,
     gridEndHour,
     mondayOf,
+    parseIsoDate,
     sameDay,
+    toIsoDate,
 } from './dateUtils';
 import styles from './Traject.module.css';
 import { Loader2, ChevronLeft, ChevronRight, CalendarClock } from 'lucide-react';
@@ -150,6 +152,10 @@ export function KlasgroepRooster({
 
     const prevWeek = () => setWeekMonday(w => addDays(w, -7));
     const nextWeek = () => setWeekMonday(w => addDays(w, 7));
+    const jumpToDate = (iso: string) => {
+        if (!iso) return;
+        setWeekMonday(mondayOf(parseIsoDate(iso)));
+    };
 
     const weekLabel = `${formatDateBE(weekMonday)} – ${formatDateBE(addDays(weekMonday, 4))}`;
 
@@ -181,13 +187,23 @@ export function KlasgroepRooster({
             </div>
 
             <div className={styles.weekNav}>
-                <button onClick={prevWeek} disabled={!klasgroep}>
-                    <ChevronLeft size={14} />
-                </button>
-                <div className={styles.weekNavTitle}>{weekLabel}</div>
-                <button onClick={nextWeek} disabled={!klasgroep}>
-                    <ChevronRight size={14} />
-                </button>
+                <div className={styles.weekNavArrows}>
+                    <button onClick={prevWeek} disabled={!klasgroep}>
+                        <ChevronLeft size={14} />
+                    </button>
+                    <div className={styles.weekNavTitle}>{weekLabel}</div>
+                    <button onClick={nextWeek} disabled={!klasgroep}>
+                        <ChevronRight size={14} />
+                    </button>
+                </div>
+                <input
+                    type="date"
+                    className={styles.weekNavDate}
+                    value={toIsoDate(weekMonday)}
+                    onChange={e => jumpToDate(e.target.value)}
+                    disabled={!klasgroep}
+                    title="Ga naar een specifieke week"
+                />
             </div>
 
             {!klasgroep ? (

@@ -20,6 +20,12 @@
     font-weight: 600;
 }
 
+.weekDateInput {
+    padding: 0.3rem 0.5rem;
+    font-size: 0.85rem;
+    width: auto;
+}
+
 .grid {
     flex: 1;
     display: flex;

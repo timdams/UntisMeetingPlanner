@@ -172,8 +172,13 @@ export function useTrajectSettings() {
         setSettings(next);
     }, []);
 
-    const clearKlasgroepen = useCallback(() => {
-        setSettings(s => ({ ...s, mijnOpleidingKlasgroepen: [] }));
+    // Vervangt de volledige klasgroep-shortlist in één keer — gebruikt door
+    // "Selecteer alle" / "Selecteer geen" die op de gefilterde lijst werken.
+    const setKlasgroepen = useCallback((next: string[]) => {
+        setSettings(s => ({
+            ...s,
+            mijnOpleidingKlasgroepen: [...next].sort((a, b) => a.localeCompare(b)),
+        }));
     }, []);
 
     return {
@@ -183,7 +188,7 @@ export function useTrajectSettings() {
         setSemesterEind,
         setSemesterPeriode,
         replaceSettings,
-        clearKlasgroepen,
+        setKlasgroepen,
     };
 }
 

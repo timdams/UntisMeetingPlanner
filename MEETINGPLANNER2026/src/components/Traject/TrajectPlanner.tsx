@@ -79,7 +79,7 @@ export function TrajectPlanner({ onBack, presetApplied = false }: Props) {
         setSemesterEind,
         setSemesterPeriode,
         replaceSettings,
-        clearKlasgroepen,
+        setKlasgroepen,
     } = useTrajectSettings();
     const { traject, toggle, isSelected, reset, replaceTraject } = useStudentTraject();
     const { map: kleurmap, ensureColor, colorOf, replaceMap, resetColors } = useKleurMap();
@@ -286,7 +286,7 @@ export function TrajectPlanner({ onBack, presetApplied = false }: Props) {
                 <TrajectSettingsView
                     settings={settings}
                     onToggleKlasgroep={toggleKlasgroep}
-                    onClearKlasgroepen={clearKlasgroepen}
+                    onSetKlasgroepen={setKlasgroepen}
                     onSemesterStartChange={setSemesterStart}
                     onSemesterEindChange={setSemesterEind}
                     onSemesterPeriodeChange={setSemesterPeriode}

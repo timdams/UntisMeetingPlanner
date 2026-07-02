@@ -11,7 +11,7 @@ import { QRCodeCanvas } from 'qrcode.react';
 interface Props {
     settings: TrajectSettings;
     onToggleKlasgroep: (k: string) => void;
-    onClearKlasgroepen: () => void;
+    onSetKlasgroepen: (list: string[]) => void;
     onSemesterStartChange: (iso: string) => void;
     onSemesterEindChange: (iso: string) => void;
     onSemesterPeriodeChange: (start: string, eind: string) => void;
@@ -23,7 +23,7 @@ interface Props {
 export function TrajectSettingsView({
     settings,
     onToggleKlasgroep,
-    onClearKlasgroepen,
+    onSetKlasgroepen,
     onSemesterStartChange,
     onSemesterEindChange,
     onSemesterPeriodeChange,
@@ -58,14 +58,18 @@ export function TrajectSettingsView({
     const selected = new Set(settings.mijnOpleidingKlasgroepen);
     const f = filter.trim().toLowerCase();
     const visible = f ? allKlasgroepen.filter(k => k.toLowerCase().includes(f)) : allKlasgroepen;
+    const alleZichtbareGeselecteerd = visible.length > 0 && visible.every(k => selected.has(k));
 
-    const handleClearKlasgroepen = () => {
-        const count = settings.mijnOpleidingKlasgroepen.length;
-        if (count === 0) return;
-        const ok = window.confirm(
-            `Alle ${count} geselecteerde klasgroepen deselecteren?`
-        );
-        if (ok) onClearKlasgroepen();
+    // Werkt enkel op de gefilterde (zichtbare) klasgroepen, zodat "Selecteer
+    // alle/geen" voorspelbaar blijft ongeacht het zoekveld.
+    const handleToggleAlleZichtbare = () => {
+        if (visible.length === 0) return;
+        if (alleZichtbareGeselecteerd) {
+            const zichtbaarSet = new Set(visible);
+            onSetKlasgroepen(settings.mijnOpleidingKlasgroepen.filter(k => !zichtbaarSet.has(k)));
+        } else {
+            onSetKlasgroepen(Array.from(new Set([...settings.mijnOpleidingKlasgroepen, ...visible])));
+        }
     };
 
     const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -237,31 +241,36 @@ export function TrajectSettingsView({
             </div>
 
             <div className={styles.settingsSection}>
-                <div className={styles.settingsTitleRow}>
-                    <div className={styles.settingsTitle}>
-                        Mijn opleiding — klasgroepen ({settings.mijnOpleidingKlasgroepen.length} geselecteerd)
-                    </div>
-                    <button
-                        className={`${styles.toolbarBtn} ${styles.toolbarBtnDanger}`}
-                        onClick={handleClearKlasgroepen}
-                        disabled={settings.mijnOpleidingKlasgroepen.length === 0}
-                        title="Deselecteer alle klasgroepen"
-                    >
-                        <RotateCcw size={14} /> Alles deselecteren
-                    </button>
+                <div className={styles.settingsTitle}>
+                    Mijn opleiding — klasgroepen ({settings.mijnOpleidingKlasgroepen.length} geselecteerd)
                 </div>
                 <div className={styles.settingsHint}>
                     Vink de klasgroepen aan die tot jouw opleiding behoren. Enkel deze
                     verschijnen in het selectiewerkblad.
                 </div>
 
-                <input
-                    className={styles.searchInput}
-                    type="text"
-                    placeholder="Zoek klasgroep..."
-                    value={filter}
-                    onChange={e => setFilter(e.target.value)}
-                />
+                <div className={styles.klasFilterRow}>
+                    <input
+                        className={styles.searchInput}
+                        type="text"
+                        placeholder="Zoek klasgroep..."
+                        value={filter}
+                        onChange={e => setFilter(e.target.value)}
+                    />
+                    <button
+                        className={styles.toolbarBtn}
+                        onClick={handleToggleAlleZichtbare}
+                        disabled={visible.length === 0}
+                        title={
+                            alleZichtbareGeselecteerd
+                                ? `Deselecteer de ${visible.length} getoonde klasgroepen`
+                                : `Selecteer de ${visible.length} getoonde klasgroepen`
+                        }
+                    >
+                        {alleZichtbareGeselecteerd ? <RotateCcw size={14} /> : <Check size={14} />}
+                        {alleZichtbareGeselecteerd ? 'Selecteer geen' : 'Selecteer alle'}
+                    </button>
+                </div>
 
                 {busy && (
                     <div className={styles.emptyState}>

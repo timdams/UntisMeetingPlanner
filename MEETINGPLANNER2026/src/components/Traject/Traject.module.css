@@ -278,19 +278,6 @@
     color: var(--text-color);
 }
 
-.settingsTitleRow {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 1rem;
-    flex-wrap: wrap;
-    margin-bottom: 0.5rem;
-}
-
-.settingsTitleRow .settingsTitle {
-    margin-bottom: 0;
-}
-
 .settingsHint {
     font-size: 0.85rem;
     color: #64748b;
@@ -332,10 +319,19 @@
     color: var(--text-color);
 }
 
+.klasFilterRow {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-bottom: 0.75rem;
+}
+
 .searchInput {
     width: 100%;
     max-width: 380px;
-    margin-bottom: 0.75rem;
+    flex: 1 1 240px;
+    margin-bottom: 0;
 }
 
 .klasList {
@@ -607,9 +603,21 @@
     font-size: 0.85rem;
 }
 
+.weekNavArrows {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
 .weekNavTitle {
     font-weight: 600;
     font-size: 0.9rem;
+}
+
+.weekNavDate {
+    padding: 0.2rem 0.4rem;
+    font-size: 0.8rem;
+    width: auto;
 }
 
 .roosterGrid {

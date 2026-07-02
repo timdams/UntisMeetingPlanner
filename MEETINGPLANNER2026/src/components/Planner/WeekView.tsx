@@ -90,12 +90,27 @@ export function WeekView({ weekDate, meetingOptions, blockedSlots, onWeekDateCha
         return `Week van ${m.toLocaleDateString('nl-BE')} tem ${f.toLocaleDateString('nl-BE')}`;
     };
 
+    const jumpToDate = (value: string) => {
+        if (!value) return;
+        const [y, m, d] = value.split('-').map(Number);
+        onWeekDateChange(new Date(y, m - 1, d));
+    };
+
+    const mondayIso = days[0].toISOString().split('T')[0];
+
     return (
         <div className={styles.container}>
             <div className={styles.header}>
                 <button onClick={prevWeek}>&lt;</button>
                 <div className={styles.weekTitle}>{formatWeekRange()}</div>
                 <button onClick={nextWeek}>&gt;</button>
+                <input
+                    type="date"
+                    className={styles.weekDateInput}
+                    value={mondayIso}
+                    onChange={e => jumpToDate(e.target.value)}
+                    title="Ga naar een specifieke week"
+                />
             </div>
 
             <div className={styles.grid}>
