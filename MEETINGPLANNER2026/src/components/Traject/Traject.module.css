@@ -1399,9 +1399,8 @@
     filter: drop-shadow(0 0 1px rgba(0, 0, 0, 0.45));
 }
 
-/* Tooltip */
-.miniBlok[data-tip]:hover::after {
-    content: attr(data-tip);
+/* Tooltip (via portal in document.body, positie berekend in MiniTooltip) */
+.miniTip {
     position: fixed;
     background-color: #111827;
     color: white;
@@ -1410,9 +1409,8 @@
     border-radius: 4px;
     white-space: pre-line;
     pointer-events: none;
-    z-index: 100;
+    z-index: 1000;
     max-width: 240px;
-    transform: translate(8px, 8px);
 }
 
 /* Conflicts panel */

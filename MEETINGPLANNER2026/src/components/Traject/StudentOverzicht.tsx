@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Lesblok, StudentTraject, Conflict } from './types';
 import {
     addDays,
@@ -38,6 +39,52 @@ interface Props {
     periodeType: PeriodeType;
     moduleGrenzen: ModuleGrenzen;
     colorOf: (olodNaam: string) => string;
+}
+
+interface TipState {
+    text: string;
+    // Viewport-rect van het blokje waar de tooltip bij hoort.
+    anchor: DOMRect;
+}
+
+const TIP_GAP = 8;
+const TIP_MARGIN = 8;
+
+// Tooltip bij een blokje in het weekoverzicht. Wordt in document.body gerenderd
+// (portal) zodat overflow/transform van voorouders de positie niet beïnvloedt,
+// en na meting binnen de viewport gehouden: standaard rechts van het blokje,
+// anders links; verticaal uitgelijnd op de bovenkant van het blokje en waar
+// nodig omhoog geschoven.
+function MiniTooltip({ tip }: { tip: TipState }) {
+    const ref = useRef<HTMLDivElement | null>(null);
+    const [pos, setPos] = useState<{ left: number; top: number } | null>(null);
+
+    useLayoutEffect(() => {
+        const el = ref.current;
+        if (!el) return;
+        const { width, height } = el.getBoundingClientRect();
+        const { anchor } = tip;
+        let left = anchor.right + TIP_GAP;
+        if (left + width > window.innerWidth - TIP_MARGIN) {
+            left = Math.max(TIP_MARGIN, anchor.left - TIP_GAP - width);
+        }
+        let top = anchor.top;
+        if (top + height > window.innerHeight - TIP_MARGIN) {
+            top = Math.max(TIP_MARGIN, window.innerHeight - TIP_MARGIN - height);
+        }
+        setPos({ left, top });
+    }, [tip]);
+
+    return createPortal(
+        <div
+            ref={ref}
+            className={styles.miniTip}
+            style={pos ? { left: pos.left, top: pos.top, visibility: 'visible' } : { left: 0, top: 0, visibility: 'hidden' }}
+        >
+            {tip.text}
+        </div>,
+        document.body
+    );
 }
 
 function topPct(d: Date, totalMin: number): number {
@@ -82,6 +129,10 @@ export function StudentOverzicht({
     colorOf,
 }: Props) {
     const [conflictsOpen, setConflictsOpen] = useState(true);
+    const [tip, setTip] = useState<TipState | null>(null);
+    const showTip = (e: React.MouseEvent<HTMLElement>, text: string) =>
+        setTip({ text, anchor: e.currentTarget.getBoundingClientRect() });
+    const hideTip = () => setTip(null);
 
     // Het overzicht beslaat altijd het volledige academiejaar; elke selectie
     // draagt enkel binnen haar eigen periode bij.
@@ -193,7 +244,7 @@ export function StudentOverzicht({
                         Klik op lesblokken in het klasgroeprooster om OLODs aan het traject toe te voegen.
                     </div>
                 ) : (
-                    <div className={styles.overzichtScroll}>
+                    <div className={styles.overzichtScroll} onScroll={hideTip}>
                         {weken.map((wkMonday, wi) => {
                             const wkVrijdagEnd = fridayEndOf(wkMonday);
                             const dagen = Array.from({ length: 5 }, (_, i) => addDays(wkMonday, i));
@@ -247,12 +298,13 @@ export function StudentOverzicht({
                                                                       )
                                                                       .join('\n')
                                                                 : '';
-                                                            const tip = baseTip + conflictTip;
+                                                            const blokTip = baseTip + conflictTip;
                                                             return (
                                                                 <div
                                                                     key={bi}
                                                                     className={`${styles.miniBlok} ${conflict ? styles.miniBlokConflict : ''}`}
-                                                                    data-tip={tip}
+                                                                    onMouseEnter={e => showTip(e, blokTip)}
+                                                                    onMouseLeave={hideTip}
                                                                     style={{
                                                                         top: `${topPct(b.start, totalMin)}%`,
                                                                         height: `${heightPct(b.start, b.eind, totalMin)}%`,
@@ -332,6 +384,7 @@ export function StudentOverzicht({
                 </div>
             )}
 
+            {tip && <MiniTooltip tip={tip} />}
         </div>
     );
 }
