@@ -19,6 +19,7 @@ const KEY_TRAJECT = 'traject_student';
 const KEY_KLEUR = 'traject_kleurmap';
 const KEY_MIGRATION = 'traject_migration_version';
 const KEY_LAST_BACKUP = 'traject_last_backup';
+const KEY_BEWAARD = 'traject_bewaard';
 
 // Verhoog dit nummer bij een breaking change in opgeslagen data. runTrajectMigrations()
 // draait dan eenmalig de bijhorende opkuis voor bestaande gebruikers.
@@ -319,6 +320,91 @@ export function useLastBackup() {
     return { lastBackup, markBackup };
 }
 
+// Een traject dat de gebruiker onder een eigen naam bewaarde om later terug
+// te laden: de OLOD-selecties samen met de instellingen waar ze bij horen
+// (klasgroep-shortlist, actieve periode, semester/module-indeling en
+// modulegrenzen). De kleurmap zit er niet bij — die is cosmetisch en wordt
+// per OLOD automatisch opnieuw toegewezen.
+export interface BewaardTraject {
+    id: string;
+    naam: string;
+    bewaardOp: string; // ISO-tijdstip
+    // Ontbreekt enkel bij items van vóór de koppeling aan instellingen; bij
+    // het laden blijven de huidige instellingen dan staan.
+    settings?: TrajectSettings;
+    traject: StudentTraject;
+}
+
+function normalizeBewaardeTrajecten(raw: unknown): BewaardTraject[] {
+    if (!Array.isArray(raw)) return [];
+    const out: BewaardTraject[] = [];
+    for (const item of raw) {
+        const it = (item && typeof item === 'object' ? item : null) as Record<string, unknown> | null;
+        if (!it || typeof it.id !== 'string' || typeof it.naam !== 'string') continue;
+        out.push({
+            id: it.id,
+            naam: it.naam,
+            bewaardOp: typeof it.bewaardOp === 'string' ? it.bewaardOp : new Date(0).toISOString(),
+            settings:
+                it.settings && typeof it.settings === 'object' ? normalizeSettings(it.settings) : undefined,
+            traject: normalizeTraject(it.traject),
+        });
+    }
+    return out;
+}
+
+function nieuwBewaardId(): string {
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+        return crypto.randomUUID();
+    }
+    return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+// Namen van bewaarde trajecten vergelijken we hoofdletter- en accentongevoelig,
+// zodat "Traject A" en "traject a" hetzelfde item overschrijven.
+export function zelfdeTrajectNaam(a: string, b: string): boolean {
+    return a.trim().localeCompare(b.trim(), 'nl', { sensitivity: 'base' }) === 0;
+}
+
+// Lijst van bewaarde trajecten (localStorage). Wordt niet gewist door reset
+// of import: dat is precies waar ze voor dienen.
+export function useBewaardeTrajecten() {
+    const [bewaard, setBewaard] = useState<BewaardTraject[]>(() =>
+        normalizeBewaardeTrajecten(loadJSON<unknown>(KEY_BEWAARD, null))
+    );
+
+    useEffect(() => {
+        persist(KEY_BEWAARD, bewaard);
+    }, [bewaard]);
+
+    // Bewaart het traject plus zijn instellingen onder de naam. Met
+    // `overschrijfId` vervangt het een bestaand item (zelfde naam) in plaats
+    // van er een tweede naast te zetten.
+    const bewaar = useCallback(
+        (naam: string, settings: TrajectSettings, traject: StudentTraject, overschrijfId?: string) => {
+        const item: BewaardTraject = {
+            id: overschrijfId ?? nieuwBewaardId(),
+            naam: naam.trim(),
+            bewaardOp: new Date().toISOString(),
+            settings: normalizeSettings(settings),
+            traject: normalizeTraject(traject),
+        };
+        setBewaard(lijst =>
+            overschrijfId && lijst.some(x => x.id === overschrijfId)
+                ? lijst.map(x => (x.id === overschrijfId ? item : x))
+                : [...lijst, item]
+        );
+        },
+        []
+    );
+
+    const verwijder = useCallback((id: string) => {
+        setBewaard(lijst => lijst.filter(x => x.id !== id));
+    }, []);
+
+    return { bewaard, bewaar, verwijder };
+}
+
 // Unieke sleutel van een selectie (alle vier velden) — voor React-keys en
 // statuskaarten.
 export function selectieKey(sel: OLODSelectie): string {
@@ -423,13 +509,26 @@ export function useStudentTraject() {
         });
     }, []);
 
+    // Verhuist een bestaande selectie naar een andere klasgroep (zelfde vak,
+    // zelfde periode). Bestaat er al een identieke selectie bij die klasgroep,
+    // dan valt de gewijzigde ermee samen.
+    const setKlasgroep = useCallback((sel: OLODSelectie, klasgroep: string) => {
+        setTraject(t => {
+            const nieuw: OLODSelectie = { ...sel, klasgroep };
+            const bestaat = t.some(x => !sameSelectie(x, sel) && sameSelectie(x, nieuw));
+            return bestaat
+                ? t.filter(x => !sameSelectie(x, sel))
+                : t.map(x => (sameSelectie(x, sel) ? nieuw : x));
+        });
+    }, []);
+
     const reset = useCallback(() => setTraject([]), []);
 
     const replaceTraject = useCallback((next: StudentTraject) => {
         setTraject(normalizeTraject(next));
     }, []);
 
-    return { traject, toggleBlok, selectieVoor, remove, setPeriode, reset, replaceTraject };
+    return { traject, toggleBlok, selectieVoor, remove, setPeriode, setKlasgroep, reset, replaceTraject };
 }
 
 export function useKleurMap() {

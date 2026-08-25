@@ -1001,7 +1001,45 @@
     outline-offset: 1px;
 }
 
-/* Keuze per selectie: heel het semester of één van de twee modules. */
+/* De klasgroep van een geselecteerde OLOD is een knop die de klasgroep-kiezer
+   opent (zelfde patroon als de periode-badge in modulemodus). */
+.olodListKlasKnop {
+    display: inline-flex;
+    align-items: center;
+    gap: 1px;
+    min-width: 0;
+    max-width: 100%;
+    padding: 0 0.25rem;
+    margin-left: -0.25rem;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 4px;
+    cursor: pointer;
+    font-family: inherit;
+}
+
+.olodListKlasKnop > span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.olodListKlasKnop > svg {
+    flex-shrink: 0;
+}
+
+.olodListKlasKnop:hover {
+    border-color: var(--primary);
+    color: var(--primary);
+}
+
+.olodListKlasKnop:focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 1px;
+}
+
+/* Keuze per selectie: heel het semester of één van de twee modules — of, via
+   de klasgroep-kiezer, een andere klasgroep waar het vak in die periode loopt. */
 .olodPeriodeKiezer {
     flex-basis: 100%;
     display: flex;
@@ -1032,6 +1070,31 @@
     color: #fff;
 }
 
+.olodPeriodeOptie:disabled {
+    opacity: 0.55;
+    cursor: default;
+}
+
+/* Aantal lessen naast een klasgroep-optie. */
+.olodOptieAantal {
+    margin-left: 0.3rem;
+    font-size: 0.62rem;
+    font-weight: 600;
+    opacity: 0.7;
+}
+
+/* Toelichting onder de opties (laden, geen alternatieven, rooster nog niet
+   beschikbaar). */
+.olodKiezerInfo {
+    flex-basis: 100%;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    font-size: 0.7rem;
+    line-height: 1.3;
+    color: #64748b;
+}
+
 .olodListRemove {
     flex-shrink: 0;
     display: inline-flex;
@@ -1058,6 +1121,104 @@
     color: #64748b;
     font-size: 0.9rem;
     text-align: center;
+}
+
+/* ===== Bewaarde trajecten: "Laad traject"-knop + uitklapmenu (topbar) ===== */
+.laadWrap {
+    position: relative;
+}
+
+.laadBadge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    border-radius: 999px;
+    background-color: var(--secondary);
+    border: 1px solid var(--border-color);
+    color: #64748b;
+    font-size: 0.7rem;
+    font-weight: 600;
+    line-height: 1;
+}
+
+.laadMenu {
+    position: absolute;
+    top: calc(100% + 4px);
+    right: 0;
+    z-index: 1000;
+    min-width: 320px;
+    max-width: 440px;
+    max-height: 60vh;
+    overflow: auto;
+    background-color: var(--bg-color);
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+    padding: 0.35rem;
+}
+
+.laadMenuKop {
+    font-size: 0.72rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #64748b;
+    padding: 0.35rem 0.5rem 0.45rem;
+    margin-bottom: 0.25rem;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.laadMenuLeeg {
+    color: #64748b;
+    font-size: 0.82rem;
+    line-height: 1.45;
+    padding: 0.6rem 0.5rem;
+    text-align: center;
+}
+
+.laadMenuLeeg strong {
+    color: var(--text-color);
+}
+
+.laadMenuItem {
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+    padding-right: 0.25rem;
+}
+
+.laadMenuLaad {
+    flex: 1;
+    min-width: 0;
+    text-align: left;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: var(--border-radius);
+    padding: 0.4rem 0.5rem;
+    cursor: pointer;
+    color: var(--text-color);
+    font: inherit;
+}
+
+.laadMenuLaad:hover {
+    background-color: var(--item-hover);
+}
+
+.laadMenuNaam {
+    font-weight: 600;
+    font-size: 0.88rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.laadMenuMeta {
+    font-size: 0.75rem;
+    color: #64748b;
+    margin-top: 2px;
 }
 
 /* ===== Rooster grid (panel B) ===== */
@@ -1385,6 +1546,59 @@
     outline: 3px dashed #DC2626;
     outline-offset: -1px;
     z-index: 2;
+}
+
+/* Wat-als-preview vanuit de klasgroep-kiezer: lessen die bij de wissel zouden
+   verdwijnen vervagen; lessen die erbij zouden komen staan als gestreepte,
+   gestippeld omrande "ghost"-blokjes. */
+.miniBlokWeg {
+    opacity: 0.2;
+    filter: grayscale(0.7);
+}
+
+.miniBlokGhost {
+    background-image: repeating-linear-gradient(
+        45deg,
+        transparent 0 3px,
+        rgba(255, 255, 255, 0.5) 3px 5px
+    );
+    border: 2px dashed #ffffff;
+    box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.45);
+    z-index: 1;
+}
+
+/* Samenvatting bovenaan het overzicht zolang een preview actief is. */
+.previewStrip {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.35rem 0.6rem;
+    font-size: 0.75rem;
+    line-height: 1.3;
+    color: #1E3A8A;
+    background-color: #EFF6FF;
+    border-bottom: 1px solid #BFDBFE;
+}
+
+.previewStrip svg {
+    flex-shrink: 0;
+}
+
+.previewStripConflict {
+    color: #991B1B;
+    background-color: #FEF2F2;
+    border-bottom-color: #FECACA;
+}
+
+.previewStripText {
+    min-width: 0;
+}
+
+.conflictsPreviewHint {
+    margin-left: 0.3rem;
+    font-weight: 400;
+    font-size: 0.75rem;
+    color: #64748b;
 }
 
 .miniBlokConflictIcon {

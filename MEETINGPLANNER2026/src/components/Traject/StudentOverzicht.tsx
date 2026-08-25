@@ -20,8 +20,9 @@ import {
     weeksBetween,
 } from './dateUtils';
 import { academiejaarBereik, periodeGrenzen, type ModuleGrenzen, type PeriodeType } from './academicYear';
+import type { KlasgroepPreview } from './useTrajectBlokken';
 import styles from './Traject.module.css';
-import { AlertTriangle, ChevronDown, ChevronRight, Loader2 } from 'lucide-react';
+import { AlertTriangle, ChevronDown, ChevronRight, Eye, Loader2 } from 'lucide-react';
 import { LesblokIcon } from './LesblokIcon';
 import { layoutDay } from './layout';
 
@@ -39,6 +40,10 @@ interface Props {
     periodeType: PeriodeType;
     moduleGrenzen: ModuleGrenzen;
     colorOf: (olodNaam: string) => string;
+    // Wat-als-preview vanuit de klasgroep-kiezer: de lessen van het vak bij de
+    // huidige klasgroep vervagen, die bij de kandidaat-klasgroep verschijnen
+    // als gestippelde blokjes; conflicten worden voor dat scenario berekend.
+    preview?: KlasgroepPreview | null;
 }
 
 interface TipState {
@@ -127,6 +132,7 @@ export function StudentOverzicht({
     periodeType,
     moduleGrenzen,
     colorOf,
+    preview = null,
 }: Props) {
     const [conflictsOpen, setConflictsOpen] = useState(true);
     const [tip, setTip] = useState<TipState | null>(null);
@@ -169,14 +175,63 @@ export function StudentOverzicht({
         return out;
     }, [blokkenPerKlas, traject, klasgroepen, start, eind]);
 
+    // Wat-als-preview. `wegBlokken`: de lessen die bij de wissel zouden
+    // verdwijnen — die van de verhuizende selectie, tenzij een andere selectie
+    // van hetzelfde vak bij dezelfde klasgroep ze ook dekt. `ghostBlokken`: de
+    // lessen die erbij zouden komen, zonder de blokken die er al in zitten
+    // (bv. een bestaande M2-keuze bij de kandidaat-klasgroep).
+    const wegBlokken = useMemo(() => {
+        const out = new Set<Lesblok>();
+        if (!preview) return out;
+        const { sel } = preview;
+        const anderen = traject.filter(
+            s =>
+                s.klasgroep === sel.klasgroep &&
+                s.olodNaam === sel.olodNaam &&
+                !(s.van === sel.van && s.tot === sel.tot)
+        );
+        for (const b of effectieveBlokken) {
+            if (b.klasgroep !== sel.klasgroep || b.olodNaam !== sel.olodNaam) continue;
+            if (!datumInBereik(b.start, sel.van, sel.tot)) continue;
+            if (anderen.some(s => datumInBereik(b.start, s.van, s.tot))) continue;
+            out.add(b);
+        }
+        return out;
+    }, [preview, traject, effectieveBlokken]);
+
+    const ghostBlokken = useMemo<Lesblok[]>(() => {
+        if (!preview) return [];
+        const aanwezig = new Set(effectieveBlokken.map(b => `${b.klasgroep}|${b.olodNaam}|${b.start.getTime()}`));
+        return preview.blokken.filter(
+            b =>
+                b.klasgroep === preview.klasgroep &&
+                b.start.getTime() >= start.getTime() &&
+                b.eind.getTime() <= eind.getTime() &&
+                datumInBereik(b.start, preview.sel.van, preview.sel.tot) &&
+                !aanwezig.has(`${b.klasgroep}|${b.olodNaam}|${b.start.getTime()}`)
+        );
+    }, [preview, effectieveBlokken, start, eind]);
+    const ghostSet = useMemo(() => new Set(ghostBlokken), [ghostBlokken]);
+
+    // Wat er getekend wordt (bestaand + ghost) en waarop de conflictdetectie
+    // loopt (bestaand zonder de wegvallende lessen, plus ghost).
+    const getoondeBlokken = useMemo<Lesblok[]>(
+        () => (ghostBlokken.length ? [...effectieveBlokken, ...ghostBlokken] : effectieveBlokken),
+        [effectieveBlokken, ghostBlokken]
+    );
+    const scenarioBlokken = useMemo<Lesblok[]>(
+        () => (preview ? [...effectieveBlokken.filter(b => !wegBlokken.has(b)), ...ghostBlokken] : effectieveBlokken),
+        [preview, effectieveBlokken, wegBlokken, ghostBlokken]
+    );
+
     // Alle weekstroken delen dezelfde hoogte: standaard tot 18u, uitgerekt tot
     // max 22u zodra het traject een avondschoolblok bevat dat later eindigt.
     const totalMin = useMemo(
-        () => (gridEndHour(effectieveBlokken) - DAY_START_HOUR) * 60,
-        [effectieveBlokken]
+        () => (gridEndHour(getoondeBlokken) - DAY_START_HOUR) * 60,
+        [getoondeBlokken]
     );
 
-    const conflicts = useMemo(() => detectConflicts(effectieveBlokken), [effectieveBlokken]);
+    const conflicts = useMemo(() => detectConflicts(scenarioBlokken), [scenarioBlokken]);
     const conflictMap = useMemo(() => {
         const map = new Map<Lesblok, Lesblok[]>();
         const push = (key: Lesblok, val: Lesblok) => {
@@ -214,6 +269,26 @@ export function StudentOverzicht({
         eersteActieveRij.current?.scrollIntoView({ block: 'start' });
     }, [actiefBereik.van, actiefBereik.tot, heeftRijen]);
 
+    // Bij een preview scrollen we de eerste week met een ghost-blok in beeld
+    // (enkel als nodig), zodat een vak buiten de actieve periode niet
+    // onzichtbaar blijft.
+    const eersteGhostRij = useRef<HTMLDivElement | null>(null);
+    const previewKey = preview ? `${preview.sel.olodNaam}|${preview.klasgroep}` : null;
+    useEffect(() => {
+        if (previewKey) eersteGhostRij.current?.scrollIntoView({ block: 'nearest' });
+    }, [previewKey]);
+    const eersteGhostWeek = useMemo(() => {
+        if (ghostBlokken.length === 0) return null;
+        const eerste = ghostBlokken.reduce((a, b) => (b.start.getTime() < a.start.getTime() ? b : a));
+        return weken.findIndex(wk => eerste.start.getTime() >= wk.getTime() && eerste.start.getTime() <= fridayEndOf(wk).getTime());
+    }, [ghostBlokken, weken]);
+
+    // Conflicten waar een ghost-blok bij betrokken is: nieuw door de wissel.
+    const previewConflicten = useMemo(
+        () => (preview ? conflicts.filter(c => ghostSet.has(c.a) || ghostSet.has(c.b)).length : 0),
+        [preview, conflicts, ghostSet]
+    );
+
     const olodLegend = useMemo(() => {
         const seen = new Set<string>();
         const out: string[] = [];
@@ -239,6 +314,27 @@ export function StudentOverzicht({
             <div className={styles.panelBodyFlex}>
                 {error && <div className={styles.emptyState}>{error}</div>}
 
+                {preview && !error && (
+                    <div
+                        className={`${styles.previewStrip} ${previewConflicten > 0 ? styles.previewStripConflict : ''}`}
+                        role="status"
+                    >
+                        <Eye size={13} />
+                        <span className={styles.legendSwatch} style={{ backgroundColor: colorOf(preview.sel.olodNaam) }} />
+                        <span className={styles.previewStripText}>
+                            <strong>{preview.sel.olodNaam}</strong> bij <strong>{preview.klasgroep}</strong> i.p.v.{' '}
+                            {preview.sel.klasgroep}:{' '}
+                            {ghostBlokken.length === 0
+                                ? 'geen lessen in deze periode'
+                                : `${ghostBlokken.length} ${ghostBlokken.length === 1 ? 'les' : 'lessen'}, ${
+                                      previewConflicten === 0
+                                          ? 'geen nieuwe conflicten'
+                                          : `${previewConflicten} ${previewConflicten === 1 ? 'conflict' : 'conflicten'}`
+                                  }`}
+                        </span>
+                    </div>
+                )}
+
                 {!error && traject.length === 0 ? (
                     <div className={styles.emptyState}>
                         Klik op lesblokken in het klasgroeprooster om OLODs aan het traject toe te voegen.
@@ -248,7 +344,7 @@ export function StudentOverzicht({
                         {weken.map((wkMonday, wi) => {
                             const wkVrijdagEnd = fridayEndOf(wkMonday);
                             const dagen = Array.from({ length: 5 }, (_, i) => addDays(wkMonday, i));
-                            const wkBlokken = effectieveBlokken.filter(
+                            const wkBlokken = getoondeBlokken.filter(
                                 b =>
                                     b.start.getTime() >= wkMonday.getTime() &&
                                     b.start.getTime() <= wkVrijdagEnd.getTime()
@@ -256,8 +352,9 @@ export function StudentOverzicht({
                             const actief = weekInActievePeriode(wkMonday);
                             const eersteActief = actief && (wi === 0 || !weekInActievePeriode(weken[wi - 1]));
                             const wkGrenzen = grenzenVoorWeek(wkMonday);
+                            const rijRef = eersteActief ? eersteActieveRij : wi === eersteGhostWeek ? eersteGhostRij : undefined;
                             return (
-                                <div key={wi} ref={eersteActief ? eersteActieveRij : undefined}>
+                                <div key={wi} ref={rijRef}>
                                     {wkGrenzen.map(g => (
                                         <div key={g.datum} className={styles.periodeGrens}>
                                             <span>{g.label}</span>
@@ -282,9 +379,12 @@ export function StudentOverzicht({
                                                         {laidOut.map(({ blok: b, col, cols }, bi) => {
                                                             const conflictsFor = conflictMap.get(b);
                                                             const conflict = !!conflictsFor;
+                                                            const ghost = ghostSet.has(b);
+                                                            const weg = wegBlokken.has(b);
                                                             const widthPct = 100 / cols;
                                                             const leftPct = col * widthPct;
                                                             const baseTip =
+                                                                (ghost ? '👁 Preview — komt erbij bij wissel\n' : weg ? '👁 Preview — vervalt bij wissel\n' : '') +
                                                                 `${b.olodNaam}\n${b.klasgroep}${b.type ? ` · ${b.type}` : ''}` +
                                                                 `\n${formatTime(b.start)}–${formatTime(b.eind)}` +
                                                                 (b.lokaal ? `\n${b.lokaal}` : '');
@@ -302,7 +402,7 @@ export function StudentOverzicht({
                                                             return (
                                                                 <div
                                                                     key={bi}
-                                                                    className={`${styles.miniBlok} ${conflict ? styles.miniBlokConflict : ''}`}
+                                                                    className={`${styles.miniBlok} ${conflict ? styles.miniBlokConflict : ''} ${ghost ? styles.miniBlokGhost : ''} ${weg ? styles.miniBlokWeg : ''}`}
                                                                     onMouseEnter={e => showTip(e, blokTip)}
                                                                     onMouseLeave={hideTip}
                                                                     style={{
@@ -364,6 +464,7 @@ export function StudentOverzicht({
                         {conflictsOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
                         <AlertTriangle size={14} />
                         {conflicts.length} conflict{conflicts.length === 1 ? '' : 'en'}
+                        {preview && <span className={styles.conflictsPreviewHint}>bij wissel naar {preview.klasgroep}</span>}
                     </div>
                     {conflictsOpen && (
                         <div className={styles.conflictsList}>

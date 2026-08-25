@@ -1,7 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Printer, RotateCcw, Settings as SettingsIcon, LayoutGrid, ArrowLeft, Palette, Copy, Check, Info, X } from 'lucide-react';
+import { Printer, RotateCcw, Settings as SettingsIcon, LayoutGrid, ArrowLeft, Palette, Copy, Check, Info, X, Save } from 'lucide-react';
 import styles from './Traject.module.css';
-import { useKleurMap, useLastBackup, useStudentTraject, useTrajectSettings } from './hooks';
+import {
+    useBewaardeTrajecten,
+    useKleurMap,
+    useLastBackup,
+    useStudentTraject,
+    useTrajectSettings,
+    zelfdeTrajectNaam,
+    type BewaardTraject,
+} from './hooks';
+import { LaadTrajectKnop } from './BewaardeTrajecten';
 import { TrajectSettingsView } from './TrajectSettings';
 import { KlasgroepSelector } from './KlasgroepSelector';
 import { KlasgroepRooster } from './KlasgroepRooster';
@@ -9,7 +18,7 @@ import { StudentOverzicht } from './StudentOverzicht';
 import { PeriodeSwitcher } from './PeriodeSwitcher';
 import { TrajectPrintView, buildTrajectClipboardText } from './TrajectPrintView';
 import { defaultRoosterWeek, periodesVoor } from './academicYear';
-import { selectieStatussen, useTrajectBlokken } from './useTrajectBlokken';
+import { selectieStatussen, useTrajectBlokken, type KlasgroepPreview } from './useTrajectBlokken';
 import { backupFilename, buildBackup, downloadBackup, parseBackup } from './trajectBackup';
 
 type Tab = 'werkblad' | 'instellingen';
@@ -85,9 +94,10 @@ export function TrajectPlanner({ onBack, presetApplied = false }: Props) {
         replaceSettings,
         setKlasgroepen,
     } = useTrajectSettings();
-    const { traject, toggleBlok, selectieVoor, remove, setPeriode, reset, replaceTraject } = useStudentTraject();
+    const { traject, toggleBlok, selectieVoor, remove, setPeriode, setKlasgroep, reset, replaceTraject } = useStudentTraject();
     const { map: kleurmap, ensureColor, colorOf, replaceMap, resetColors } = useKleurMap();
     const { lastBackup, markBackup } = useLastBackup();
+    const { bewaard: bewaardeTrajecten, bewaar: bewaarTraject, verwijder: verwijderBewaard } = useBewaardeTrajecten();
 
     const [tab, setTab] = useState<Tab>(
         settings.mijnOpleidingKlasgroepen.length === 0 ? 'instellingen' : 'werkblad'
@@ -96,6 +106,7 @@ export function TrajectPlanner({ onBack, presetApplied = false }: Props) {
         settings.mijnOpleidingKlasgroepen[0] ?? null
     );
     const [copied, setCopied] = useState(false);
+    const [bewaardFeedback, setBewaardFeedback] = useState(false);
     const [bannerDismissed, setBannerDismissed] = useState(false);
 
     const [panelAWidth, setPanelAWidth] = useState<number>(() => {
@@ -146,6 +157,53 @@ export function TrajectPlanner({ onBack, presetApplied = false }: Props) {
             `Weet je zeker dat je het volledige studenttraject wil wissen? (${traject.length} OLODs)`
         );
         if (ok) reset();
+    };
+
+    // Bewaart het huidige traject mét zijn instellingen (klasgroepen,
+    // periode-indeling, actieve periode) onder een naam in localStorage. Een
+    // bestaande naam wordt (na bevestiging) overschreven.
+    const handleBewaar = () => {
+        if (traject.length === 0) return;
+        const voorstel = `Traject ${bewaardeTrajecten.length + 1}`;
+        const naam = window.prompt('Geef dit traject een naam:', voorstel)?.trim();
+        if (!naam) return;
+        const bestaand = bewaardeTrajecten.find(x => zelfdeTrajectNaam(x.naam, naam));
+        if (
+            bestaand &&
+            !window.confirm(
+                `Er is al een bewaard traject "${bestaand.naam}" (${bestaand.traject.length} OLODs). Overschrijven met het huidige traject (${traject.length} OLODs) en de huidige instellingen?`
+            )
+        ) {
+            return;
+        }
+        bewaarTraject(naam, settings, traject, bestaand?.id);
+        setBewaardFeedback(true);
+        window.setTimeout(() => setBewaardFeedback(false), 1500);
+    };
+
+    // Vervangt het huidige traject én de instellingen door die van een
+    // bewaard traject (zoals een back-up-import, maar zonder kleurmap).
+    const handleLaad = (item: BewaardTraject): boolean => {
+        const heeftData = traject.length > 0 || settings.mijnOpleidingKlasgroepen.length > 0;
+        if (
+            heeftData &&
+            !window.confirm(
+                `"${item.naam}" laden (${item.traject.length} OLODs)? Dit vervangt je huidige traject (${traject.length} OLODs) en je instellingen (klasgroepen en periode).`
+            )
+        ) {
+            return false;
+        }
+        if (item.settings) replaceSettings(item.settings);
+        replaceTraject(item.traject);
+        setTab('werkblad');
+        return true;
+    };
+
+    const handleVerwijderBewaard = (item: BewaardTraject) => {
+        const ok = window.confirm(
+            `Bewaard traject "${item.naam}" (${item.traject.length} OLODs) verwijderen? Dit kan niet ongedaan gemaakt worden.`
+        );
+        if (ok) verwijderBewaard(item.id);
     };
 
     const handleResetColors = () => {
@@ -228,6 +286,11 @@ export function TrajectPlanner({ onBack, presetApplied = false }: Props) {
     const { blokkenPerKlas, busy: blokkenBusy, error: blokkenError } = useTrajectBlokken(traject, ensureColor);
     const statussen = useMemo(() => selectieStatussen(traject, blokkenPerKlas), [traject, blokkenPerKlas]);
 
+    // Wat-als-preview vanuit de klasgroep-kiezer (paneel A): zolang de
+    // gebruiker over een andere klasgroep beweegt, toont paneel C waar het vak
+    // dan zou vallen.
+    const [klasgroepPreview, setKlasgroepPreview] = useState<KlasgroepPreview | null>(null);
+
     return (
       <>
         <div className={styles.screenRoot}>
@@ -274,6 +337,20 @@ export function TrajectPlanner({ onBack, presetApplied = false }: Props) {
                 >
                     <RotateCcw size={14} /> Reset traject
                 </button>
+                <button
+                    className={styles.toolbarBtn}
+                    onClick={handleBewaar}
+                    disabled={traject.length === 0}
+                    title="Bewaar het huidige traject onder een naam in deze browser, om het later opnieuw te laden"
+                >
+                    {bewaardFeedback ? <Check size={14} /> : <Save size={14} />}
+                    {bewaardFeedback ? 'Bewaard!' : 'Bewaar traject'}
+                </button>
+                <LaadTrajectKnop
+                    items={bewaardeTrajecten}
+                    onLaad={handleLaad}
+                    onVerwijder={handleVerwijderBewaard}
+                />
                 <button
                     className={styles.toolbarBtn}
                     onClick={handleResetColors}
@@ -347,6 +424,8 @@ export function TrajectPlanner({ onBack, presetApplied = false }: Props) {
                         colorOf={colorOf}
                         onRemoveOlod={remove}
                         onSetPeriode={setPeriode}
+                        onSetKlasgroep={setKlasgroep}
+                        onPreview={setKlasgroepPreview}
                         statussen={statussen}
                         actiefBereik={actiefBereik}
                         periodeType={settings.periodeType}
@@ -372,6 +451,7 @@ export function TrajectPlanner({ onBack, presetApplied = false }: Props) {
                         periodeType={settings.periodeType}
                         moduleGrenzen={settings.moduleGrenzen}
                         colorOf={colorOf}
+                        preview={klasgroepPreview}
                     />
                 </div>
             )}

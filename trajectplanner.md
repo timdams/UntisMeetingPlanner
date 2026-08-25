@@ -62,6 +62,7 @@ LocalStorage-sleutels:
 - `traject_settings` — `TrajectSettings`
 - `traject_student` — `StudentTraject`
 - `traject_kleurmap` — `KleurMap`
+- `traject_bewaard` — `BewaardTraject[]` (bewaarde trajecten: naam + `TrajectSettings` + `StudentTraject`; zie hieronder)
 
 De reset-knop wist enkel `traject_student`. Instellingen en kleurmap blijven staan.
 
@@ -101,6 +102,8 @@ Drie panelen naast elkaar (grid: `200px 1fr 460px`).
 - Eén klasgroep tegelijk actief → bron voor paneel B.
 - Lijst **Geselecteerde OLODs** met per selectie een **periode-badge** (`S1`, `M2`, of datums bij een handmatig bereik); de badge is gemarkeerd als de selectie de actieve periode raakt. Teller toont "in deze periode / totaal".
 - In modulemodus is de badge een knop die een **periode-kiezer** opent: heel het semester (beide modules) of enkel module 1 of 2, voor die klasgroep (`setPeriode` in [hooks.ts](MEETINGPLANNER2026/src/components/Traject/hooks.ts); opties uit `periodeOptiesVoor`). De kiezer blijft open na een keuze.
+- De **klasgroepnaam** van een selectie is eveneens een knop die een **klasgroep-kiezer** opent: alle klasgroepen uit de shortlist waar hetzelfde vak in de periode van de selectie voorkomt (met per klasgroep het aantal lessen; de tooltip toont de wekelijkse lesmomenten). Een keuze verhuist de selectie naar die klasgroep (`setKlasgroep` in [hooks.ts](MEETINGPLANNER2026/src/components/Traject/hooks.ts)); valt ze samen met een bestaande selectie, dan smelten ze samen. De kandidaten worden lui opgehaald zodra de kiezer opent (`useKlasgroepAlternatieven` in [useTrajectBlokken.ts](MEETINGPLANNER2026/src/components/Traject/useTrajectBlokken.ts)); klasgroepen waarvan het rooster nog niet beschikbaar is, worden apart vermeld. Hooguit één kiezer (periode of klasgroep) staat tegelijk open.
+- **Wat-als-preview**: zolang de muis (of de toetsenbordfocus) op een andere klasgroep-chip in de kiezer staat, toont paneel C waar het vak dan zou vallen — zie hieronder. De preview verdwijnt zodra de muis de chip verlaat, de kiezer sluit of de wissel effectief gebeurt.
 - **Waarschuwing** bij een selectie die in haar periode geen enkele les van dat vak bij die klasgroep oplevert (bv. na een wissel naar een module waarin het vak niet loopt): oranje kader + melding "Geen lessen van dit vak bij … in …". Is het rooster van die periode nog niet beschikbaar (Untis 404), dan staat er een informatieve melding in plaats van een vals alarm. Statussen komen uit `selectieStatussen` in [useTrajectBlokken.ts](MEETINGPLANNER2026/src/components/Traject/useTrajectBlokken.ts), dat ook het jaarrooster voor paneel C levert.
 
 **Paneel B — Klasgroeprooster** ([KlasgroepRooster.tsx](MEETINGPLANNER2026/src/components/Traject/KlasgroepRooster.tsx))
@@ -119,11 +122,14 @@ Drie panelen naast elkaar (grid: `200px 1fr 460px`).
 - **Legende** onderaan met OLOD-namen + swatches.
 - **Uitklapbaar conflictpaneel** onderaan met datum, uur, OLOD-naam en klasgroep per conflict.
 - Hover-tooltip per blokje (CSS `data-tip`).
+- **Wat-als-preview** vanuit de klasgroep-kiezer van paneel A (`preview`-prop, type `KlasgroepPreview`): de lessen van de verhuizende selectie bij de huidige klasgroep vervagen (tenzij een andere selectie van hetzelfde vak bij die klasgroep ze ook dekt), de lessen bij de kandidaat-klasgroep verschijnen als gestreepte, gestippeld omrande *ghost*-blokjes (zonder blokken die al in het traject zitten), en conflictdetectie + conflictpaneel rekenen voor dat scenario ("… bij wissel naar 2 TI B"). Een strip bovenaan vat samen: vak, nieuwe i.p.v. huidige klasgroep, aantal lessen en het aantal *nieuwe* conflicten (rood zodra > 0). De eerste week met een ghost-blok wordt zo nodig in beeld gescrold.
 
 ### Globale acties (toolbar in [TrajectPlanner.tsx](MEETINGPLANNER2026/src/components/Traject/TrajectPlanner.tsx))
 - Tab-switcher Werkblad / Instellingen.
 - **Periode-switcher** (compact: `S1 | S2` of `M1 | M2 | M3 | M4`, afhankelijk van de indeling) — zet de actieve periode; paneel B en C volgen.
 - **Reset traject** → confirm → wist enkel `StudentTraject`.
+- **Bewaar traject** → vraagt een naam (`prompt`) en bewaart het huidige `StudentTraject` **samen met de `TrajectSettings`** (klasgroep-shortlist, actieve periode, semester/module-indeling, modulegrenzen) in `traject_bewaard` (`useBewaardeTrajecten` in [hooks.ts](MEETINGPLANNER2026/src/components/Traject/hooks.ts)). Een bestaande naam wordt na bevestiging overschreven. Kleurmap wordt niet meebewaard.
+- **Laad traject** ([BewaardeTrajecten.tsx](MEETINGPLANNER2026/src/components/Traject/BewaardeTrajecten.tsx)) → uitklapmenu met alle bewaarde trajecten (naam, aantal OLODs/klasgroepen, periode, datum). Klik = na bevestiging traject **én instellingen** vervangen (zoals een back-up-import, zonder kleurmap); prullenbakje = bewaard traject verwijderen uit localStorage. Reset en import raken de bewaarde trajecten niet.
 - **Print / PDF** → `window.print()`.
 
 ## Conflictdefinitie
@@ -158,10 +164,11 @@ MEETINGPLANNER2026/src/components/Traject/
 ├── academicYear.ts          # Academiejaar, semesters, modules (Periode, periodesVoor, modulegrenzen), defaultRoosterWeek
 ├── trajectService.ts        # Adapter rond untisService met range-aware cache
 ├── hooks.ts                 # useTrajectSettings, useStudentTraject, useKleurMap (+ normalize/replace-functies voor import)
-├── useTrajectBlokken.ts     # Jaarrooster per klasgroep in het traject + selectieStatussen (geen lessen / niet beschikbaar)
+├── useTrajectBlokken.ts     # Jaarrooster per klasgroep in het traject + selectieStatussen (geen lessen / niet beschikbaar) + useKlasgroepAlternatieven (klasgroep-kiezer)
 ├── dateUtils.ts             # mondayOf, weeksBetween, isoWeekNumber, periodeBereik, formatters
 ├── PeriodeSwitcher.tsx      # Snelkeuze-knoppen actieve periode (topbar compact + instellingen)
-├── TrajectPlanner.tsx       # Shell + topbar + tabs + periode-switcher + reset + print + export/import wiring
+├── TrajectPlanner.tsx       # Shell + topbar + tabs + periode-switcher + reset + bewaar/laad traject + print + export/import wiring
+├── BewaardeTrajecten.tsx    # "Laad traject"-knop + uitklapmenu van bewaarde trajecten (laden / verwijderen)
 ├── TrajectSettings.tsx      # Scherm 1
 ├── KlasgroepSelector.tsx    # Paneel A
 ├── KlasgroepRooster.tsx     # Paneel B

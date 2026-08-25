@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react';
-import { AlertTriangle, ChevronDown, Info, X } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { AlertTriangle, ChevronDown, Eye, Info, Loader2, X } from 'lucide-react';
 import { OLODSelectie, StudentTraject } from './types';
 import {
     matchtPeriode,
@@ -10,7 +10,12 @@ import {
 } from './academicYear';
 import { bereikOverlapt } from './dateUtils';
 import { selectieKey } from './hooks';
-import type { SelectieStatus } from './useTrajectBlokken';
+import {
+    useKlasgroepAlternatieven,
+    type KlasgroepAlternatief,
+    type KlasgroepPreview,
+    type SelectieStatus,
+} from './useTrajectBlokken';
 import styles from './Traject.module.css';
 
 interface Props {
@@ -21,6 +26,10 @@ interface Props {
     colorOf: (olodNaam: string) => string;
     onRemoveOlod: (sel: OLODSelectie) => void;
     onSetPeriode: (sel: OLODSelectie, van: string, tot: string) => void;
+    onSetKlasgroep: (sel: OLODSelectie, klasgroep: string) => void;
+    // Wat-als-preview: de klasgroep waar de gebruiker in de kiezer over
+    // beweegt (of null). Het studentoverzicht toont dan waar het vak zou vallen.
+    onPreview: (preview: KlasgroepPreview | null) => void;
     // Per selectie (selectieKey) of ze geen lessen oplevert of nog niet
     // gecontroleerd kan worden; selecties zonder status zijn in orde.
     statussen: Map<string, SelectieStatus>;
@@ -33,6 +42,10 @@ interface Props {
     moduleGrenzen: ModuleGrenzen;
 }
 
+// Welke kiezer onder een selectie open staat: de periode-kiezer (badge) of
+// de klasgroep-kiezer (klasgroepnaam). Hooguit één tegelijk.
+type Kiezer = { key: string; soort: 'periode' | 'klasgroep' };
+
 export function KlasgroepSelector({
     klasgroepen,
     actief,
@@ -41,20 +54,39 @@ export function KlasgroepSelector({
     colorOf,
     onRemoveOlod,
     onSetPeriode,
+    onSetKlasgroep,
+    onPreview,
     statussen,
     actiefBereik,
     periodeType,
     moduleGrenzen,
 }: Props) {
-    // Selectie waarvan de periode-kiezer open staat. De sleutel bevat de
+    // Selectie waarvan een kiezer open staat. De sleutel bevat klasgroep én
     // periode; na een keuze volgt ze de gewijzigde selectie zodat de kiezer
     // open blijft en de gebruiker meteen een andere optie kan proberen.
-    const [openKey, setOpenKey] = useState<string | null>(null);
+    const [open, setOpen] = useState<Kiezer | null>(null);
     const kiesbaar = periodeType === 'module';
+
+    // Geen preview meer zodra een kiezer sluit of wisselt (de chips waar de
+    // muis over stond bestaan dan niet meer), en evenmin na unmount.
+    useEffect(() => {
+        onPreview(null);
+    }, [open, onPreview]);
+    useEffect(() => () => onPreview(null), [onPreview]);
+
+    const toggleKiezer = (key: string, soort: Kiezer['soort']) => {
+        setOpen(o => (o && o.key === key && o.soort === soort ? null : { key, soort }));
+    };
 
     const kiesPeriode = (sel: OLODSelectie, van: string, tot: string) => {
         onSetPeriode(sel, van, tot);
-        setOpenKey(selectieKey({ ...sel, van, tot }));
+        setOpen({ key: selectieKey({ ...sel, van, tot }), soort: 'periode' });
+    };
+
+    const kiesKlasgroep = (sel: OLODSelectie, klasgroep: string) => {
+        if (klasgroep === sel.klasgroep) return;
+        onSetKlasgroep(sel, klasgroep);
+        setOpen({ key: selectieKey({ ...sel, klasgroep }), soort: 'klasgroep' });
     };
 
     const gesorteerd = useMemo(
@@ -74,6 +106,14 @@ export function KlasgroepSelector({
         () => traject.filter(s => bereikOverlapt(s.van, s.tot, actiefBereik.van, actiefBereik.tot)).length,
         [traject, actiefBereik.van, actiefBereik.tot]
     );
+
+    // Kandidaat-klasgroepen worden enkel opgehaald voor de selectie waarvan de
+    // klasgroep-kiezer open staat.
+    const openKlasSel = useMemo(
+        () => (open?.soort === 'klasgroep' ? traject.find(s => selectieKey(s) === open.key) ?? null : null),
+        [open, traject]
+    );
+    const alternatieven = useKlasgroepAlternatieven(openKlasSel, klasgroepen);
 
     return (
         <div className={styles.panel}>
@@ -122,7 +162,8 @@ export function KlasgroepSelector({
                         const key = selectieKey(sel);
                         const periode = periodeLabelVoor(sel.van, sel.tot, moduleGrenzen);
                         const zichtbaar = bereikOverlapt(sel.van, sel.tot, actiefBereik.van, actiefBereik.tot);
-                        const open = kiesbaar && openKey === key;
+                        const openPeriode = kiesbaar && open?.key === key && open.soort === 'periode';
+                        const openKlas = open?.key === key && open.soort === 'klasgroep';
                         const status = statussen.get(key);
                         const waarschuwing = status === 'geen-lessen';
                         const badgeClass = `${styles.olodListPeriode} ${zichtbaar ? styles.olodListPeriodeActief : ''}`;
@@ -145,9 +186,9 @@ export function KlasgroepSelector({
                                             <button
                                                 type="button"
                                                 className={`${badgeClass} ${styles.olodListPeriodeKnop}`}
-                                                onClick={() => setOpenKey(open ? null : key)}
+                                                onClick={() => toggleKiezer(key, 'periode')}
                                                 title={`${badgeTitle}\nKlik om te kiezen: hele semester of één module`}
-                                                aria-expanded={open}
+                                                aria-expanded={openPeriode}
                                             >
                                                 {periode.kort}
                                                 <ChevronDown size={10} />
@@ -157,9 +198,16 @@ export function KlasgroepSelector({
                                                 {periode.kort}
                                             </span>
                                         )}
-                                        <span className={styles.olodListKlas} title={sel.klasgroep}>
-                                            {sel.klasgroep}
-                                        </span>
+                                        <button
+                                            type="button"
+                                            className={`${styles.olodListKlas} ${styles.olodListKlasKnop}`}
+                                            onClick={() => toggleKiezer(key, 'klasgroep')}
+                                            title={`${sel.klasgroep}\nKlik om dit vak in ${periode.kort} bij een andere klasgroep te volgen`}
+                                            aria-expanded={openKlas}
+                                        >
+                                            <span>{sel.klasgroep}</span>
+                                            <ChevronDown size={10} />
+                                        </button>
                                     </div>
                                 </div>
                                 <button
@@ -186,7 +234,7 @@ export function KlasgroepSelector({
                                         <span>Rooster van {periode.kort} nog niet beschikbaar — nog niet gecontroleerd.</span>
                                     </div>
                                 )}
-                                {open && (
+                                {openPeriode && (
                                     <div className={styles.olodPeriodeKiezer} role="group" aria-label="Periode van deze OLOD">
                                         {periodeOptiesVoor(sel.van, sel.tot, moduleGrenzen).map(p => {
                                             const isSemester = p.id.startsWith('S');
@@ -206,11 +254,99 @@ export function KlasgroepSelector({
                                         })}
                                     </div>
                                 )}
+                                {openKlas && (
+                                    <KlasgroepKiezer
+                                        sel={sel}
+                                        periodeKort={periode.kort}
+                                        alternatieven={alternatieven}
+                                        onKies={k => kiesKlasgroep(sel, k)}
+                                        onPreview={onPreview}
+                                    />
+                                )}
                             </div>
                         );
                     })
                 )}
             </div>
+        </div>
+    );
+}
+
+interface KiezerProps {
+    sel: OLODSelectie;
+    periodeKort: string;
+    // null zolang de kandidaten nog laden.
+    alternatieven: KlasgroepAlternatief[] | null;
+    onKies: (klasgroep: string) => void;
+    onPreview: (preview: KlasgroepPreview | null) => void;
+}
+
+// Kiezer met alle klasgroepen uit de shortlist waar dit vak in de periode
+// van de selectie voorkomt. De huidige klasgroep staat er altijd bij (ook
+// zonder lessen — dan staat de waarschuwing er al boven). Over een andere
+// klasgroep bewegen toont een wat-als-preview in het studentoverzicht.
+function KlasgroepKiezer({ sel, periodeKort, alternatieven, onKies, onPreview }: KiezerProps) {
+    if (alternatieven === null) {
+        return (
+            <div className={styles.olodPeriodeKiezer} role="group" aria-label="Klasgroep van deze OLOD">
+                <span className={styles.olodKiezerInfo}>
+                    <Loader2 size={12} className="animate-spin" />
+                    Klasgroepen controleren op {sel.olodNaam}…
+                </span>
+            </div>
+        );
+    }
+
+    const opties = alternatieven.filter(a => a.klasgroep === sel.klasgroep || (a.beschikbaar && a.aantal > 0));
+    const onbekend = alternatieven.filter(a => a.klasgroep !== sel.klasgroep && !a.beschikbaar).map(a => a.klasgroep);
+    const heeftAlternatief = opties.some(a => a.klasgroep !== sel.klasgroep);
+
+    return (
+        <div className={styles.olodPeriodeKiezer} role="group" aria-label="Klasgroep van deze OLOD">
+            {opties.map(a => {
+                const huidig = a.klasgroep === sel.klasgroep;
+                const lessen = a.beschikbaar
+                    ? `${a.aantal} ${a.aantal === 1 ? 'les' : 'lessen'} van ${sel.olodNaam} in ${periodeKort}`
+                    : `Rooster van ${periodeKort} nog niet beschikbaar`;
+                const momenten = a.momenten.length > 0 ? `\n${a.momenten.join('\n')}` : '';
+                const preview = () =>
+                    onPreview(huidig ? null : { sel, klasgroep: a.klasgroep, blokken: a.blokken });
+                const stopPreview = () => onPreview(null);
+                return (
+                    <button
+                        key={a.klasgroep}
+                        type="button"
+                        className={`${styles.olodPeriodeOptie} ${huidig ? styles.olodPeriodeOptieActief : ''}`}
+                        onClick={() => onKies(a.klasgroep)}
+                        onMouseEnter={preview}
+                        onMouseLeave={stopPreview}
+                        onFocus={preview}
+                        onBlur={stopPreview}
+                        title={`${a.klasgroep}${huidig ? ' (huidige klasgroep)' : ''}: ${lessen}${momenten}`}
+                        aria-pressed={huidig}
+                    >
+                        {a.klasgroep}
+                        {a.beschikbaar && <span className={styles.olodOptieAantal}>{a.aantal}</span>}
+                    </button>
+                );
+            })}
+            {heeftAlternatief ? (
+                <span className={styles.olodKiezerInfo}>
+                    <Eye size={12} />
+                    Beweeg over een klasgroep om te zien waar de lessen in het traject vallen.
+                </span>
+            ) : (
+                <span className={styles.olodKiezerInfo}>
+                    <Info size={12} />
+                    Geen andere klasgroep uit je shortlist geeft dit vak in {periodeKort}.
+                </span>
+            )}
+            {onbekend.length > 0 && (
+                <span className={styles.olodKiezerInfo}>
+                    <Info size={12} />
+                    Rooster van {periodeKort} nog niet beschikbaar voor {onbekend.join(', ')}.
+                </span>
+            )}
         </div>
     );
 }
