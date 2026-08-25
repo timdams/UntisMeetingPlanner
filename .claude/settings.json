@@ -1,7 +1,9 @@
 {
   "permissions": {
     "allow": [
-      "Bash(npx tsc *)"
+      "Bash(npx tsc *)",
+      "Bash(netstat -ano)",
+      "PowerShell(Get-CimInstance Win32_Process -Filter \"ProcessId = 39500 OR ProcessId = 32984\" | Select-Object ProcessId, ParentProcessId, Name, @{n='Cmd';e={$_.CommandLine.Substring\\(0, [Math]::Min\\(160, $_.CommandLine.Length\\)\\)}} | Format-List)"
     ]
   }
 }

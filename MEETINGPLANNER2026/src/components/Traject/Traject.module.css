@@ -176,18 +176,45 @@
 
 /* ===== Settings screen ===== */
 .settings {
-    padding: 1.5rem;
-    overflow: auto;
+    padding: 0;
+    overflow: auto; /* scroll-container: nodig voor de sticky bovenbalk */
     flex: 1;
 }
 
 /* "Klaar"-balk bovenaan de instellingen: duidelijke weg terug naar het werkblad,
    los van de "Menu"-knop linksboven (die de hele module verlaat). */
-.settingsDoneBar {
+.settingsTopBar {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    background-color: var(--bg-color);
+    border-bottom: 1px solid var(--border-color);
+}
+
+.settingsTopBarInner {
+    max-width: 960px;
+    margin: 0 auto;
+    padding: 0.75rem 1.5rem;
     display: flex;
     align-items: center;
     gap: 0.75rem;
-    margin-bottom: 1.25rem;
+}
+
+.settingsPageTitle {
+    font-weight: 700;
+    font-size: 1.05rem;
+    color: var(--text-color);
+}
+
+/* Gecentreerde kolom met de instellingenkaarten; houdt tekst en het
+   klasgroepraster leesbaar op brede schermen. */
+.settingsInner {
+    max-width: 960px;
+    margin: 0 auto;
+    padding: 1.25rem 1.5rem 2rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
 }
 
 /* Badge die het actieve academiejaar toont (bron van klasgroep-/roosterdata). */
@@ -221,25 +248,6 @@
     border-color: var(--primary-hover);
 }
 
-.backupWarning {
-    display: flex;
-    gap: 0.75rem;
-    align-items: flex-start;
-    padding: 0.75rem 1rem;
-    margin-bottom: 1.5rem;
-    background-color: #FEF3C7;
-    border: 1px solid #F59E0B;
-    border-left: 4px solid #B45309;
-    border-radius: var(--border-radius);
-    color: #78350F;
-    font-size: 0.88rem;
-    line-height: 1.4;
-}
-
-.backupWarning strong {
-    color: #78350F;
-}
-
 .backupRow {
     display: flex;
     flex-wrap: wrap;
@@ -268,15 +276,240 @@
     color: #7F1D1D;
 }
 
-.settingsSection {
-    margin-bottom: 2rem;
+/* ===== Inklapbare instellingenkaart ===== */
+.card {
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    background-color: var(--bg-color);
+    overflow: hidden;
 }
 
-.settingsTitle {
-    font-size: 1.1rem;
-    font-weight: 600;
-    margin-bottom: 0.5rem;
+.cardHeader {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.75rem 1rem;
+    background: transparent;
+    border: none;
+    border-radius: 0;
     color: var(--text-color);
+    text-align: left;
+    font-size: 1rem;
+    cursor: pointer;
+}
+
+.cardHeader:hover {
+    background-color: var(--secondary);
+    border-color: transparent;
+}
+
+.cardIcon {
+    display: inline-flex;
+    color: var(--primary);
+    flex-shrink: 0;
+}
+
+.cardTitle {
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.cardSummary {
+    flex: 1;
+    min-width: 0;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 0.85rem;
+    color: #64748b;
+}
+
+.cardSummaryText {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.cardSummaryWarn {
+    color: #B45309;
+}
+
+.cardChevron {
+    display: inline-flex;
+    color: #64748b;
+    flex-shrink: 0;
+}
+
+.cardBody {
+    padding: 0.75rem 1rem 1rem;
+    border-top: 1px solid var(--border-color);
+}
+
+/* Disclosure ("Meer uitleg", "Geavanceerd") — native <details>. */
+.uitleg {
+    margin-top: 0.75rem;
+}
+
+.uitlegSummary {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    list-style: none;
+    cursor: pointer;
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: #64748b;
+    user-select: none;
+}
+
+.uitlegSummary::-webkit-details-marker {
+    display: none;
+}
+
+.uitlegSummary:hover {
+    color: var(--text-color);
+}
+
+.uitlegChevron {
+    transition: transform 0.15s ease;
+}
+
+.uitleg[open] > .uitlegSummary .uitlegChevron {
+    transform: rotate(90deg);
+}
+
+.uitlegBody {
+    margin-top: 0.5rem;
+    padding: 0.6rem 0.85rem;
+    border-left: 3px solid var(--border-color);
+    font-size: 0.85rem;
+    color: #64748b;
+    line-height: 1.45;
+}
+
+.uitlegBody p {
+    margin: 0 0 0.5rem;
+}
+
+.uitlegBody p:last-child {
+    margin-bottom: 0;
+}
+
+/* Segmented control (Indeling: Semesters | Modules) */
+.segmented {
+    display: inline-flex;
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    overflow: hidden;
+    margin: 0.25rem 0 0.75rem;
+}
+
+.segmentedBtn {
+    background-color: var(--bg-color);
+    border: none;
+    border-radius: 0;
+    padding: 0.45rem 0.9rem;
+    font-weight: 500;
+    color: var(--text-color);
+    cursor: pointer;
+}
+
+.segmentedBtn + .segmentedBtn {
+    border-left: 1px solid var(--border-color);
+}
+
+.segmentedBtn:hover {
+    background-color: var(--item-hover);
+    border-color: var(--border-color);
+}
+
+.segmentedBtnActief,
+.segmentedBtnActief:hover {
+    background-color: var(--primary);
+    color: #fff;
+}
+
+/* De vier moduleperiodes als compacte strip */
+.moduleStrip {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 0.5rem;
+    margin: 0.75rem 0 0.25rem;
+}
+
+@media (max-width: 600px) {
+    .moduleStrip {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+.moduleCell {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    padding: 0.5rem 0.65rem;
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    background-color: var(--secondary);
+}
+
+.moduleCellKort {
+    font-weight: 600;
+    font-size: 0.85rem;
+}
+
+.moduleCellDatums {
+    font-size: 0.8rem;
+    color: #64748b;
+}
+
+/* Jaar-subkop in het klasgroepraster (spant alle kolommen) */
+.klasGroepHeader {
+    grid-column: 1 / -1;
+    margin-top: 0.35rem;
+    padding: 0 0.5rem;
+    font-size: 0.72rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #64748b;
+}
+
+.klasGroepHeader:first-child {
+    margin-top: 0;
+}
+
+/* Compacte notitie in een kaart (bv. de back-upherinnering) */
+.cardNote {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.5rem;
+    padding: 0.55rem 0.75rem;
+    margin-bottom: 0.75rem;
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    background-color: var(--secondary);
+    font-size: 0.85rem;
+    line-height: 1.4;
+}
+
+.cardNote svg {
+    flex-shrink: 0;
+    margin-top: 0.1em;
+}
+
+.cardNoteWarn {
+    background-color: #FEF3C7;
+    border-color: #F59E0B;
+    color: #78350F;
+}
+
+.backupMeta {
+    margin-top: 0.6rem;
+    font-size: 0.85rem;
+    color: #64748b;
 }
 
 .settingsHint {
@@ -357,9 +590,9 @@
 
 .klasList {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
     gap: 0.4rem;
-    max-height: 60vh;
+    max-height: 50vh;
     overflow: auto;
     padding: 0.5rem;
     border: 1px solid var(--border-color);
@@ -383,6 +616,114 @@
 
 .klasRowChecked {
     background-color: var(--selected-bg);
+}
+
+/* Gebundelde weergave van de geselecteerde klasgroepen, boven het volledige
+   raster. Zo hoeft de gebruiker de selectie niet in honderden rijen te zoeken;
+   het raster eronder blijft de plek om aan of af te vinken. */
+.klasSelectedBox {
+    margin-bottom: 0.75rem;
+    padding: 0.5rem 0.75rem 0.6rem;
+    border: 1px solid var(--selected-border);
+    border-radius: var(--border-radius);
+    background-color: var(--selected-bg);
+}
+
+.klasSelectedHeader {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    margin-bottom: 0.4rem;
+}
+
+.klasSelectedTitle {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.8rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: var(--text-color);
+}
+
+.klasSelectedCount {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 1.4em;
+    padding: 0 0.4em;
+    border-radius: 999px;
+    background-color: var(--primary);
+    color: #fff;
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0;
+}
+
+.klasSelectedClear {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0.2rem 0.5rem;
+    font-size: 0.8rem;
+    font-weight: 500;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 6px;
+    color: var(--primary);
+    cursor: pointer;
+}
+
+.klasSelectedClear:hover {
+    background-color: var(--bg-color);
+    border-color: rgba(255, 0, 0, 0.3);
+}
+
+.klasSelectedEmpty {
+    font-size: 0.85rem;
+    color: #64748b;
+}
+
+.klasSelectedChips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+}
+
+.klasChip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.2rem 0.3rem 0.2rem 0.6rem;
+    border: 1px solid var(--border-color);
+    border-radius: 999px;
+    background-color: var(--bg-color);
+    color: var(--text-color);
+    font-size: 0.85rem;
+    font-weight: 500;
+    line-height: 1.2;
+}
+
+.klasChipRemove {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    padding: 0;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 50%;
+    color: #64748b;
+    cursor: pointer;
+}
+
+.klasChipRemove:hover {
+    background-color: var(--selected-bg);
+    border-color: rgba(255, 0, 0, 0.3);
+    color: var(--primary);
 }
 
 /* ===== Workbench ===== */

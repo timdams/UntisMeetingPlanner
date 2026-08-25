@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Printer, RotateCcw, Settings as SettingsIcon, LayoutGrid, ArrowLeft, Palette, Copy, Check, Info, X } from 'lucide-react';
 import styles from './Traject.module.css';
-import { useKleurMap, useStudentTraject, useTrajectSettings } from './hooks';
+import { useKleurMap, useLastBackup, useStudentTraject, useTrajectSettings } from './hooks';
 import { TrajectSettingsView } from './TrajectSettings';
 import { KlasgroepSelector } from './KlasgroepSelector';
 import { KlasgroepRooster } from './KlasgroepRooster';
@@ -87,6 +87,7 @@ export function TrajectPlanner({ onBack, presetApplied = false }: Props) {
     } = useTrajectSettings();
     const { traject, toggleBlok, selectieVoor, remove, setPeriode, reset, replaceTraject } = useStudentTraject();
     const { map: kleurmap, ensureColor, colorOf, replaceMap, resetColors } = useKleurMap();
+    const { lastBackup, markBackup } = useLastBackup();
 
     const [tab, setTab] = useState<Tab>(
         settings.mijnOpleidingKlasgroepen.length === 0 ? 'instellingen' : 'werkblad'
@@ -184,6 +185,7 @@ export function TrajectPlanner({ onBack, presetApplied = false }: Props) {
     const handleExport = () => {
         const backup = buildBackup(settings, traject, kleurmap);
         downloadBackup(backupFilename(), backup);
+        markBackup(backup.exportedAt);
     };
 
     const handleImport = async (file: File): Promise<boolean> => {
@@ -325,6 +327,8 @@ export function TrajectPlanner({ onBack, presetApplied = false }: Props) {
                     onModuleGrenzenChange={setModuleGrenzen}
                     onExport={handleExport}
                     onImport={handleImport}
+                    lastBackup={lastBackup}
+                    heeftTraject={traject.length > 0}
                     onDone={() => setTab('werkblad')}
                 />
             ) : (

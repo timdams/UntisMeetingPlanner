@@ -18,6 +18,7 @@ const KEY_SETTINGS = 'traject_settings';
 const KEY_TRAJECT = 'traject_student';
 const KEY_KLEUR = 'traject_kleurmap';
 const KEY_MIGRATION = 'traject_migration_version';
+const KEY_LAST_BACKUP = 'traject_last_backup';
 
 // Verhoog dit nummer bij een breaking change in opgeslagen data. runTrajectMigrations()
 // draait dan eenmalig de bijhorende opkuis voor bestaande gebruikers.
@@ -293,6 +294,22 @@ export function useTrajectSettings() {
         replaceSettings,
         setKlasgroepen,
     };
+}
+
+// Tijdstip (ISO) van de laatste back-upexport. Voedt enkel de herinnering in
+// de instellingen ("Laatste back-up: …"); zit niet in de back-up zelf en
+// wordt niet gewist door reset of import.
+export function useLastBackup() {
+    const [lastBackup, setLastBackup] = useState<string | null>(() =>
+        loadJSON<string | null>(KEY_LAST_BACKUP, null)
+    );
+
+    const markBackup = useCallback((iso: string) => {
+        setLastBackup(iso);
+        persist(KEY_LAST_BACKUP, iso);
+    }, []);
+
+    return { lastBackup, markBackup };
 }
 
 // Unieke sleutel van een selectie (alle vier velden) — voor React-keys en
