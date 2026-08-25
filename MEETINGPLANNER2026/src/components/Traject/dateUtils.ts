@@ -105,3 +105,45 @@ export function toIsoDate(d: Date): string {
     const day = String(d.getDate()).padStart(2, '0');
     return `${y}-${m}-${day}`;
 }
+
+/**
+ * True voor een string van de vorm YYYY-MM-DD die ook een echte datum is.
+ * De round-trip via Date vangt doorgerolde datums zoals 2026-02-30 af.
+ */
+export function isIsoDate(iso: unknown): iso is string {
+    if (typeof iso !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(iso)) return false;
+    const d = parseIsoDate(iso);
+    return !Number.isNaN(d.getTime()) && toIsoDate(d) === iso;
+}
+
+export function addDaysIso(iso: string, n: number): string {
+    return toIsoDate(addDays(parseIsoDate(iso), n));
+}
+
+export function dagVoorIso(iso: string): string {
+    return addDaysIso(iso, -1);
+}
+
+/**
+ * Het volledige tijdsbereik van een periode (start 00:00 t/m einde 23:59:59.999).
+ * Alle consumenten die een periode bij de adapter opvragen gebruiken deze ene
+ * constructie, zodat de cache-slices en de in-flight dedup-sleutels van
+ * trajectService exact overeenkomen.
+ */
+export function periodeBereik(startIso: string, eindIso: string): { van: Date; tot: Date } {
+    const van = parseIsoDate(startIso);
+    const tot = parseIsoDate(eindIso);
+    tot.setHours(23, 59, 59, 999);
+    return { van, tot };
+}
+
+/** True wanneer twee inclusieve ISO-datumbereiken minstens één dag delen. */
+export function bereikOverlapt(aVan: string, aTot: string, bVan: string, bTot: string): boolean {
+    return aVan <= bTot && bVan <= aTot;
+}
+
+/** True wanneer de datum (op dagniveau) binnen het inclusieve ISO-bereik valt. */
+export function datumInBereik(d: Date, vanIso: string, totIso: string): boolean {
+    const iso = toIsoDate(d);
+    return iso >= vanIso && iso <= totIso;
+}

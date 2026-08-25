@@ -1,4 +1,5 @@
 import { TrajectSettings, StudentTraject, KleurMap } from './types';
+import { normalizeSettings, normalizeTraject } from './hooks';
 
 export interface TrajectBackup {
     version: 1;
@@ -22,6 +23,9 @@ export function buildBackup(
     };
 }
 
+// Versie 1 blijft geldig sinds de periode-switcher: de nieuwe velden
+// (periodeType, moduleGrenzen, van/tot per selectie) zijn optioneel en krijgen
+// bij het inlezen hun standaard via normalizeSettings()/normalizeTraject().
 export function parseBackup(raw: string): TrajectBackup {
     let data: unknown;
     try {
@@ -47,6 +51,13 @@ export function parseBackup(raw: string): TrajectBackup {
     ) {
         throw new Error('Ongeldige instellingen in back-up.');
     }
+    if (
+        s.periodeType !== undefined &&
+        s.periodeType !== 'semester' &&
+        s.periodeType !== 'module'
+    ) {
+        throw new Error('Ongeldige periode-indeling in back-up.');
+    }
 
     if (!Array.isArray(d.traject)) {
         throw new Error('Ongeldig traject in back-up.');
@@ -55,6 +66,12 @@ export function parseBackup(raw: string): TrajectBackup {
         const it = item as Record<string, unknown> | null;
         if (!it || typeof it.klasgroep !== 'string' || typeof it.olodNaam !== 'string') {
             throw new Error('Ongeldige OLOD-selectie in traject.');
+        }
+        if (
+            (it.van !== undefined && typeof it.van !== 'string') ||
+            (it.tot !== undefined && typeof it.tot !== 'string')
+        ) {
+            throw new Error('Ongeldige periode bij een OLOD-selectie in traject.');
         }
     }
 
@@ -71,12 +88,8 @@ export function parseBackup(raw: string): TrajectBackup {
     return {
         version: 1,
         exportedAt: typeof d.exportedAt === 'string' ? d.exportedAt : new Date().toISOString(),
-        settings: {
-            mijnOpleidingKlasgroepen: s.mijnOpleidingKlasgroepen as string[],
-            semesterStart: s.semesterStart,
-            semesterEind: s.semesterEind,
-        },
-        traject: d.traject as StudentTraject,
+        settings: normalizeSettings(s),
+        traject: normalizeTraject(d.traject),
         kleurmap: km as KleurMap,
     };
 }

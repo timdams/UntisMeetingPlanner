@@ -1,5 +1,6 @@
 import { StudentTraject, TrajectSettings } from './types';
 import { formatDateBE, parseIsoDate } from './dateUtils';
+import { actievePeriode, modulePeriodes, periodeLabelVoor, semesterPeriodes } from './academicYear';
 import styles from './Traject.module.css';
 
 interface Props {
@@ -7,17 +8,33 @@ interface Props {
     settings: TrajectSettings;
 }
 
-function groupByKlas(traject: StudentTraject): Map<string, string[]> {
+// Kop van de afdruk: de naam van de actieve periode (semester of module) met
+// haar datums, of enkel de datums bij een handmatig ingesteld bereik.
+function periodeKop(settings: TrajectSettings): string {
+    const datums = `${formatDateBE(parseIsoDate(settings.semesterStart))} – ${formatDateBE(parseIsoDate(settings.semesterEind))}`;
+    const match = actievePeriode(
+        [...semesterPeriodes(), ...modulePeriodes(settings.moduleGrenzen)],
+        settings.semesterStart,
+        settings.semesterEind
+    );
+    return match ? `${match.label} (${datums})` : `Periode ${datums}`;
+}
+
+// Per klasgroep de OLODs mét de periode waarin de student ze daar volgt,
+// bv. "Web Development (M2)". Het hele traject wordt afgedrukt, niet enkel de
+// actieve periode: de afdruk is het overzicht voor het volledige jaar.
+function groupByKlas(traject: StudentTraject, settings: TrajectSettings): Map<string, string[]> {
     const byKlas = new Map<string, string[]>();
     [...traject]
         .sort(
             (a, b) =>
                 a.klasgroep.localeCompare(b.klasgroep) ||
+                a.van.localeCompare(b.van) ||
                 a.olodNaam.localeCompare(b.olodNaam)
         )
         .forEach(s => {
             const arr = byKlas.get(s.klasgroep) ?? [];
-            arr.push(s.olodNaam);
+            arr.push(`${s.olodNaam} (${periodeLabelVoor(s.van, s.tot, settings.moduleGrenzen).kort})`);
             byKlas.set(s.klasgroep, arr);
         });
     return byKlas;
@@ -27,14 +44,12 @@ export function buildTrajectClipboardText(
     traject: StudentTraject,
     settings: TrajectSettings
 ): string {
-    const start = parseIsoDate(settings.semesterStart);
-    const eind = parseIsoDate(settings.semesterEind);
-    const byKlas = groupByKlas(traject);
+    const byKlas = groupByKlas(traject, settings);
 
     const lines: string[] = [];
     lines.push('Studenttraject');
     lines.push(
-        `Semester ${formatDateBE(start)} – ${formatDateBE(eind)} · Afgedrukt op ${new Date().toLocaleDateString('nl-BE')}`
+        `${periodeKop(settings)} · Afgedrukt op ${new Date().toLocaleDateString('nl-BE')}`
     );
     lines.push('');
     lines.push(`OLODs (${traject.length})`);
@@ -55,16 +70,14 @@ export function buildTrajectClipboardText(
 }
 
 export function TrajectPrintView({ traject, settings }: Props) {
-    const start = parseIsoDate(settings.semesterStart);
-    const eind = parseIsoDate(settings.semesterEind);
-    const byKlas = groupByKlas(traject);
+    const byKlas = groupByKlas(traject, settings);
 
     return (
         <div className={styles.printRoot}>
             <div className={styles.printHeader}>
                 <h1>Studenttraject</h1>
                 <div>
-                    Semester {formatDateBE(start)} – {formatDateBE(eind)}
+                    {periodeKop(settings)}
                     {' · '}Afgedrukt op {new Date().toLocaleDateString('nl-BE')}
                 </div>
             </div>

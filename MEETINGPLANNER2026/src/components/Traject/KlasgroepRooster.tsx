@@ -18,7 +18,6 @@ import styles from './Traject.module.css';
 import { Loader2, ChevronLeft, ChevronRight, CalendarClock } from 'lucide-react';
 import { LesblokIcon } from './LesblokIcon';
 import { layoutDay } from './layout';
-import { defaultRoosterWeek } from './academicYear';
 
 // Untis geeft 404 op roosterdata van een week buiten het geselecteerde
 // academiejaar. We vangen die specifiek op met een begrijpelijke melding.
@@ -26,12 +25,14 @@ const OUTSIDE_YEAR_MSG = 'Deze week valt buiten het geselecteerde academiejaar. 
 
 interface Props {
     klasgroep: string | null;
+    // De week waarop het rooster opent; verandert mee met de actieve periode.
     initialWeek: Date;
     mijnOpleidingKlasgroepen: string[];
-    isSelected: (sel: OLODSelectie) => boolean;
+    // De selectie waaronder een lesblok op die datum valt, of null.
+    selectieVoor: (klasgroep: string, olodNaam: string, datum: Date) => OLODSelectie | null;
     colorOf: (olodNaam: string) => string;
     ensureColor: (olodNaam: string) => void;
-    onToggle: (sel: OLODSelectie) => void;
+    onToggleBlok: (blok: Lesblok) => void;
 }
 
 function topPct(d: Date, totalMin: number): number {
@@ -59,12 +60,20 @@ export function KlasgroepRooster({
     klasgroep,
     initialWeek,
     mijnOpleidingKlasgroepen,
-    isSelected,
+    selectieVoor,
     colorOf,
     ensureColor,
-    onToggle,
+    onToggleBlok,
 }: Props) {
     const [weekMonday, setWeekMonday] = useState<Date>(() => mondayOf(initialWeek));
+
+    // Springt naar de openingsweek van een nieuw gekozen periode. Bij mount is
+    // de week al gelijk; dan behouden we het bestaande Date-object zodat de
+    // fetch-effecten hieronder niet nog eens vuren.
+    useEffect(() => {
+        const next = mondayOf(initialWeek);
+        setWeekMonday(w => (w.getTime() === next.getTime() ? w : next));
+    }, [initialWeek.getTime()]);
     const [blokken, setBlokken] = useState<Lesblok[]>([]);
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -95,7 +104,7 @@ export function KlasgroepRooster({
                 setError(msg.includes('404') ? OUTSIDE_YEAR_MSG : (msg || 'Rooster ophalen mislukt'));
             })
             .finally(() => setBusy(false));
-    }, [klasgroep, weekMonday]);
+    }, [klasgroep, weekMonday.getTime()]);
 
     // Prefetch other shortlist klasgroepen for the current week — used by hover popover.
     useEffect(() => {
@@ -217,9 +226,9 @@ export function KlasgroepRooster({
                         <button
                             className={styles.toolbarBtn}
                             style={{ marginTop: '0.75rem' }}
-                            onClick={() => setWeekMonday(mondayOf(defaultRoosterWeek()))}
+                            onClick={() => setWeekMonday(mondayOf(initialWeek))}
                         >
-                            <CalendarClock size={14} /> Ga naar {formatDateBE(mondayOf(defaultRoosterWeek()))}
+                            <CalendarClock size={14} /> Ga naar {formatDateBE(mondayOf(initialWeek))}
                         </button>
                     )}
                 </div>
@@ -257,8 +266,7 @@ export function KlasgroepRooster({
                                     />
                                 ))}
                                 {laidOut.map(({ blok: b, col, cols }, i) => {
-                                    const sel = { klasgroep: b.klasgroep, olodNaam: b.olodNaam };
-                                    const selected = isSelected(sel);
+                                    const selected = selectieVoor(b.klasgroep, b.olodNaam, b.start) !== null;
                                     const widthPct = 100 / cols;
                                     const leftPct = col * widthPct;
                                     return (
@@ -272,7 +280,7 @@ export function KlasgroepRooster({
                                                 width: `calc(${widthPct}% - 4px)`,
                                                 backgroundColor: colorOf(b.olodNaam),
                                             }}
-                                            onClick={() => onToggle(sel)}
+                                            onClick={() => onToggleBlok(b)}
                                             onMouseEnter={(e) => showHover(e, b.olodNaam)}
                                             onMouseLeave={hideHover}
                                         >

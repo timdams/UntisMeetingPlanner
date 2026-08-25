@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Lesblok, StudentTraject, Conflict } from './types';
-import { trajectUntisService } from './trajectService';
 import {
     addDays,
+    bereikOverlapt,
     DAG_HEADERS,
     DAY_START_HOUR,
+    datumInBereik,
     formatDateBE,
     formatDateTime,
     formatTime,
@@ -12,9 +13,12 @@ import {
     gridEndHour,
     isoWeekNumber,
     parseIsoDate,
+    periodeBereik,
     sameDay,
+    toIsoDate,
     weeksBetween,
 } from './dateUtils';
+import { academiejaarBereik, periodeGrenzen, type ModuleGrenzen, type PeriodeType } from './academicYear';
 import styles from './Traject.module.css';
 import { AlertTriangle, ChevronDown, ChevronRight, Loader2 } from 'lucide-react';
 import { LesblokIcon } from './LesblokIcon';
@@ -22,10 +26,18 @@ import { layoutDay } from './layout';
 
 interface Props {
     traject: StudentTraject;
-    semesterStart: string;
-    semesterEind: string;
+    // Lesblokken van het volledige academiejaar per klasgroep in het traject
+    // (zie useTrajectBlokken), plus laad-/foutstatus van die fetch.
+    blokkenPerKlas: Record<string, Lesblok[]>;
+    busy: boolean;
+    error: string | null;
+    // De actieve periode van het werkblad (inclusieve ISO-datums): haar weken
+    // worden gemarkeerd en in beeld gescrold. Het overzicht zelf toont altijd
+    // het volledige academiejaar.
+    actiefBereik: { van: string; tot: string };
+    periodeType: PeriodeType;
+    moduleGrenzen: ModuleGrenzen;
     colorOf: (olodNaam: string) => string;
-    ensureColor: (olodNaam: string) => void;
 }
 
 function topPct(d: Date, totalMin: number): number {
@@ -61,86 +73,50 @@ function detectConflicts(blokken: Lesblok[]): Conflict[] {
 
 export function StudentOverzicht({
     traject,
-    semesterStart,
-    semesterEind,
+    blokkenPerKlas,
+    busy,
+    error,
+    actiefBereik,
+    periodeType,
+    moduleGrenzen,
     colorOf,
-    ensureColor,
 }: Props) {
-    const [blokkenPerKlas, setBlokkenPerKlas] = useState<Record<string, Lesblok[]>>({});
-    const [busy, setBusy] = useState(false);
-    const [error, setError] = useState<string | null>(null);
     const [conflictsOpen, setConflictsOpen] = useState(true);
 
-    const start = useMemo(() => parseIsoDate(semesterStart), [semesterStart]);
-    const eind = useMemo(() => {
-        const d = parseIsoDate(semesterEind);
-        d.setHours(23, 59, 59, 999);
-        return d;
-    }, [semesterEind]);
+    // Het overzicht beslaat altijd het volledige academiejaar; elke selectie
+    // draagt enkel binnen haar eigen periode bij.
+    const jaar = useMemo(() => academiejaarBereik(), []);
+    const { van: start, tot: eind } = useMemo(() => periodeBereik(jaar.van, jaar.tot), [jaar]);
 
     const klasgroepen = useMemo(
         () => Array.from(new Set(traject.map(s => s.klasgroep))),
         [traject]
     );
 
-    useEffect(() => {
-        if (klasgroepen.length === 0) {
-            setBlokkenPerKlas({});
-            return;
-        }
-        let cancelled = false;
-        setBusy(true);
-        setError(null);
-        Promise.all(
-            klasgroepen.map(k =>
-                trajectUntisService
-                    .getLesblokken(k, start, eind)
-                    .then(bs => [k, bs] as const)
-            )
-        )
-            .then(results => {
-                if (cancelled) return;
-                const map: Record<string, Lesblok[]> = {};
-                results.forEach(([k, bs]) => {
-                    map[k] = bs;
-                    bs.forEach(b => ensureColor(b.olodNaam));
-                });
-                setBlokkenPerKlas(map);
-            })
-            .catch(e => {
-                if (cancelled) return;
-                // Untis weigert bereiken die nog niet beschikbaar zijn met een
-                // 400 (meerdere schooljaren) of 404 (rooster nog niet
-                // gepubliceerd); toon testers geen rauwe API-fout.
-                const msg: string = e?.message ?? '';
-                const nogNietBeschikbaar = msg.includes('400') || msg.includes('404');
-                setError(nogNietBeschikbaar ? 'later beschikbaar' : (msg || 'Rooster ophalen mislukt'));
-            })
-            .finally(() => {
-                if (!cancelled) setBusy(false);
-            });
-        return () => {
-            cancelled = true;
-        };
-    }, [klasgroepen.join('|'), start.getTime(), eind.getTime()]);
-
+    // Een blok telt zodra een selectie van dat vak bij die klasgroep het blok in
+    // haar periode heeft. Twee selecties kunnen elkaar overlappen (bv. een
+    // S1-keuze naast een M2-keuze van hetzelfde vak); hetzelfde blok mag dan
+    // maar één keer in het overzicht komen.
     const effectieveBlokken = useMemo<Lesblok[]>(() => {
-        const selectedKeys = new Set(traject.map(s => `${s.klasgroep}||${s.olodNaam}`));
+        const perTuple = new Map<string, StudentTraject>();
+        for (const s of traject) {
+            const key = `${s.klasgroep}||${s.olodNaam}`;
+            const arr = perTuple.get(key);
+            if (arr) arr.push(s);
+            else perTuple.set(key, [s]);
+        }
         const out: Lesblok[] = [];
         for (const k of klasgroepen) {
             const bs = blokkenPerKlas[k] ?? [];
             for (const b of bs) {
-                if (
-                    selectedKeys.has(`${b.klasgroep}||${b.olodNaam}`) &&
-                    b.start.getTime() >= start.getTime() &&
-                    b.eind.getTime() <= eind.getTime()
-                ) {
-                    out.push(b);
-                }
+                const sels = perTuple.get(`${b.klasgroep}||${b.olodNaam}`);
+                if (!sels) continue;
+                if (b.start.getTime() < start.getTime() || b.eind.getTime() > eind.getTime()) continue;
+                if (sels.some(s => datumInBereik(b.start, s.van, s.tot))) out.push(b);
             }
         }
         return out;
-    }, [blokkenPerKlas, traject, start, eind]);
+    }, [blokkenPerKlas, traject, klasgroepen, start, eind]);
 
     // Alle weekstroken delen dezelfde hoogte: standaard tot 18u, uitgerekt tot
     // max 22u zodra het traject een avondschoolblok bevat dat later eindigt.
@@ -165,6 +141,27 @@ export function StudentOverzicht({
     }, [conflicts]);
 
     const weken = useMemo(() => weeksBetween(start, eind), [start, eind]);
+
+    // Grensmarkeringen (semester-/modulestart) per week: de week waarin de
+    // grensdatum valt krijgt er een boven zich.
+    const grenzen = useMemo(
+        () => periodeGrenzen(periodeType, moduleGrenzen),
+        [periodeType, moduleGrenzen.m2Start, moduleGrenzen.m4Start]
+    );
+    const grenzenVoorWeek = (wkMonday: Date) => {
+        const ma = toIsoDate(wkMonday);
+        const zo = toIsoDate(addDays(wkMonday, 6));
+        return grenzen.filter(g => g.datum >= ma && g.datum <= zo);
+    };
+    const weekInActievePeriode = (wkMonday: Date) =>
+        bereikOverlapt(toIsoDate(wkMonday), toIsoDate(addDays(wkMonday, 4)), actiefBereik.van, actiefBereik.tot);
+
+    // Bij een periodewissel scrollen we de eerste week van die periode in beeld.
+    const eersteActieveRij = useRef<HTMLDivElement | null>(null);
+    const heeftRijen = !error && traject.length > 0;
+    useEffect(() => {
+        eersteActieveRij.current?.scrollIntoView({ block: 'start' });
+    }, [actiefBereik.van, actiefBereik.tot, heeftRijen]);
 
     const olodLegend = useMemo(() => {
         const seen = new Set<string>();
@@ -205,8 +202,18 @@ export function StudentOverzicht({
                                     b.start.getTime() >= wkMonday.getTime() &&
                                     b.start.getTime() <= wkVrijdagEnd.getTime()
                             );
+                            const actief = weekInActievePeriode(wkMonday);
+                            const eersteActief = actief && (wi === 0 || !weekInActievePeriode(weken[wi - 1]));
+                            const wkGrenzen = grenzenVoorWeek(wkMonday);
                             return (
-                                <div key={wi} className={styles.weekRow}>
+                                <div key={wi} ref={eersteActief ? eersteActieveRij : undefined}>
+                                    {wkGrenzen.map(g => (
+                                        <div key={g.datum} className={styles.periodeGrens}>
+                                            <span>{g.label}</span>
+                                            <small>{formatDateBE(parseIsoDate(g.datum))}</small>
+                                        </div>
+                                    ))}
+                                <div className={`${styles.weekRow} ${actief ? styles.weekRowActief : ''}`}>
                                     <div className={styles.weekLabel}>
                                         Week {isoWeekNumber(wkMonday)}
                                         <small>{formatDateBE(wkMonday)}</small>
@@ -275,6 +282,7 @@ export function StudentOverzicht({
                                             );
                                         })}
                                     </div>
+                                </div>
                                 </div>
                             );
                         })}

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Printer, RotateCcw, Settings as SettingsIcon, LayoutGrid, ArrowLeft, Palette, Copy, Check, Info, X } from 'lucide-react';
 import styles from './Traject.module.css';
 import { useKleurMap, useStudentTraject, useTrajectSettings } from './hooks';
@@ -6,8 +6,10 @@ import { TrajectSettingsView } from './TrajectSettings';
 import { KlasgroepSelector } from './KlasgroepSelector';
 import { KlasgroepRooster } from './KlasgroepRooster';
 import { StudentOverzicht } from './StudentOverzicht';
+import { PeriodeSwitcher } from './PeriodeSwitcher';
 import { TrajectPrintView, buildTrajectClipboardText } from './TrajectPrintView';
-import { defaultRoosterWeek } from './academicYear';
+import { defaultRoosterWeek, periodesVoor } from './academicYear';
+import { selectieStatussen, useTrajectBlokken } from './useTrajectBlokken';
 import { backupFilename, buildBackup, downloadBackup, parseBackup } from './trajectBackup';
 
 type Tab = 'werkblad' | 'instellingen';
@@ -78,10 +80,12 @@ export function TrajectPlanner({ onBack, presetApplied = false }: Props) {
         setSemesterStart,
         setSemesterEind,
         setSemesterPeriode,
+        setPeriodeType,
+        setModuleGrenzen,
         replaceSettings,
         setKlasgroepen,
     } = useTrajectSettings();
-    const { traject, toggle, isSelected, reset, replaceTraject } = useStudentTraject();
+    const { traject, toggleBlok, selectieVoor, remove, setPeriode, reset, replaceTraject } = useStudentTraject();
     const { map: kleurmap, ensureColor, colorOf, replaceMap, resetColors } = useKleurMap();
 
     const [tab, setTab] = useState<Tab>(
@@ -198,10 +202,29 @@ export function TrajectPlanner({ onBack, presetApplied = false }: Props) {
         return true;
     };
 
-    // Open het rooster op de huidige week als die binnen het academiejaar valt,
-    // anders op de eerste week van het academiejaar (niet op een week uit het
-    // vorige jaar, wat 404's op de roosterdata gaf).
-    const initialWeek = defaultRoosterWeek();
+    // De periodes waar de topbar-snelkeuze tussen wisselt (semesters of modules).
+    const periodes = useMemo(
+        () => periodesVoor(settings.periodeType, settings.moduleGrenzen),
+        [settings.periodeType, settings.moduleGrenzen.m2Start, settings.moduleGrenzen.m4Start]
+    );
+    const actiefBereik = useMemo(
+        () => ({ van: settings.semesterStart, tot: settings.semesterEind }),
+        [settings.semesterStart, settings.semesterEind]
+    );
+
+    // Open het rooster op de huidige week als die binnen de actieve periode
+    // valt, anders op de eerste lesweek van die periode (niet op een week uit
+    // het vorige jaar, wat 404's op de roosterdata gaf). Verandert mee wanneer
+    // de gebruiker van periode wisselt.
+    const initialWeek = useMemo(
+        () => defaultRoosterWeek(new Date(), settings.semesterStart, settings.semesterEind),
+        [settings.semesterStart, settings.semesterEind]
+    );
+
+    // Jaarrooster per klasgroep in het traject: voedt het overzicht (paneel C)
+    // en de controle of elke selectie wel lessen oplevert (paneel A).
+    const { blokkenPerKlas, busy: blokkenBusy, error: blokkenError } = useTrajectBlokken(traject, ensureColor);
+    const statussen = useMemo(() => selectieStatussen(traject, blokkenPerKlas), [traject, blokkenPerKlas]);
 
     return (
       <>
@@ -231,6 +254,14 @@ export function TrajectPlanner({ onBack, presetApplied = false }: Props) {
                         <SettingsIcon size={14} /> Instellingen
                     </button>
                 </div>
+
+                <PeriodeSwitcher
+                    compact
+                    periodes={periodes}
+                    actieveStart={settings.semesterStart}
+                    actieveEind={settings.semesterEind}
+                    onKies={p => setSemesterPeriode(p.start, p.eind)}
+                />
 
                 <div className={styles.topbarSpacer} />
 
@@ -269,7 +300,7 @@ export function TrajectPlanner({ onBack, presetApplied = false }: Props) {
                     <Info size={18} />
                     <div className={styles.presetBannerText}>
                         <strong>Klaargezet door je trajectbegeleider.</strong> De klasgroepen
-                        en semesterperiode zijn al ingesteld — kies meteen je vakken in het
+                        en periode zijn al ingesteld — kies meteen je vakken in het
                         werkblad. Je hoeft niets in de instellingen aan te passen.
                     </div>
                     <button
@@ -290,6 +321,8 @@ export function TrajectPlanner({ onBack, presetApplied = false }: Props) {
                     onSemesterStartChange={setSemesterStart}
                     onSemesterEindChange={setSemesterEind}
                     onSemesterPeriodeChange={setSemesterPeriode}
+                    onPeriodeTypeChange={setPeriodeType}
+                    onModuleGrenzenChange={setModuleGrenzen}
                     onExport={handleExport}
                     onImport={handleImport}
                     onDone={() => setTab('werkblad')}
@@ -308,25 +341,33 @@ export function TrajectPlanner({ onBack, presetApplied = false }: Props) {
                         onSelect={setActieveKlasgroep}
                         traject={traject}
                         colorOf={colorOf}
-                        onRemoveOlod={toggle}
+                        onRemoveOlod={remove}
+                        onSetPeriode={setPeriode}
+                        statussen={statussen}
+                        actiefBereik={actiefBereik}
+                        periodeType={settings.periodeType}
+                        moduleGrenzen={settings.moduleGrenzen}
                     />
                     <Splitter orientation="left" onDelta={adjustPanelA} />
                     <KlasgroepRooster
                         klasgroep={actieveKlasgroep}
                         initialWeek={initialWeek}
                         mijnOpleidingKlasgroepen={settings.mijnOpleidingKlasgroepen}
-                        isSelected={isSelected}
+                        selectieVoor={selectieVoor}
                         colorOf={colorOf}
                         ensureColor={ensureColor}
-                        onToggle={toggle}
+                        onToggleBlok={b => toggleBlok(b, actiefBereik)}
                     />
                     <Splitter orientation="right" onDelta={adjustPanelC} />
                     <StudentOverzicht
                         traject={traject}
-                        semesterStart={settings.semesterStart}
-                        semesterEind={settings.semesterEind}
+                        blokkenPerKlas={blokkenPerKlas}
+                        busy={blokkenBusy}
+                        error={blokkenError}
+                        actiefBereik={actiefBereik}
+                        periodeType={settings.periodeType}
+                        moduleGrenzen={settings.moduleGrenzen}
                         colorOf={colorOf}
-                        ensureColor={ensureColor}
                     />
                 </div>
             )}

@@ -1,4 +1,6 @@
 import { TrajectSettings } from './types';
+import type { ModuleGrenzen, PeriodeType } from './academicYear';
+import { isIsoDate } from './dateUtils';
 
 /** Hash-parameter waaronder de preset in een gedeelde URL verstopt zit. */
 const PRESET_PARAM = 'traject';
@@ -6,13 +8,17 @@ const PRESET_VERSION = 1;
 
 /**
  * De subset van de instellingen die een trajectbegeleider met een student deelt:
- * de klasgroep-shortlist en de semesterperiode. Het studenttraject (OLOD-keuzes)
- * en de kleurmap horen hier bewust NIET bij — die bouwt de student zelf op.
+ * de klasgroep-shortlist, de actieve periode en (optioneel, links van na de
+ * periode-switcher) de indeling met modulegrenzen. Het studenttraject
+ * (OLOD-keuzes) en de kleurmap horen hier bewust NIET bij — die bouwt de
+ * student zelf op.
  */
 export interface TrajectPreset {
     mijnOpleidingKlasgroepen: string[];
     semesterStart: string;
     semesterEind: string;
+    periodeType?: PeriodeType;
+    moduleGrenzen?: ModuleGrenzen;
 }
 
 // UTF-8-veilige base64url. Klasgroepnamen kunnen accenten bevatten, dus btoa()
@@ -42,6 +48,8 @@ export function buildShareUrl(settings: TrajectSettings): string {
         k: settings.mijnOpleidingKlasgroepen,
         s: settings.semesterStart,
         e: settings.semesterEind,
+        p: settings.periodeType,
+        m: [settings.moduleGrenzen.m2Start, settings.moduleGrenzen.m4Start],
     });
     const root = window.location.origin + window.location.pathname;
     return `${root}#${PRESET_PARAM}=${toBase64Url(payload)}`;
@@ -56,14 +64,21 @@ export function readTrajectPresetFromUrl(): TrajectPreset | null {
         if (!raw) return null;
         const data = JSON.parse(fromBase64Url(raw)) as Record<string, unknown>;
         if (data.v !== PRESET_VERSION) return null;
-        const { k, s, e } = data;
+        const { k, s, e, p, m } = data;
         if (!Array.isArray(k) || !k.every(x => typeof x === 'string')) return null;
         if (typeof s !== 'string' || typeof e !== 'string') return null;
-        return {
+        const preset: TrajectPreset = {
             mijnOpleidingKlasgroepen: k as string[],
             semesterStart: s,
             semesterEind: e,
         };
+        // Indeling en modulegrenzen zijn optioneel (oudere links hebben ze niet);
+        // enkel overnemen als ze volledig geldig zijn.
+        if (p === 'semester' || p === 'module') preset.periodeType = p;
+        if (Array.isArray(m) && m.length === 2 && isIsoDate(m[0]) && isIsoDate(m[1])) {
+            preset.moduleGrenzen = { m2Start: m[0], m4Start: m[1] };
+        }
+        return preset;
     } catch {
         return null;
     }

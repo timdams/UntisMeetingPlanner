@@ -2,10 +2,56 @@ import { untisService } from '../../services/UntisService';
 import { ClassGroup, RosterEntry } from '../../types';
 import { Lesblok, TrajectUntisService } from './types';
 
-interface RangeCache {
+interface Interval {
     van: number;
     tot: number;
+}
+
+// Per klasgroep bewaren we welke tijdsintervallen effectief opgehaald zijn.
+// Vroeger was dit één unie-bereik (min van, max tot), maar wie eerst module 2
+// en daarna module 4 bekijkt, kreeg zo het nooit-opgehaalde module 3 leeg uit
+// de cache. Enkel een aanvraag die volledig binnen één gedekt interval valt
+// wordt uit het geheugen geserveerd.
+interface RangeCache {
+    intervals: Interval[];
     blokken: Lesblok[];
+}
+
+// Opeenvolgende periodes verschillen 1 ms (23:59:59.999 → 00:00:00.000);
+// intervallen die zo dicht op elkaar aansluiten tellen als één geheel.
+const INTERVAL_JOIN_TOLERANCE_MS = 1000;
+
+function voegIntervalToe(intervals: Interval[], nieuw: Interval): Interval[] {
+    const out: Interval[] = [];
+    let cur = { ...nieuw };
+    for (const iv of intervals) {
+        const raakt =
+            iv.van <= cur.tot + INTERVAL_JOIN_TOLERANCE_MS &&
+            cur.van <= iv.tot + INTERVAL_JOIN_TOLERANCE_MS;
+        if (raakt) {
+            cur = { van: Math.min(cur.van, iv.van), tot: Math.max(cur.tot, iv.tot) };
+        } else {
+            out.push(iv);
+        }
+    }
+    out.push(cur);
+    return out.sort((a, b) => a.van - b.van);
+}
+
+function isGedekt(intervals: Interval[], van: number, tot: number): boolean {
+    return intervals.some(iv => iv.van <= van && iv.tot >= tot);
+}
+
+// Het deel van de aanvraag [van, tot] dat een (op de middag afgebakend)
+// schooljaarsegment effectief dekt: van 00:00 op de eerste segmentdag t/m
+// 23:59:59.999 op de laatste, geknipt op de aanvraag zelf.
+function segmentDekking(seg: { van: Date; tot: Date }, van: Date, tot: Date): Interval {
+    const dagStart = new Date(seg.van.getFullYear(), seg.van.getMonth(), seg.van.getDate(), 0, 0, 0, 0);
+    const dagEind = new Date(seg.tot.getFullYear(), seg.tot.getMonth(), seg.tot.getDate(), 23, 59, 59, 999);
+    return {
+        van: Math.max(van.getTime(), dagStart.getTime()),
+        tot: Math.min(tot.getTime(), dagEind.getTime()),
+    };
 }
 
 // Untis weigert (400 MULTIPLE_SCHOOLYEARS_IN_RANGE) zodra één request meer dan
@@ -78,7 +124,7 @@ class TrajectUntisAdapter implements TrajectUntisService {
 
     async getLesblokken(klasgroep: string, van: Date, tot: Date): Promise<Lesblok[]> {
         const cached = this.rangeByKlasgroep.get(klasgroep);
-        if (cached && cached.van <= van.getTime() && cached.tot >= tot.getTime()) {
+        if (cached && isGedekt(cached.intervals, van.getTime(), tot.getTime())) {
             return this.slice(cached.blokken, van, tot);
         }
 
@@ -112,49 +158,45 @@ class TrajectUntisAdapter implements TrajectUntisService {
         // nog niet gepubliceerd schooljaar wordt opgevraagd. Toon dan gewoon wat
         // er wél is; faal enkel als geen enkel segment lukte (dan bubbelt de
         // eerste fout door zodat StudentOverzicht een nette melding kan tonen).
-        const entries: RosterEntry[] = [];
-        let geslaagd = 0;
+        const gelukt: Array<{ dekking: Interval; entries: RosterEntry[] }> = [];
         let eersteFout: unknown = null;
-        for (const r of perSegment) {
+        perSegment.forEach((r, i) => {
             if (r.status === 'fulfilled') {
-                geslaagd++;
-                entries.push(...r.value);
+                gelukt.push({ dekking: segmentDekking(segmenten[i], van, tot), entries: r.value });
             } else if (eersteFout === null) {
                 eersteFout = r.reason;
             }
-        }
-        if (geslaagd === 0 && eersteFout !== null) {
+        });
+        if (gelukt.length === 0 && eersteFout !== null) {
             throw eersteFout;
         }
 
-        const blokken: Lesblok[] = entries.map(e => {
-            const olod = (e.lessonText?.split(',')[0]?.trim()) || 'Onbekend';
-            return {
-                klasgroep,
-                olodNaam: olod,
-                type: e.info?.trim() || undefined,
-                start: new Date(e.start),
-                eind: new Date(e.end),
-                lokaal: undefined,
-            };
+        const toBlok = (e: RosterEntry): Lesblok => ({
+            klasgroep,
+            olodNaam: (e.lessonText?.split(',')[0]?.trim()) || 'Onbekend',
+            type: e.info?.trim() || undefined,
+            start: new Date(e.start),
+            eind: new Date(e.end),
+            lokaal: undefined,
         });
 
-        // Merge with existing range cache if any; widen to the union.
-        const prev = this.rangeByKlasgroep.get(klasgroep);
-        if (prev) {
-            const newVan = Math.min(prev.van, van.getTime());
-            const newTot = Math.max(prev.tot, tot.getTime());
-            const merged = this.mergeBlokken(prev.blokken, blokken, van.getTime(), tot.getTime());
-            this.rangeByKlasgroep.set(klasgroep, { van: newVan, tot: newTot, blokken: merged });
-        } else {
-            this.rangeByKlasgroep.set(klasgroep, {
-                van: van.getTime(),
-                tot: tot.getTime(),
-                blokken,
-            });
+        // Enkel geslaagde segmenten worden als gedekt gemarkeerd. Het bereik van
+        // een mislukt segment blijft ongedekt, zodat een latere aanvraag opnieuw
+        // naar Untis gaat in plaats van leeg uit de cache te komen (bv. zodra
+        // het rooster van semester 2 wél gepubliceerd is).
+        let cache = this.rangeByKlasgroep.get(klasgroep) ?? { intervals: [], blokken: [] };
+        const opgehaald: Lesblok[] = [];
+        for (const seg of gelukt) {
+            const fresh = seg.entries.map(toBlok);
+            opgehaald.push(...fresh);
+            cache = {
+                intervals: voegIntervalToe(cache.intervals, seg.dekking),
+                blokken: this.mergeBlokken(cache.blokken, fresh, seg.dekking.van, seg.dekking.tot),
+            };
         }
+        this.rangeByKlasgroep.set(klasgroep, cache);
 
-        return this.slice(blokken, van, tot);
+        return this.slice(opgehaald, van, tot);
     }
 
     private slice(blokken: Lesblok[], van: Date, tot: Date): Lesblok[] {
@@ -174,6 +216,17 @@ class TrajectUntisAdapter implements TrajectUntisService {
         return [...kept, ...fresh].sort((a, b) => a.start.getTime() - b.start.getTime());
     }
 
+    // True zodra minstens een deel van [van, tot] voor deze klasgroep effectief
+    // opgehaald is. Laat een consument onderscheiden tussen "geen lessen in
+    // dit bereik" en "rooster van dit bereik (nog) niet beschikbaar".
+    isDeelsGedekt(klasgroep: string, van: Date, tot: Date): boolean {
+        const cached = this.rangeByKlasgroep.get(klasgroep);
+        if (!cached) return false;
+        const v = van.getTime();
+        const t = tot.getTime();
+        return cached.intervals.some(iv => iv.van <= t && iv.tot >= v);
+    }
+
     invalidate() {
         this.classCache = null;
         this.classesInflight = null;
@@ -182,5 +235,7 @@ class TrajectUntisAdapter implements TrajectUntisService {
     }
 }
 
-export const trajectUntisService: TrajectUntisService & { invalidate(): void } =
-    new TrajectUntisAdapter();
+export const trajectUntisService: TrajectUntisService & {
+    invalidate(): void;
+    isDeelsGedekt(klasgroep: string, van: Date, tot: Date): boolean;
+} = new TrajectUntisAdapter();

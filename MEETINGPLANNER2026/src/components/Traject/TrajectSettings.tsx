@@ -1,6 +1,16 @@
 import { useEffect, useRef, useState } from 'react';
 import { TrajectSettings } from './types';
-import { ACADEMIEJAAR, matchtSemester } from './academicYear';
+import {
+    ACADEMIEJAAR,
+    defaultModuleGrenzen,
+    moduleGrensGeldig,
+    modulePeriodes,
+    semesterPeriodes,
+    type ModuleGrenzen,
+    type PeriodeType,
+} from './academicYear';
+import { formatDateBE, parseIsoDate } from './dateUtils';
+import { PeriodeSwitcher } from './PeriodeSwitcher';
 import { trajectUntisService } from './trajectService';
 import { untisService } from '../../services/UntisService';
 import { buildShareUrl, copyToClipboard } from './trajectShare';
@@ -15,6 +25,8 @@ interface Props {
     onSemesterStartChange: (iso: string) => void;
     onSemesterEindChange: (iso: string) => void;
     onSemesterPeriodeChange: (start: string, eind: string) => void;
+    onPeriodeTypeChange: (type: PeriodeType) => void;
+    onModuleGrenzenChange: (grenzen: ModuleGrenzen) => void;
     onExport: () => void;
     onImport: (file: File) => Promise<boolean>;
     onDone: () => void;
@@ -27,6 +39,8 @@ export function TrajectSettingsView({
     onSemesterStartChange,
     onSemesterEindChange,
     onSemesterPeriodeChange,
+    onPeriodeTypeChange,
+    onModuleGrenzenChange,
     onExport,
     onImport,
     onDone,
@@ -122,14 +136,30 @@ export function TrajectSettingsView({
     };
 
     // Een gegenereerde link/QR is een momentopname van de instellingen; verberg ze
-    // zodra de klasgroepen of semesterperiode wijzigen, zodat de trajectbegeleider
-    // nooit per ongeluk een verouderde link of QR deelt.
+    // zodra de klasgroepen, de periode of de indeling wijzigen, zodat de
+    // trajectbegeleider nooit per ongeluk een verouderde link of QR deelt.
     useEffect(() => {
         setShareUrl(null);
         setShowQr(false);
-    }, [settings.mijnOpleidingKlasgroepen, settings.semesterStart, settings.semesterEind]);
+    }, [
+        settings.mijnOpleidingKlasgroepen,
+        settings.semesterStart,
+        settings.semesterEind,
+        settings.periodeType,
+        settings.moduleGrenzen.m2Start,
+        settings.moduleGrenzen.m4Start,
+    ]);
 
     const noKlasgroepen = settings.mijnOpleidingKlasgroepen.length === 0;
+
+    const [sem1, sem2] = ACADEMIEJAAR.semesters;
+    const isModule = settings.periodeType === 'module';
+    const grenzenOngeldig =
+        isModule &&
+        (!moduleGrensGeldig(settings.moduleGrenzen.m2Start, sem1) ||
+            !moduleGrensGeldig(settings.moduleGrenzen.m4Start, sem2));
+    const standaardGrenzen = defaultModuleGrenzen();
+    const modules = modulePeriodes(settings.moduleGrenzen);
 
     return (
         <div className={styles.settings}>
@@ -199,27 +229,104 @@ export function TrajectSettingsView({
             </div>
 
             <div className={styles.settingsSection}>
-                <div className={styles.settingsTitle}>Semesterperiode</div>
+                <div className={styles.settingsTitle}>Periode</div>
                 <div className={styles.settingsHint}>
-                    Het studenttraject wordt opgebouwd binnen deze periode. Kies een
-                    semester van academiejaar {ACADEMIEJAAR.naam} of stel de datums
-                    handmatig in.
+                    Het studenttraject wordt per periode opgebouwd: elke OLOD-keuze geldt
+                    voor de periode die op dat moment actief is. Kies of jouw opleiding
+                    per semester of per module (twee modules per semester) plant; in het
+                    werkblad wissel je dan snel tussen de periodes van academiejaar{' '}
+                    {ACADEMIEJAAR.naam}.
                 </div>
+
+                <div className={styles.settingsSubtitle}>Indeling</div>
                 <div className={styles.semesterBtnRow}>
-                    {ACADEMIEJAAR.semesters.map(sem => {
-                        const actief = matchtSemester(sem, settings.semesterStart, settings.semesterEind);
-                        return (
-                            <button
-                                key={sem.nummer}
-                                className={`${styles.toolbarBtn} ${actief ? styles.semesterBtnActief : ''}`}
-                                onClick={() => onSemesterPeriodeChange(sem.start, sem.eind)}
-                                title={`${sem.start} t/m ${sem.eind}`}
-                            >
-                                {sem.label}
-                            </button>
-                        );
-                    })}
+                    <button
+                        className={`${styles.toolbarBtn} ${!isModule ? styles.semesterBtnActief : ''}`}
+                        onClick={() => onPeriodeTypeChange('semester')}
+                        aria-pressed={!isModule}
+                    >
+                        Semesters
+                    </button>
+                    <button
+                        className={`${styles.toolbarBtn} ${isModule ? styles.semesterBtnActief : ''}`}
+                        onClick={() => onPeriodeTypeChange('module')}
+                        aria-pressed={isModule}
+                    >
+                        Modules (2 per semester)
+                    </button>
                 </div>
+
+                {isModule && (
+                    <>
+                        <div className={styles.settingsSubtitle}>Modulegrenzen</div>
+                        <div className={styles.settingsHint}>
+                            Eerste dag van module 2 (binnen semester 1) en van module 4
+                            (binnen semester 2). Standaard halverwege het semester.
+                        </div>
+                        <div className={styles.dateRow}>
+                            <div className={styles.dateField}>
+                                <label>Start module 2</label>
+                                <input
+                                    type="date"
+                                    value={settings.moduleGrenzen.m2Start}
+                                    min={sem1.start}
+                                    max={sem1.eind}
+                                    onChange={e =>
+                                        onModuleGrenzenChange({ ...settings.moduleGrenzen, m2Start: e.target.value })
+                                    }
+                                />
+                            </div>
+                            <div className={styles.dateField}>
+                                <label>Start module 4</label>
+                                <input
+                                    type="date"
+                                    value={settings.moduleGrenzen.m4Start}
+                                    min={sem2.start}
+                                    max={sem2.eind}
+                                    onChange={e =>
+                                        onModuleGrenzenChange({ ...settings.moduleGrenzen, m4Start: e.target.value })
+                                    }
+                                />
+                            </div>
+                        </div>
+                        {grenzenOngeldig && (
+                            <div className={styles.importMsgErr}>
+                                Een modulegrens is leeg of valt niet binnen haar semester. Tot je
+                                dat corrigeert wordt de standaardgrens gebruikt (module 2:{' '}
+                                {formatDateBE(parseIsoDate(standaardGrenzen.m2Start))}, module 4:{' '}
+                                {formatDateBE(parseIsoDate(standaardGrenzen.m4Start))}).
+                            </div>
+                        )}
+                        <div className={styles.settingsHint}>
+                            {modules
+                                .map(
+                                    p =>
+                                        `${p.label}: ${formatDateBE(parseIsoDate(p.start))} – ${formatDateBE(parseIsoDate(p.eind))}`
+                                )
+                                .join(' · ')}
+                        </div>
+                    </>
+                )}
+
+                <div className={styles.settingsSubtitle}>Actieve periode</div>
+                <div className={styles.settingsHint}>
+                    Kies een periode of stel de datums handmatig in. Deze keuze kan je ook
+                    rechtstreeks in de topbar van het werkblad maken.
+                </div>
+                <PeriodeSwitcher
+                    periodes={semesterPeriodes()}
+                    actieveStart={settings.semesterStart}
+                    actieveEind={settings.semesterEind}
+                    onKies={p => onSemesterPeriodeChange(p.start, p.eind)}
+                />
+                {isModule && (
+                    <PeriodeSwitcher
+                        periodes={modules}
+                        actieveStart={settings.semesterStart}
+                        actieveEind={settings.semesterEind}
+                        onKies={p => onSemesterPeriodeChange(p.start, p.eind)}
+                    />
+                )}
                 <div className={styles.dateRow}>
                     <div className={styles.dateField}>
                         <label>Start</label>
