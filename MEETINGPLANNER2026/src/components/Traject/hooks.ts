@@ -77,15 +77,22 @@ export function normalizeTraject(raw: unknown): StudentTraject {
     if (!Array.isArray(raw)) return [];
     const jaar = academiejaarBereik();
     const out: StudentTraject = [];
+    // Identieke selecties (zelfde vak, klasgroep én periode) horen maar één
+    // keer in het traject; oudere opslag kan er dubbele bevatten.
+    const gezien = new Set<string>();
     for (const item of raw) {
         const it = (item && typeof item === 'object' ? item : null) as Record<string, unknown> | null;
         if (!it || typeof it.klasgroep !== 'string' || typeof it.olodNaam !== 'string') continue;
-        out.push({
+        const sel: OLODSelectie = {
             klasgroep: it.klasgroep,
             olodNaam: it.olodNaam,
             van: isIsoDate(it.van) ? it.van : jaar.van,
             tot: isIsoDate(it.tot) ? it.tot : jaar.tot,
-        });
+        };
+        const key = selectieKey(sel);
+        if (gezien.has(key)) continue;
+        gezien.add(key);
+        out.push(sel);
     }
     return out;
 }
@@ -340,6 +347,31 @@ function selectieDieDekt(
     );
 }
 
+// De selectie waarop een klik op een lesblok slaat: de selectie die de datum
+// van het blok dekt, of anders de selectie voor precies het actieve bereik.
+// Die tweede tak vangt een blok in een week buiten de actieve periode op: een
+// klik daar voegt een selectie voor de actieve periode toe, en een volgende
+// klik moet die dan ook weer weghalen in plaats van een dubbel toe te voegen.
+function selectieVoorBlok(
+    traject: StudentTraject,
+    klasgroep: string,
+    olodNaam: string,
+    datum: Date,
+    bereik: { van: string; tot: string }
+): OLODSelectie | null {
+    return (
+        selectieDieDekt(traject, klasgroep, olodNaam, datum) ??
+        traject.find(
+            x =>
+                x.klasgroep === klasgroep &&
+                x.olodNaam === olodNaam &&
+                x.van === bereik.van &&
+                x.tot === bereik.tot
+        ) ??
+        null
+    );
+}
+
 export function useStudentTraject() {
     const [traject, setTraject] = useState<StudentTraject>(() =>
         normalizeTraject(loadJSON<unknown>(KEY_TRAJECT, null))
@@ -350,12 +382,13 @@ export function useStudentTraject() {
     }, [traject]);
 
     // Klik op een lesblok: valt het blok onder een bestaande selectie van dit
-    // vak bij deze klasgroep, dan verdwijnt die selectie (voor haar hele
-    // periode); anders komt er een selectie bij voor het meegegeven bereik —
-    // de periode die op dat moment actief is.
+    // vak bij deze klasgroep (of bestaat die selectie al voor het meegegeven
+    // bereik), dan verdwijnt die selectie (voor haar hele periode); anders
+    // komt er een selectie bij voor het meegegeven bereik — de periode die op
+    // dat moment actief is. Een vak staat zo nooit dubbel in het traject.
     const toggleBlok = useCallback((blok: Lesblok, bereik: { van: string; tot: string }) => {
         setTraject(t => {
-            const bestaande = selectieDieDekt(t, blok.klasgroep, blok.olodNaam, blok.start);
+            const bestaande = selectieVoorBlok(t, blok.klasgroep, blok.olodNaam, blok.start, bereik);
             if (bestaande) return t.filter(x => !sameSelectie(x, bestaande));
             return [
                 ...t,
@@ -364,10 +397,12 @@ export function useStudentTraject() {
         });
     }, []);
 
-    // De selectie waaronder een lesblok op de gegeven datum valt, of null.
+    // De selectie die een klik op een lesblok (op de gegeven datum, bij het
+    // gegeven actieve bereik) zou weghalen, of null — spiegelt toggleBlok,
+    // zodat het rooster precies die blokken als geselecteerd toont.
     const selectieVoor = useCallback(
-        (klasgroep: string, olodNaam: string, datum: Date) =>
-            selectieDieDekt(traject, klasgroep, olodNaam, datum),
+        (klasgroep: string, olodNaam: string, datum: Date, bereik: { van: string; tot: string }) =>
+            selectieVoorBlok(traject, klasgroep, olodNaam, datum, bereik),
         [traject]
     );
 

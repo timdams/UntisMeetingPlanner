@@ -28,7 +28,7 @@ interface Props {
     // De week waarop het rooster opent; verandert mee met de actieve periode.
     initialWeek: Date;
     mijnOpleidingKlasgroepen: string[];
-    // De selectie waaronder een lesblok op die datum valt, of null.
+    // De selectie die een klik op dit lesblok zou weghalen, of null.
     selectieVoor: (klasgroep: string, olodNaam: string, datum: Date) => OLODSelectie | null;
     colorOf: (olodNaam: string) => string;
     ensureColor: (olodNaam: string) => void;

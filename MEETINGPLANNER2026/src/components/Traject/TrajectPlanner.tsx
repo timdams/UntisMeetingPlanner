@@ -357,7 +357,7 @@ export function TrajectPlanner({ onBack, presetApplied = false }: Props) {
                         klasgroep={actieveKlasgroep}
                         initialWeek={initialWeek}
                         mijnOpleidingKlasgroepen={settings.mijnOpleidingKlasgroepen}
-                        selectieVoor={selectieVoor}
+                        selectieVoor={(k, o, d) => selectieVoor(k, o, d, actiefBereik)}
                         colorOf={colorOf}
                         ensureColor={ensureColor}
                         onToggleBlok={b => toggleBlok(b, actiefBereik)}
