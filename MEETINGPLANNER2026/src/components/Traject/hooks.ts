@@ -528,13 +528,55 @@ export function useStudentTraject() {
         });
     }, []);
 
+    // Verhuist meerdere selecties in één keer naar dezelfde klasgroep (bulk
+    // klasgroepwissel voor bv. alle vakken van één module). Selecties die door
+    // de wissel samenvallen met een bestaande selectie bij die klasgroep
+    // smelten ermee samen — zelfde regel als setKlasgroep, maar in één update
+    // zodat de hele set als geheel verhuist.
+    const setKlasgroepBulk = useCallback((sels: OLODSelectie[], klasgroep: string) => {
+        if (sels.length === 0) return;
+        setTraject(t => {
+            const teVerhuizen = new Set(sels.map(selectieKey));
+            const gezien = new Set<string>();
+            const out: StudentTraject = [];
+            for (const x of t) {
+                const nieuw = teVerhuizen.has(selectieKey(x)) ? { ...x, klasgroep } : x;
+                const key = selectieKey(nieuw);
+                if (gezien.has(key)) continue;
+                gezien.add(key);
+                out.push(nieuw);
+            }
+            return out;
+        });
+    }, []);
+
+    // Verwijdert meerdere selecties in één keer uit het traject.
+    const removeMany = useCallback((sels: OLODSelectie[]) => {
+        if (sels.length === 0) return;
+        setTraject(t => {
+            const weg = new Set(sels.map(selectieKey));
+            return t.filter(x => !weg.has(selectieKey(x)));
+        });
+    }, []);
+
     const reset = useCallback(() => setTraject([]), []);
 
     const replaceTraject = useCallback((next: StudentTraject) => {
         setTraject(normalizeTraject(next));
     }, []);
 
-    return { traject, toggleBlok, selectieVoor, remove, setPeriode, setKlasgroep, reset, replaceTraject };
+    return {
+        traject,
+        toggleBlok,
+        selectieVoor,
+        remove,
+        removeMany,
+        setPeriode,
+        setKlasgroep,
+        setKlasgroepBulk,
+        reset,
+        replaceTraject,
+    };
 }
 
 export function useKleurMap() {

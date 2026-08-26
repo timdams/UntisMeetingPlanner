@@ -94,7 +94,18 @@ export function TrajectPlanner({ onBack, presetApplied = false }: Props) {
         replaceSettings,
         setKlasgroepen,
     } = useTrajectSettings();
-    const { traject, toggleBlok, selectieVoor, remove, setPeriode, setKlasgroep, reset, replaceTraject } = useStudentTraject();
+    const {
+        traject,
+        toggleBlok,
+        selectieVoor,
+        remove,
+        removeMany,
+        setPeriode,
+        setKlasgroep,
+        setKlasgroepBulk,
+        reset,
+        replaceTraject,
+    } = useStudentTraject();
     const { map: kleurmap, ensureColor, colorOf, replaceMap, resetColors } = useKleurMap();
     const { lastBackup, markBackup } = useLastBackup();
     const { bewaard: bewaardeTrajecten, bewaar: bewaarTraject, verwijder: verwijderBewaard } = useBewaardeTrajecten();
@@ -425,10 +436,13 @@ export function TrajectPlanner({ onBack, presetApplied = false }: Props) {
                         actief={actieveKlasgroep}
                         onSelect={setActieveKlasgroep}
                         traject={traject}
+                        blokkenPerKlas={blokkenPerKlas}
                         colorOf={colorOf}
                         onRemoveOlod={remove}
                         onSetPeriode={setPeriode}
                         onSetKlasgroep={setKlasgroep}
+                        onBulkSetKlasgroep={setKlasgroepBulk}
+                        onBulkRemove={removeMany}
                         onPreview={setKlasgroepPreview}
                         statussen={statussen}
                         actiefBereik={actiefBereik}

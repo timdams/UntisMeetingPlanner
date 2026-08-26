@@ -2,6 +2,13 @@ import { useEffect, useMemo, useState } from 'react';
 import { Lesblok, OLODSelectie, StudentTraject } from './types';
 import { trajectUntisService } from './trajectService';
 import { academiejaarBereik, type GrenzenInput } from './academicYear';
+import {
+    detectConflicts,
+    effectieveBlokken,
+    ghostBlokkenVoor,
+    scenarioBlokken,
+    wegBlokkenVoor,
+} from './conflicts';
 import { DAG_HEADERS, datumInBereik, formatTime, periodeBereik } from './dateUtils';
 import { selectieKey } from './hooks';
 
@@ -124,12 +131,13 @@ export interface KlasgroepAlternatief {
     blokken: Lesblok[];
 }
 
-// Wat-als-preview: de gebruiker beweegt in de klasgroep-kiezer over een
-// andere klasgroep; het studentoverzicht toont dan waar de lessen van
-// `sel.olodNaam` bij `klasgroep` zouden vallen (in plaats van bij
-// `sel.klasgroep`), vóór de wissel effectief gebeurt.
+// Wat-als-preview: de gebruiker beweegt in een klasgroep-kiezer over een
+// andere klasgroep; het studentoverzicht toont dan waar de lessen van de
+// verhuizende selecties bij `klasgroep` zouden vallen, vóór de wissel
+// effectief gebeurt. `sels` bevat één selectie bij de kiezer per vak, en de
+// hele aangevinkte set bij de bulk-kiezer.
 export interface KlasgroepPreview {
-    sel: OLODSelectie;
+    sels: OLODSelectie[];
     klasgroep: string;
     blokken: Lesblok[];
 }
@@ -202,4 +210,138 @@ export function useKlasgroepAlternatieven(
     }, [volledigeKey]);
 
     return result && result.key === volledigeKey ? result.items : null;
+}
+
+// Eén kandidaat-klasgroep voor een bulkwissel: hoeveel van de aangevinkte
+// vakken ze in hun eigen periode geeft, en hoe het traject eruit zou zien als
+// die vakken naar haar verhuizen.
+export interface BulkAlternatief {
+    klasgroep: string;
+    gedekt: number;   // aantal aangevinkte vakken dat deze klasgroep geeft
+    totaal: number;   // aantal aangevinkte vakken
+    lessen: number;   // aantal lesblokken dat erbij zou komen
+    conflicten: number; // totaal aantal conflicten ná de wissel
+    beschikbaar: boolean; // false zodra haar rooster niet opgehaald kon worden
+    // True wanneer er niets zou veranderen: alle gedekte vakken zitten hier al.
+    huidig: boolean;
+    // De selecties die effectief van klasgroep veranderen — voedt zowel de
+    // wat-als-preview als de wissel zelf.
+    verhuizend: OLODSelectie[];
+    // De lessen die erbij zouden komen (ghost-blokjes in het overzicht).
+    blokken: Lesblok[];
+    // Vakken die deze klasgroep in hun periode niet geeft en dus blijven staan.
+    ontbrekend: string[];
+}
+
+export interface BulkAlternatieven {
+    items: BulkAlternatief[];
+    // Het aantal conflicten in het traject zoals het nu is — referentiepunt
+    // naast de score van elke kandidaat.
+    huidigeConflicten: number;
+}
+
+/**
+ * Scoort elke klasgroep uit de shortlist als doel voor een bulkwissel van de
+ * aangevinkte selecties. Voedt de bulk-kiezer in paneel A.
+ *
+ * De roosters worden lui opgehaald zodra de kiezer opengaat, per kandidaat één
+ * keer voor het **volledige academiejaar** — dezelfde range als
+ * {@link useTrajectBlokken}, zodat de range-aware cache van de adapter
+ * klasgroepen die al in het traject zitten meteen uit het geheugen serveert.
+ * Het scoren zelf gebeurt daarna zonder nieuwe fetch, ook na een wissel.
+ *
+ * Geeft `null` zolang er niets aangevinkt is of de roosters nog laden.
+ */
+export function useBulkAlternatieven(
+    sels: OLODSelectie[] | null,
+    shortlist: string[],
+    traject: StudentTraject,
+    blokkenPerKlas: Record<string, Lesblok[]>,
+    grenzen?: GrenzenInput
+): BulkAlternatieven | null {
+    const [roosters, setRoosters] = useState<{
+        key: string;
+        perKlas: Record<string, Lesblok[] | null>;
+    } | null>(null);
+
+    const jaar = useMemo(() => academiejaarBereik(grenzen), [grenzen]);
+    const { van, tot } = useMemo(() => periodeBereik(jaar.van, jaar.tot), [jaar]);
+
+    const actief = sels !== null && sels.length > 0;
+    const eigenKlasgroepen = (sels ?? []).map(s => s.klasgroep).sort().join('|');
+    const kandidaten = useMemo(() => {
+        const set = new Set(shortlist);
+        (sels ?? []).forEach(s => set.add(s.klasgroep));
+        return Array.from(set).sort((a, b) => a.localeCompare(b));
+    }, [shortlist.join('|'), eigenKlasgroepen]);
+    const key = `${kandidaten.join('|')}##${van.getTime()}-${tot.getTime()}`;
+
+    useEffect(() => {
+        if (!actief) return;
+        let cancelled = false;
+        Promise.all(
+            kandidaten.map(k =>
+                trajectUntisService
+                    .getLesblokken(k, van, tot)
+                    .then(bs => [k, bs] as const)
+                    // Rooster (nog) niet beschikbaar: die klasgroep krijgt geen
+                    // score in plaats van een vals nulresultaat.
+                    .catch(() => [k, null] as const)
+            )
+        ).then(results => {
+            if (cancelled) return;
+            const perKlas: Record<string, Lesblok[] | null> = {};
+            results.forEach(([k, bs]) => {
+                perKlas[k] = bs;
+            });
+            setRoosters({ key, perKlas });
+        });
+        return () => {
+            cancelled = true;
+        };
+    }, [actief, key]);
+
+    return useMemo(() => {
+        if (!actief || !sels || !roosters || roosters.key !== key) return null;
+        const effectieve = effectieveBlokken(traject, blokkenPerKlas, van, tot);
+        const huidigeConflicten = detectConflicts(effectieve).length;
+        const items = kandidaten.map<BulkAlternatief>(k => {
+            const bs = roosters.perKlas[k];
+            if (!bs) {
+                return {
+                    klasgroep: k,
+                    gedekt: 0,
+                    totaal: sels.length,
+                    lessen: 0,
+                    conflicten: huidigeConflicten,
+                    beschikbaar: false,
+                    huidig: false,
+                    verhuizend: [],
+                    blokken: [],
+                    ontbrekend: sels.map(s => s.olodNaam),
+                };
+            }
+            const gedekt = sels.filter(s =>
+                bs.some(b => b.olodNaam === s.olodNaam && datumInBereik(b.start, s.van, s.tot))
+            );
+            // Vakken die hier al zitten veranderen niet van klasgroep: zij
+            // horen niet bij de weg- of ghost-blokken van het scenario.
+            const verhuizend = gedekt.filter(s => s.klasgroep !== k);
+            const weg = wegBlokkenVoor(verhuizend, traject, effectieve);
+            const ghost = ghostBlokkenVoor(verhuizend, k, bs, effectieve, van, tot);
+            return {
+                klasgroep: k,
+                gedekt: gedekt.length,
+                totaal: sels.length,
+                lessen: ghost.length,
+                conflicten: detectConflicts(scenarioBlokken(effectieve, weg, ghost)).length,
+                beschikbaar: true,
+                huidig: verhuizend.length === 0,
+                verhuizend,
+                blokken: ghost,
+                ontbrekend: sels.filter(s => !gedekt.includes(s)).map(s => s.olodNaam),
+            };
+        });
+        return { items, huidigeConflicten };
+    }, [actief, sels, roosters, key, traject, blokkenPerKlas, van, tot, kandidaten]);
 }

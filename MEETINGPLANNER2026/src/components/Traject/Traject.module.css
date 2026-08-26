@@ -1107,6 +1107,163 @@
     color: #64748b;
 }
 
+/* ===== Bulkselectie: meerdere vakken samen van klasgroep wisselen ===== */
+
+/* Snelkeuze-chips boven de lijst: alles van één periode in één klik. */
+.olodSnelRij {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.3rem 0.4rem;
+    border-bottom: 1px solid var(--border-color);
+    background-color: var(--bg-color);
+}
+
+.olodSnelLabel {
+    font-size: 0.68rem;
+    color: #64748b;
+}
+
+.olodSnelChip {
+    background-color: var(--secondary);
+    border: 1px solid var(--border-color);
+    color: var(--text-color);
+    padding: 0.1rem 0.4rem;
+    border-radius: 999px;
+    font-size: 0.68rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.olodSnelChip:hover {
+    border-color: var(--primary);
+    color: var(--primary);
+}
+
+/* Actiebalk + kiezer, zichtbaar zodra er iets aangevinkt is. */
+.olodBulkZone {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.3rem;
+    padding: 0.35rem 0.4rem;
+    border-bottom: 1px solid var(--border-color);
+    background-color: var(--selected-bg);
+}
+
+.olodBulkBar {
+    flex-basis: 100%;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.3rem;
+}
+
+.olodBulkCount {
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: var(--text-color);
+    margin-right: auto;
+}
+
+.olodBulkKnop {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    background-color: var(--bg-color);
+    border: 1px solid var(--border-color);
+    color: var(--text-color);
+    padding: 0.15rem 0.4rem;
+    border-radius: 5px;
+    font-size: 0.7rem;
+    font-weight: 500;
+    cursor: pointer;
+}
+
+.olodBulkKnop:hover {
+    border-color: var(--primary);
+    color: var(--primary);
+}
+
+.olodBulkKnopActief {
+    background-color: var(--primary);
+    border-color: var(--primary);
+    color: #fff;
+}
+
+.olodBulkKnopActief:hover {
+    color: #fff;
+}
+
+/* Eén kandidaat-klasgroep in de bulk-kiezer: naam links, score rechts. */
+.bulkOptie {
+    flex-basis: 100%;
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    background-color: var(--bg-color);
+    border: 1px solid var(--border-color);
+    color: var(--text-color);
+    padding: 0.25rem 0.45rem;
+    border-radius: 6px;
+    font-size: 0.72rem;
+    text-align: left;
+    cursor: pointer;
+}
+
+.bulkOptie:hover {
+    border-color: var(--primary);
+}
+
+.bulkOptie:disabled {
+    opacity: 0.6;
+    cursor: default;
+}
+
+.bulkOptieBest {
+    border-color: #16A34A;
+    background-color: #F0FDF4;
+}
+
+.bulkOptieBestIcon {
+    flex-shrink: 0;
+    color: #16A34A;
+}
+
+.bulkOptieNaam {
+    font-weight: 600;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.bulkOptieScore {
+    margin-left: auto;
+    font-size: 0.68rem;
+    color: #64748b;
+    white-space: nowrap;
+}
+
+.bulkOptieSlechter {
+    color: #DC2626;
+    font-weight: 600;
+}
+
+/* Checkbox voor de bulkselectie, links in elk lijstitem. */
+.olodListCheck {
+    flex-shrink: 0;
+    width: 13px;
+    height: 13px;
+    margin: 0;
+    accent-color: var(--primary);
+    cursor: pointer;
+}
+
+.olodListItemGekozen {
+    border-color: var(--primary);
+    background-color: var(--selected-bg);
+}
+
 .olodListRemove {
     flex-shrink: 0;
     display: inline-flex;

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, ChevronDown, Eye, Info, Loader2, X } from 'lucide-react';
-import { OLODSelectie, StudentTraject } from './types';
+import { AlertTriangle, ArrowLeftRight, ChevronDown, Eye, Info, Loader2, Sparkles, Trash2, X } from 'lucide-react';
+import { Lesblok, OLODSelectie, StudentTraject } from './types';
 import {
     matchtPeriode,
     periodeLabelVoor,
@@ -11,7 +11,9 @@ import {
 import { bereikOverlapt } from './dateUtils';
 import { selectieKey } from './hooks';
 import {
+    useBulkAlternatieven,
     useKlasgroepAlternatieven,
+    type BulkAlternatief,
     type KlasgroepAlternatief,
     type KlasgroepPreview,
     type SelectieStatus,
@@ -23,10 +25,16 @@ interface Props {
     actief: string | null;
     onSelect: (klasgroep: string) => void;
     traject: StudentTraject;
+    // Lesblokken van het volledige academiejaar per klasgroep in het traject —
+    // nodig om te scoren wat een bulkwissel met de conflicten zou doen.
+    blokkenPerKlas: Record<string, Lesblok[]>;
     colorOf: (olodNaam: string) => string;
     onRemoveOlod: (sel: OLODSelectie) => void;
     onSetPeriode: (sel: OLODSelectie, van: string, tot: string) => void;
     onSetKlasgroep: (sel: OLODSelectie, klasgroep: string) => void;
+    // Bulkacties op de aangevinkte selecties.
+    onBulkSetKlasgroep: (sels: OLODSelectie[], klasgroep: string) => void;
+    onBulkRemove: (sels: OLODSelectie[]) => void;
     // Wat-als-preview: de klasgroep waar de gebruiker in de kiezer over
     // beweegt (of null). Het studentoverzicht toont dan waar het vak zou vallen.
     onPreview: (preview: KlasgroepPreview | null) => void;
@@ -51,10 +59,13 @@ export function KlasgroepSelector({
     actief,
     onSelect,
     traject,
+    blokkenPerKlas,
     colorOf,
     onRemoveOlod,
     onSetPeriode,
     onSetKlasgroep,
+    onBulkSetKlasgroep,
+    onBulkRemove,
     onPreview,
     statussen,
     actiefBereik,
@@ -65,16 +76,31 @@ export function KlasgroepSelector({
     // periode; na een keuze volgt ze de gewijzigde selectie zodat de kiezer
     // open blijft en de gebruiker meteen een andere optie kan proberen.
     const [open, setOpen] = useState<Kiezer | null>(null);
+    // Aangevinkte selecties (selectieKey) voor een bulkactie, en of de
+    // bulk-klasgroepkiezer openstaat. Vluchtige UI-state: niet opgeslagen.
+    const [gekozen, setGekozen] = useState<Set<string>>(new Set());
+    const [bulkOpen, setBulkOpen] = useState(false);
     const kiesbaar = periodeType === 'module';
 
     // Geen preview meer zodra een kiezer sluit of wisselt (de chips waar de
     // muis over stond bestaan dan niet meer), en evenmin na unmount.
     useEffect(() => {
         onPreview(null);
-    }, [open, onPreview]);
+    }, [open, bulkOpen, onPreview]);
     useEffect(() => () => onPreview(null), [onPreview]);
 
+    // Vakken die uit het traject verdwijnen (of van klasgroep/periode wisselen)
+    // laten hun oude sleutel achter; die snoeien we weg zodat de teller klopt.
+    const trajectKeys = useMemo(() => new Set(traject.map(selectieKey)), [traject]);
+    useEffect(() => {
+        setGekozen(g => {
+            const next = new Set(Array.from(g).filter(k => trajectKeys.has(k)));
+            return next.size === g.size ? g : next;
+        });
+    }, [trajectKeys]);
+
     const toggleKiezer = (key: string, soort: Kiezer['soort']) => {
+        setBulkOpen(false);
         setOpen(o => (o && o.key === key && o.soort === soort ? null : { key, soort }));
     };
 
@@ -87,6 +113,15 @@ export function KlasgroepSelector({
         if (klasgroep === sel.klasgroep) return;
         onSetKlasgroep(sel, klasgroep);
         setOpen({ key: selectieKey({ ...sel, klasgroep }), soort: 'klasgroep' });
+    };
+
+    const toggleGekozen = (key: string) => {
+        setGekozen(g => {
+            const next = new Set(g);
+            if (next.has(key)) next.delete(key);
+            else next.add(key);
+            return next;
+        });
     };
 
     const gesorteerd = useMemo(
@@ -114,6 +149,90 @@ export function KlasgroepSelector({
         [open, traject]
     );
     const alternatieven = useKlasgroepAlternatieven(openKlasSel, klasgroepen);
+
+    // ===== Bulkselectie =====
+
+    const gekozenSels = useMemo(
+        () => gesorteerd.filter(s => gekozen.has(selectieKey(s))),
+        [gesorteerd, gekozen]
+    );
+
+    // Snelkeuze-chips: elke periode die in het traject voorkomt, met de
+    // selecties die erin vallen. Zo staat "alles van M1" op één klik.
+    const periodeGroepen = useMemo(() => {
+        const map = new Map<string, { kort: string; label: string; keys: string[] }>();
+        for (const s of gesorteerd) {
+            const id = `${s.van}::${s.tot}`;
+            const bestaand = map.get(id);
+            if (bestaand) {
+                bestaand.keys.push(selectieKey(s));
+                continue;
+            }
+            const p = periodeLabelVoor(s.van, s.tot, periodeGrenzen);
+            map.set(id, { kort: p.kort, label: p.label, keys: [selectieKey(s)] });
+        }
+        return Array.from(map.entries())
+            .sort((a, b) => a[0].localeCompare(b[0]))
+            .map(([id, g]) => ({ id, ...g }));
+    }, [gesorteerd, periodeGrenzen]);
+
+    // Een groep aanklikken selecteert precies die groep; nog eens klikken wist
+    // de selectie weer.
+    const kiesGroep = (keys: string[]) => {
+        setGekozen(g => {
+            const zelfde = g.size === keys.length && keys.every(k => g.has(k));
+            return zelfde ? new Set() : new Set(keys);
+        });
+    };
+
+    const bulk = useBulkAlternatieven(
+        bulkOpen ? gekozenSels : null,
+        klasgroepen,
+        traject,
+        blokkenPerKlas,
+        periodeGrenzen
+    );
+
+    // Verzet de aangevinkte vakken naar deze klasgroep. Geeft ze die klasgroep
+    // niet allemaal, dan verhuizen enkel de gedekte — na bevestiging, met de
+    // achterblijvers bij naam.
+    const bulkVerzet = (a: BulkAlternatief) => {
+        if (a.huidig || a.verhuizend.length === 0) return;
+        if (a.ontbrekend.length > 0) {
+            const ok = window.confirm(
+                `${a.klasgroep} geeft ${a.gedekt} van de ${a.totaal} aangevinkte vakken in hun periode.\n\n` +
+                    `Enkel die ${a.gedekt} verzetten? Deze blijven bij hun huidige klasgroep:\n` +
+                    a.ontbrekend.map(n => `• ${n}`).join('\n')
+            );
+            if (!ok) return;
+        }
+        onBulkSetKlasgroep(a.verhuizend, a.klasgroep);
+        // Dezelfde vakken blijven aangevinkt (onder hun nieuwe sleutel), zodat
+        // meteen een andere klasgroep geprobeerd kan worden.
+        setGekozen(g => {
+            const next = new Set(g);
+            a.verhuizend.forEach(s => {
+                next.delete(selectieKey(s));
+                next.add(selectieKey({ ...s, klasgroep: a.klasgroep }));
+            });
+            return next;
+        });
+        onPreview(null);
+    };
+
+    const bulkVerwijder = () => {
+        if (gekozenSels.length === 0) return;
+        const ok = window.confirm(
+            `${gekozenSels.length} ${gekozenSels.length === 1 ? 'vak' : 'vakken'} uit het traject verwijderen?\n\n` +
+                gekozenSels
+                    .map(s => `• ${s.olodNaam} (${s.klasgroep}, ${periodeLabelVoor(s.van, s.tot, periodeGrenzen).kort})`)
+                    .join('\n')
+        );
+        if (!ok) return;
+        onBulkRemove(gekozenSels);
+        setGekozen(new Set());
+        setBulkOpen(false);
+    };
 
     return (
         <div className={styles.panel}>
@@ -152,6 +271,90 @@ export function KlasgroepSelector({
                     {inPeriode === traject.length ? traject.length : `${inPeriode} / ${traject.length}`}
                 </span>
             </div>
+
+            {periodeGroepen.length > 0 && (
+                <div className={styles.olodSnelRij}>
+                    <span className={styles.olodSnelLabel}>Snel kiezen:</span>
+                    {periodeGroepen.map(g => (
+                        <button
+                            key={g.id}
+                            type="button"
+                            className={styles.olodSnelChip}
+                            onClick={() => kiesGroep(g.keys)}
+                            title={`Alle ${g.keys.length} vakken van ${g.label} aanvinken`}
+                        >
+                            {g.kort}
+                            <span className={styles.olodOptieAantal}>{g.keys.length}</span>
+                        </button>
+                    ))}
+                    <button
+                        type="button"
+                        className={styles.olodSnelChip}
+                        onClick={() => kiesGroep(gesorteerd.map(selectieKey))}
+                        title="Alle vakken van het traject aanvinken"
+                    >
+                        alles
+                    </button>
+                    {gekozen.size > 0 && (
+                        <button
+                            type="button"
+                            className={styles.olodSnelChip}
+                            onClick={() => setGekozen(new Set())}
+                            title="Selectie wissen"
+                        >
+                            wis
+                        </button>
+                    )}
+                </div>
+            )}
+
+            {gekozenSels.length > 0 && (
+                <div className={styles.olodBulkZone}>
+                    <div className={styles.olodBulkBar}>
+                        <span className={styles.olodBulkCount}>
+                            {gekozenSels.length} gekozen
+                        </span>
+                        <button
+                            type="button"
+                            className={`${styles.olodBulkKnop} ${bulkOpen ? styles.olodBulkKnopActief : ''}`}
+                            onClick={() => {
+                                setOpen(null);
+                                setBulkOpen(o => !o);
+                            }}
+                            title="Deze vakken samen naar een andere klasgroep verzetten"
+                            aria-expanded={bulkOpen}
+                        >
+                            <ArrowLeftRight size={12} /> Verzet naar…
+                        </button>
+                        <button
+                            type="button"
+                            className={styles.olodBulkKnop}
+                            onClick={bulkVerwijder}
+                            title="Deze vakken uit het traject verwijderen"
+                        >
+                            <Trash2 size={12} />
+                        </button>
+                        <button
+                            type="button"
+                            className={styles.olodBulkKnop}
+                            onClick={() => setGekozen(new Set())}
+                            title="Selectie wissen"
+                            aria-label="Selectie wissen"
+                        >
+                            <X size={12} />
+                        </button>
+                    </div>
+                    {bulkOpen && (
+                        <BulkKlasgroepKiezer
+                            aantal={gekozenSels.length}
+                            bulk={bulk}
+                            onKies={bulkVerzet}
+                            onPreview={onPreview}
+                        />
+                    )}
+                </div>
+            )}
+
             <div className={styles.olodList}>
                 {gesorteerd.length === 0 ? (
                     <div className={styles.olodListEmpty}>
@@ -168,11 +371,22 @@ export function KlasgroepSelector({
                         const waarschuwing = status === 'geen-lessen';
                         const badgeClass = `${styles.olodListPeriode} ${zichtbaar ? styles.olodListPeriodeActief : ''}`;
                         const badgeTitle = `${periode.label}: ${sel.van} t/m ${sel.tot}${zichtbaar ? '' : ' — buiten de actieve periode'}`;
+                        const aangevinkt = gekozen.has(key);
                         return (
                             <div
                                 key={key}
-                                className={`${styles.olodListItem} ${waarschuwing ? styles.olodListItemWaarschuwing : ''}`}
+                                className={`${styles.olodListItem} ${waarschuwing ? styles.olodListItemWaarschuwing : ''} ${
+                                    aangevinkt ? styles.olodListItemGekozen : ''
+                                }`}
                             >
+                                <input
+                                    type="checkbox"
+                                    className={styles.olodListCheck}
+                                    checked={aangevinkt}
+                                    onChange={() => toggleGekozen(key)}
+                                    title={`${sel.olodNaam} aanvinken om samen met andere vakken van klasgroep te wisselen`}
+                                    aria-label={`${sel.olodNaam} (${sel.klasgroep}, ${periode.kort}) aanvinken`}
+                                />
                                 <span
                                     className={styles.olodListSwatch}
                                     style={{ backgroundColor: colorOf(sel.olodNaam) }}
@@ -272,6 +486,120 @@ export function KlasgroepSelector({
     );
 }
 
+interface BulkKiezerProps {
+    aantal: number;
+    // null zolang de roosters van de kandidaten nog laden.
+    bulk: ReturnType<typeof useBulkAlternatieven>;
+    onKies: (a: BulkAlternatief) => void;
+    onPreview: (preview: KlasgroepPreview | null) => void;
+}
+
+/**
+ * Kiezer voor een bulkwissel: elke klasgroep uit de shortlist met hoeveel van
+ * de aangevinkte vakken ze geeft en hoeveel conflicten het traject na de
+ * wissel zou tellen, beste eerst. Over een rij bewegen toont de wat-als-preview
+ * in het studentoverzicht; klikken verzet de vakken.
+ */
+function BulkKlasgroepKiezer({ aantal, bulk, onKies, onPreview }: BulkKiezerProps) {
+    if (bulk === null) {
+        return (
+            <div className={styles.olodPeriodeKiezer} role="group" aria-label="Klasgroep voor de aangevinkte vakken">
+                <span className={styles.olodKiezerInfo}>
+                    <Loader2 size={12} className="animate-spin" />
+                    Klasgroepen vergelijken op {aantal} {aantal === 1 ? 'vak' : 'vakken'}…
+                </span>
+            </div>
+        );
+    }
+
+    const { items, huidigeConflicten } = bulk;
+    // Beste eerst: meeste vakken gedekt, dan minste conflicten, dan naam.
+    // Klasgroepen zonder rooster zakken naar onderen.
+    const gesorteerd = [...items].sort(
+        (a, b) =>
+            Number(b.beschikbaar) - Number(a.beschikbaar) ||
+            b.gedekt - a.gedekt ||
+            a.conflicten - b.conflicten ||
+            a.klasgroep.localeCompare(b.klasgroep)
+    );
+    const bruikbaar = gesorteerd.filter(a => a.beschikbaar && (a.gedekt > 0 || a.huidig));
+    const onbekend = gesorteerd.filter(a => !a.beschikbaar).map(a => a.klasgroep);
+    // De aanrader: de eerste rij die iets verandert én er niet slechter van
+    // wordt dan de huidige situatie.
+    const beste = bruikbaar.find(a => !a.huidig && a.gedekt === aantal && a.conflicten <= huidigeConflicten) ?? null;
+
+    return (
+        <div className={styles.olodPeriodeKiezer} role="group" aria-label="Klasgroep voor de aangevinkte vakken">
+            <span className={styles.olodKiezerInfo}>
+                Verzet {aantal} {aantal === 1 ? 'vak' : 'vakken'} naar — nu {huidigeConflicten}{' '}
+                {huidigeConflicten === 1 ? 'conflict' : 'conflicten'}
+            </span>
+            {bruikbaar.map(a => {
+                const isBeste = beste?.klasgroep === a.klasgroep;
+                const dekking = a.huidig
+                    ? 'huidige klasgroep'
+                    : `${a.gedekt}/${a.totaal} ${a.totaal === 1 ? 'vak' : 'vakken'}`;
+                const score = `${a.conflicten} ${a.conflicten === 1 ? 'conflict' : 'conflicten'}`;
+                const detail = a.huidig
+                    ? `Alle aangevinkte vakken zitten al bij ${a.klasgroep}.`
+                    : `${a.gedekt} van de ${a.totaal} aangevinkte vakken lopen bij ${a.klasgroep} in hun periode` +
+                      ` (${a.lessen} ${a.lessen === 1 ? 'les' : 'lessen'}).` +
+                      `\nNa de wissel: ${score} (nu ${huidigeConflicten}).` +
+                      (a.ontbrekend.length > 0 ? `\nBlijft staan: ${a.ontbrekend.join(', ')}` : '');
+                const preview = () =>
+                    onPreview(
+                        a.huidig ? null : { sels: a.verhuizend, klasgroep: a.klasgroep, blokken: a.blokken }
+                    );
+                const stopPreview = () => onPreview(null);
+                return (
+                    <button
+                        key={a.klasgroep}
+                        type="button"
+                        className={`${styles.bulkOptie} ${a.huidig ? styles.olodPeriodeOptieActief : ''} ${
+                            isBeste ? styles.bulkOptieBest : ''
+                        }`}
+                        onClick={() => onKies(a)}
+                        onMouseEnter={preview}
+                        onMouseLeave={stopPreview}
+                        onFocus={preview}
+                        onBlur={stopPreview}
+                        title={detail}
+                        disabled={a.huidig}
+                        aria-pressed={a.huidig}
+                    >
+                        {isBeste && <Sparkles size={11} className={styles.bulkOptieBestIcon} />}
+                        <span className={styles.bulkOptieNaam}>{a.klasgroep}</span>
+                        <span className={styles.bulkOptieScore}>
+                            {dekking} ·{' '}
+                            <span className={a.conflicten > huidigeConflicten ? styles.bulkOptieSlechter : ''}>
+                                {score}
+                            </span>
+                        </span>
+                    </button>
+                );
+            })}
+            {bruikbaar.length <= 1 && (
+                <span className={styles.olodKiezerInfo}>
+                    <Info size={12} />
+                    Geen andere klasgroep uit je shortlist geeft deze vakken in hun periode.
+                </span>
+            )}
+            {bruikbaar.length > 1 && (
+                <span className={styles.olodKiezerInfo}>
+                    <Eye size={12} />
+                    Beweeg over een klasgroep om te zien waar de lessen dan vallen.
+                </span>
+            )}
+            {onbekend.length > 0 && (
+                <span className={styles.olodKiezerInfo}>
+                    <Info size={12} />
+                    Rooster nog niet beschikbaar voor {onbekend.join(', ')}.
+                </span>
+            )}
+        </div>
+    );
+}
+
 interface KiezerProps {
     sel: OLODSelectie;
     periodeKort: string;
@@ -310,7 +638,7 @@ function KlasgroepKiezer({ sel, periodeKort, alternatieven, onKies, onPreview }:
                     : `Rooster van ${periodeKort} nog niet beschikbaar`;
                 const momenten = a.momenten.length > 0 ? `\n${a.momenten.join('\n')}` : '';
                 const preview = () =>
-                    onPreview(huidig ? null : { sel, klasgroep: a.klasgroep, blokken: a.blokken });
+                    onPreview(huidig ? null : { sels: [sel], klasgroep: a.klasgroep, blokken: a.blokken });
                 const stopPreview = () => onPreview(null);
                 return (
                     <button

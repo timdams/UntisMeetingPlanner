@@ -1,12 +1,18 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Lesblok, StudentTraject, Conflict } from './types';
+import { Lesblok, StudentTraject } from './types';
+import {
+    detectConflicts,
+    effectieveBlokken as berekenEffectieveBlokken,
+    ghostBlokkenVoor,
+    scenarioBlokken as berekenScenarioBlokken,
+    wegBlokkenVoor,
+} from './conflicts';
 import {
     addDays,
     bereikOverlapt,
     DAG_HEADERS,
     DAY_START_HOUR,
-    datumInBereik,
     formatDateBE,
     formatDateTime,
     formatTime,
@@ -108,24 +114,6 @@ function heightPct(start: Date, eind: Date, totalMin: number): number {
     return Math.max(2, Math.min(100, (m / totalMin) * 100));
 }
 
-function overlapt(a: Lesblok, b: Lesblok): boolean {
-    return a.start.getTime() < b.eind.getTime() && b.start.getTime() < a.eind.getTime();
-}
-
-function detectConflicts(blokken: Lesblok[]): Conflict[] {
-    const conflicts: Conflict[] = [];
-    const sorted = [...blokken].sort((a, b) => a.start.getTime() - b.start.getTime());
-    for (let i = 0; i < sorted.length; i++) {
-        for (let j = i + 1; j < sorted.length; j++) {
-            if (sorted[j].start.getTime() >= sorted[i].eind.getTime()) break;
-            if (overlapt(sorted[i], sorted[j])) {
-                conflicts.push({ a: sorted[i], b: sorted[j] });
-            }
-        }
-    }
-    return conflicts;
-}
-
 export function StudentOverzicht({
     traject,
     blokkenPerKlas,
@@ -151,83 +139,42 @@ export function StudentOverzicht({
     const jaar = useMemo(() => academiejaarBereik(periodeGrenzen), [periodeGrenzen]);
     const { van: start, tot: eind } = useMemo(() => periodeBereik(jaar.van, jaar.tot), [jaar]);
 
-    const klasgroepen = useMemo(
-        () => Array.from(new Set(traject.map(s => s.klasgroep))),
-        [traject]
+    // Een blok telt zodra een selectie van dat vak bij die klasgroep het blok in
+    // haar periode heeft (zie effectieveBlokken in conflicts.ts).
+    const effectieve = useMemo<Lesblok[]>(
+        () => berekenEffectieveBlokken(traject, blokkenPerKlas, start, eind),
+        [blokkenPerKlas, traject, start, eind]
     );
 
-    // Een blok telt zodra een selectie van dat vak bij die klasgroep het blok in
-    // haar periode heeft. Twee selecties kunnen elkaar overlappen (bv. een
-    // S1-keuze naast een M2-keuze van hetzelfde vak); hetzelfde blok mag dan
-    // maar één keer in het overzicht komen.
-    const effectieveBlokken = useMemo<Lesblok[]>(() => {
-        const perTuple = new Map<string, StudentTraject>();
-        for (const s of traject) {
-            const key = `${s.klasgroep}||${s.olodNaam}`;
-            const arr = perTuple.get(key);
-            if (arr) arr.push(s);
-            else perTuple.set(key, [s]);
-        }
-        const out: Lesblok[] = [];
-        for (const k of klasgroepen) {
-            const bs = blokkenPerKlas[k] ?? [];
-            for (const b of bs) {
-                const sels = perTuple.get(`${b.klasgroep}||${b.olodNaam}`);
-                if (!sels) continue;
-                if (b.start.getTime() < start.getTime() || b.eind.getTime() > eind.getTime()) continue;
-                if (sels.some(s => datumInBereik(b.start, s.van, s.tot))) out.push(b);
-            }
-        }
-        return out;
-    }, [blokkenPerKlas, traject, klasgroepen, start, eind]);
-
     // Wat-als-preview. `wegBlokken`: de lessen die bij de wissel zouden
-    // verdwijnen — die van de verhuizende selectie, tenzij een andere selectie
+    // verdwijnen — die van de verhuizende selecties, tenzij een andere selectie
     // van hetzelfde vak bij dezelfde klasgroep ze ook dekt. `ghostBlokken`: de
     // lessen die erbij zouden komen, zonder de blokken die er al in zitten
-    // (bv. een bestaande M2-keuze bij de kandidaat-klasgroep).
-    const wegBlokken = useMemo(() => {
-        const out = new Set<Lesblok>();
-        if (!preview) return out;
-        const { sel } = preview;
-        const anderen = traject.filter(
-            s =>
-                s.klasgroep === sel.klasgroep &&
-                s.olodNaam === sel.olodNaam &&
-                !(s.van === sel.van && s.tot === sel.tot)
-        );
-        for (const b of effectieveBlokken) {
-            if (b.klasgroep !== sel.klasgroep || b.olodNaam !== sel.olodNaam) continue;
-            if (!datumInBereik(b.start, sel.van, sel.tot)) continue;
-            if (anderen.some(s => datumInBereik(b.start, s.van, s.tot))) continue;
-            out.add(b);
-        }
-        return out;
-    }, [preview, traject, effectieveBlokken]);
+    // (bv. een bestaande M2-keuze bij de kandidaat-klasgroep). Bij een
+    // bulkwissel bevat `preview.sels` meerdere selecties tegelijk.
+    const wegBlokken = useMemo(
+        () => (preview ? wegBlokkenVoor(preview.sels, traject, effectieve) : new Set<Lesblok>()),
+        [preview, traject, effectieve]
+    );
 
-    const ghostBlokken = useMemo<Lesblok[]>(() => {
-        if (!preview) return [];
-        const aanwezig = new Set(effectieveBlokken.map(b => `${b.klasgroep}|${b.olodNaam}|${b.start.getTime()}`));
-        return preview.blokken.filter(
-            b =>
-                b.klasgroep === preview.klasgroep &&
-                b.start.getTime() >= start.getTime() &&
-                b.eind.getTime() <= eind.getTime() &&
-                datumInBereik(b.start, preview.sel.van, preview.sel.tot) &&
-                !aanwezig.has(`${b.klasgroep}|${b.olodNaam}|${b.start.getTime()}`)
-        );
-    }, [preview, effectieveBlokken, start, eind]);
+    const ghostBlokken = useMemo<Lesblok[]>(
+        () =>
+            preview
+                ? ghostBlokkenVoor(preview.sels, preview.klasgroep, preview.blokken, effectieve, start, eind)
+                : [],
+        [preview, effectieve, start, eind]
+    );
     const ghostSet = useMemo(() => new Set(ghostBlokken), [ghostBlokken]);
 
     // Wat er getekend wordt (bestaand + ghost) en waarop de conflictdetectie
     // loopt (bestaand zonder de wegvallende lessen, plus ghost).
     const getoondeBlokken = useMemo<Lesblok[]>(
-        () => (ghostBlokken.length ? [...effectieveBlokken, ...ghostBlokken] : effectieveBlokken),
-        [effectieveBlokken, ghostBlokken]
+        () => (ghostBlokken.length ? [...effectieve, ...ghostBlokken] : effectieve),
+        [effectieve, ghostBlokken]
     );
     const scenarioBlokken = useMemo<Lesblok[]>(
-        () => (preview ? [...effectieveBlokken.filter(b => !wegBlokken.has(b)), ...ghostBlokken] : effectieveBlokken),
-        [preview, effectieveBlokken, wegBlokken, ghostBlokken]
+        () => (preview ? berekenScenarioBlokken(effectieve, wegBlokken, ghostBlokken) : effectieve),
+        [preview, effectieve, wegBlokken, ghostBlokken]
     );
 
     // De blokken van de uitvergrote week (zie WeekZoom).
@@ -288,7 +235,9 @@ export function StudentOverzicht({
     // (enkel als nodig), zodat een vak buiten de actieve periode niet
     // onzichtbaar blijft.
     const eersteGhostRij = useRef<HTMLDivElement | null>(null);
-    const previewKey = preview ? `${preview.sel.olodNaam}|${preview.klasgroep}` : null;
+    const previewKey = preview
+        ? `${preview.sels.map(s => s.olodNaam).join('+')}|${preview.klasgroep}`
+        : null;
     useEffect(() => {
         if (previewKey) eersteGhostRij.current?.scrollIntoView({ block: 'nearest' });
     }, [previewKey]);
@@ -303,18 +252,35 @@ export function StudentOverzicht({
         () => (preview ? conflicts.filter(c => ghostSet.has(c.a) || ghostSet.has(c.b)).length : 0),
         [preview, conflicts, ghostSet]
     );
+    // Het aantal conflicten zonder de wissel — referentiepunt in de strip bij
+    // een bulkwissel, waar het totaal na de wissel zegt of het rooster beter wordt.
+    const huidigeConflicten = useMemo(
+        () => (preview ? detectConflicts(effectieve).length : 0),
+        [preview, effectieve]
+    );
+    // De klasgroep waar de verhuizende vakken nu zitten, of null zodra ze uit
+    // meerdere klasgroepen komen (kan enkel bij een bulkwissel).
+    const previewHerkomst = useMemo(() => {
+        if (!preview) return null;
+        const bronnen = new Set(preview.sels.map(s => s.klasgroep));
+        return bronnen.size === 1 ? preview.sels[0].klasgroep : null;
+    }, [preview]);
+    const previewVakken = useMemo(
+        () => (preview ? Array.from(new Set(preview.sels.map(s => s.olodNaam))) : []),
+        [preview]
+    );
 
     const olodLegend = useMemo(() => {
         const seen = new Set<string>();
         const out: string[] = [];
-        for (const b of effectieveBlokken) {
+        for (const b of effectieve) {
             if (!seen.has(b.olodNaam)) {
                 seen.add(b.olodNaam);
                 out.push(b.olodNaam);
             }
         }
         return out.sort((a, b) => a.localeCompare(b));
-    }, [effectieveBlokken]);
+    }, [effectieve]);
 
     return (
         <div className={styles.panel}>
@@ -331,21 +297,47 @@ export function StudentOverzicht({
 
                 {preview && !error && (
                     <div
-                        className={`${styles.previewStrip} ${previewConflicten > 0 ? styles.previewStripConflict : ''}`}
+                        className={`${styles.previewStrip} ${
+                            (previewVakken.length === 1 ? previewConflicten > 0 : conflicts.length > huidigeConflicten)
+                                ? styles.previewStripConflict
+                                : ''
+                        }`}
                         role="status"
                     >
                         <Eye size={13} />
-                        <span className={styles.legendSwatch} style={{ backgroundColor: colorOf(preview.sel.olodNaam) }} />
+                        {previewVakken.slice(0, 4).map(naam => (
+                            <span
+                                key={naam}
+                                className={styles.legendSwatch}
+                                style={{ backgroundColor: colorOf(naam) }}
+                                title={naam}
+                            />
+                        ))}
                         <span className={styles.previewStripText}>
-                            <strong>{preview.sel.olodNaam}</strong> bij <strong>{preview.klasgroep}</strong> i.p.v.{' '}
-                            {preview.sel.klasgroep}:{' '}
-                            {ghostBlokken.length === 0
-                                ? 'geen lessen in deze periode'
-                                : `${ghostBlokken.length} ${ghostBlokken.length === 1 ? 'les' : 'lessen'}, ${
-                                      previewConflicten === 0
-                                          ? 'geen nieuwe conflicten'
-                                          : `${previewConflicten} ${previewConflicten === 1 ? 'conflict' : 'conflicten'}`
-                                  }`}
+                            {previewVakken.length === 1 ? (
+                                <>
+                                    <strong>{previewVakken[0]}</strong> bij <strong>{preview.klasgroep}</strong>
+                                    {previewHerkomst ? ` i.p.v. ${previewHerkomst}` : ''}:{' '}
+                                    {ghostBlokken.length === 0
+                                        ? 'geen lessen in deze periode'
+                                        : `${ghostBlokken.length} ${ghostBlokken.length === 1 ? 'les' : 'lessen'}, ${
+                                              previewConflicten === 0
+                                                  ? 'geen nieuwe conflicten'
+                                                  : `${previewConflicten} ${previewConflicten === 1 ? 'conflict' : 'conflicten'}`
+                                          }`}
+                                </>
+                            ) : (
+                                <>
+                                    <strong>{previewVakken.length} vakken</strong> bij{' '}
+                                    <strong>{preview.klasgroep}</strong>
+                                    {previewHerkomst ? ` i.p.v. ${previewHerkomst}` : ''}:{' '}
+                                    {`${ghostBlokken.length} ${ghostBlokken.length === 1 ? 'les' : 'lessen'} · `}
+                                    {conflicts.length === 0
+                                        ? 'geen conflicten'
+                                        : `${conflicts.length} ${conflicts.length === 1 ? 'conflict' : 'conflicten'}`}
+                                    {` (nu ${huidigeConflicten})`}
+                                </>
+                            )}
                         </span>
                     </div>
                 )}
