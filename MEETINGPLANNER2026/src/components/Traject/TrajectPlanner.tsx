@@ -1,16 +1,35 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Printer, RotateCcw, Settings as SettingsIcon, LayoutGrid, ArrowLeft, Palette, Copy, Check, Info, X, Save } from 'lucide-react';
+import {
+    Printer,
+    RotateCcw,
+    Settings as SettingsIcon,
+    LayoutGrid,
+    ArrowLeft,
+    Copy,
+    Check,
+    Info,
+    X,
+    Save,
+    Share2,
+    MoreHorizontal,
+} from 'lucide-react';
 import styles from './Traject.module.css';
 import {
+    selectieKey,
+    trajectVingerafdruk,
+    useActiefTraject,
     useBewaardeTrajecten,
     useKleurMap,
     useLastBackup,
     useStudentTraject,
     useTrajectSettings,
-    zelfdeTrajectNaam,
     type BewaardTraject,
 } from './hooks';
+import type { OLODSelectie } from './types';
 import { LaadTrajectKnop } from './BewaardeTrajecten';
+import { TopbarMenu, TopbarMenuItem } from './TopbarMenu';
+import { BevestigDialog, BewaarDialog, type DialogItem } from './TrajectDialogs';
+import { UndoToast, useUndo } from './Toast';
 import { TrajectSettingsView } from './TrajectSettings';
 import { KlasgroepSelector } from './KlasgroepSelector';
 import { KlasgroepRooster } from './KlasgroepRooster';
@@ -19,9 +38,20 @@ import { PeriodeSwitcher } from './PeriodeSwitcher';
 import { TrajectPrintView, buildTrajectClipboardText } from './TrajectPrintView';
 import { defaultRoosterWeek, periodesVoor } from './academicYear';
 import { selectieStatussen, useTrajectBlokken, type KlasgroepPreview } from './useTrajectBlokken';
-import { backupFilename, buildBackup, downloadBackup, parseBackup } from './trajectBackup';
+import { backupFilename, buildBackup, downloadBackup, parseBackup, type TrajectBackup } from './trajectBackup';
 
 type Tab = 'werkblad' | 'instellingen';
+
+// De dialoog die momenteel openstaat. Alle bevestigingen en het benoemen van
+// een traject lopen hierlangs, in plaats van via window.confirm/prompt.
+type Dialoog =
+    | { soort: 'bewaar' }
+    | { soort: 'reset' }
+    | { soort: 'laad'; item: BewaardTraject }
+    | { soort: 'verwijderBewaard'; item: BewaardTraject }
+    // De import wacht op het antwoord van de gebruiker: `resolve` sluit de
+    // Promise die TrajectSettingsView aan de bestandskiezer hangt.
+    | { soort: 'import'; backup: TrajectBackup; resolve: (ok: boolean) => void };
 
 interface Props {
     onBack: () => void;
@@ -109,6 +139,8 @@ export function TrajectPlanner({ onBack, presetApplied = false }: Props) {
     const { map: kleurmap, ensureColor, colorOf, replaceMap, resetColors } = useKleurMap();
     const { lastBackup, markBackup } = useLastBackup();
     const { bewaard: bewaardeTrajecten, bewaar: bewaarTraject, verwijder: verwijderBewaard } = useBewaardeTrajecten();
+    const { actief: actiefTraject, markeer: markeerActief, wis: wisActief } = useActiefTraject();
+    const { melding: undoMelding, meld: meldUndo, sluit: sluitUndo, herstel: herstelUndo } = useUndo();
 
     const [tab, setTab] = useState<Tab>(
         settings.mijnOpleidingKlasgroepen.length === 0 ? 'instellingen' : 'werkblad'
@@ -119,6 +151,7 @@ export function TrajectPlanner({ onBack, presetApplied = false }: Props) {
     const [copied, setCopied] = useState(false);
     const [bewaardFeedback, setBewaardFeedback] = useState(false);
     const [bannerDismissed, setBannerDismissed] = useState(false);
+    const [dialoog, setDialoog] = useState<Dialoog | null>(null);
 
     const [panelAWidth, setPanelAWidth] = useState<number>(() => {
         const raw = localStorage.getItem(KEY_PANEL_A);
@@ -162,68 +195,77 @@ export function TrajectPlanner({ onBack, presetApplied = false }: Props) {
         setActieveKlasgroep(settings.mijnOpleidingKlasgroepen[0]);
     }
 
-    const handleReset = () => {
-        if (traject.length === 0) return;
-        const ok = window.confirm(
-            `Weet je zeker dat je het volledige studenttraject wil wissen? (${traject.length} OLODs)`
-        );
-        if (ok) reset();
+    // ===== Wijzigingen aan het traject, met undo =====
+
+    // Elke ingrijpende mutatie bewaart eerst het volledige traject en biedt dat
+    // als herstelpunt aan. Bewust géén inverse per actie: een bulkwissel kan
+    // selecties laten samensmelten (setKlasgroepBulk), en dat is niet ongedaan
+    // te maken door nog eens te verzetten.
+    const metUndo = (tekst: string, actie: () => void) => {
+        const snapshot = traject;
+        actie();
+        meldUndo(tekst, () => replaceTraject(snapshot));
+    };
+
+    const vakken = (n: number) => `${n} ${n === 1 ? 'vak' : 'vakken'}`;
+
+    const handleRemoveOlod = (sel: OLODSelectie) => {
+        metUndo(`${sel.olodNaam} verwijderd uit het traject`, () => remove(sel));
+    };
+
+    const handleBulkRemove = (sels: OLODSelectie[]) => {
+        if (sels.length === 0) return;
+        metUndo(`${vakken(sels.length)} verwijderd uit het traject`, () => removeMany(sels));
+    };
+
+    const handleBulkSetKlasgroep = (sels: OLODSelectie[], klasgroep: string) => {
+        if (sels.length === 0) return;
+        metUndo(`${vakken(sels.length)} verzet naar ${klasgroep}`, () => setKlasgroepBulk(sels, klasgroep));
+    };
+
+    // ===== Globale acties (elk via een dialoog) =====
+
+    const doeReset = () => {
+        const aantal = traject.length;
+        setDialoog(null);
+        metUndo(`Traject gewist (${aantal} ${aantal === 1 ? 'OLOD' : 'OLODs'})`, reset);
     };
 
     // Bewaart het huidige traject mét zijn instellingen (klasgroepen,
-    // periode-indeling, actieve periode) onder een naam in localStorage. Een
-    // bestaande naam wordt (na bevestiging) overschreven.
-    const handleBewaar = () => {
-        if (traject.length === 0) return;
-        const voorstel = `Traject ${bewaardeTrajecten.length + 1}`;
-        const naam = window.prompt('Geef dit traject een naam:', voorstel)?.trim();
-        if (!naam) return;
-        const bestaand = bewaardeTrajecten.find(x => zelfdeTrajectNaam(x.naam, naam));
-        if (
-            bestaand &&
-            !window.confirm(
-                `Er is al een bewaard traject "${bestaand.naam}" (${bestaand.traject.length} OLODs). Overschrijven met het huidige traject (${traject.length} OLODs) en de huidige instellingen?`
-            )
-        ) {
-            return;
-        }
-        bewaarTraject(naam, settings, traject, bestaand?.id);
+    // periode-indeling, actieve periode) onder een naam in localStorage, en
+    // markeert dat item als het geopende dossier.
+    const doeBewaar = (naam: string, overschrijfId?: string) => {
+        const id = bewaarTraject(naam, settings, traject, overschrijfId);
+        markeerActief(id, naam, traject, settings);
+        setDialoog(null);
         setBewaardFeedback(true);
         window.setTimeout(() => setBewaardFeedback(false), 1500);
     };
 
     // Vervangt het huidige traject én de instellingen door die van een
     // bewaard traject (zoals een back-up-import, maar zonder kleurmap).
-    const handleLaad = (item: BewaardTraject): boolean => {
-        const heeftData = traject.length > 0 || settings.mijnOpleidingKlasgroepen.length > 0;
-        if (
-            heeftData &&
-            !window.confirm(
-                `"${item.naam}" laden (${item.traject.length} OLODs)? Dit vervangt je huidige traject (${traject.length} OLODs) en je instellingen (klasgroepen en periode).`
-            )
-        ) {
-            return false;
-        }
+    const doeLaad = (item: BewaardTraject) => {
         if (item.settings) replaceSettings(item.settings);
         replaceTraject(item.traject);
+        markeerActief(item.id, item.naam, item.traject, item.settings ?? settings);
+        setDialoog(null);
         setTab('werkblad');
-        return true;
     };
 
-    const handleVerwijderBewaard = (item: BewaardTraject) => {
-        const ok = window.confirm(
-            `Bewaard traject "${item.naam}" (${item.traject.length} OLODs) verwijderen? Dit kan niet ongedaan gemaakt worden.`
-        );
-        if (ok) verwijderBewaard(item.id);
+    // Een klik op een bewaard traject vraagt eerst om bevestiging zodra er iets
+    // te overschrijven valt; staat het werkblad leeg, dan laadt het meteen.
+    const handleLaad = (item: BewaardTraject) => {
+        const heeftData = traject.length > 0 || settings.mijnOpleidingKlasgroepen.length > 0;
+        if (heeftData) setDialoog({ soort: 'laad', item });
+        else doeLaad(item);
     };
 
-    const handleResetColors = () => {
-        const count = Object.keys(kleurmap).length;
-        if (count === 0) return;
-        const ok = window.confirm(
-            `Kleurmap wissen en opnieuw genereren? (${count} kleuren worden opnieuw toegewezen zodra de OLODs in beeld komen)`
-        );
-        if (ok) resetColors();
+    const doeVerwijderBewaard = (item: BewaardTraject) => {
+        verwijderBewaard(item.id);
+        // Het geopende dossier bestaat niet meer; het werk blijft staan, maar
+        // hoort nu bij geen enkel bewaard traject.
+        if (actiefTraject?.id === item.id) wisActief();
+        setDialoog(null);
     };
 
     const handlePrint = () => {
@@ -257,21 +299,54 @@ export function TrajectPlanner({ onBack, presetApplied = false }: Props) {
         markBackup(backup.exportedAt);
     };
 
+    // Leest en valideert het bestand (fouten belanden bij de bestandskiezer in
+    // de instellingen) en laat de dialoog het antwoord invullen: de Promise
+    // lost pas op wanneer de gebruiker bevestigt of annuleert.
     const handleImport = async (file: File): Promise<boolean> => {
         const text = await file.text();
         const backup = parseBackup(text);
-        const confirmMsg =
-            traject.length > 0 || settings.mijnOpleidingKlasgroepen.length > 0
-                ? 'Importeren overschrijft je huidige instellingen, traject en kleurmap. Doorgaan?'
-                : 'Back-up importeren?';
-        if (!window.confirm(confirmMsg)) {
-            return false;
-        }
+        return new Promise<boolean>(resolve => setDialoog({ soort: 'import', backup, resolve }));
+    };
+
+    const doeImport = (backup: TrajectBackup, resolve: (ok: boolean) => void) => {
         replaceSettings(backup.settings);
         replaceTraject(backup.traject);
         replaceMap(backup.kleurmap);
-        return true;
+        // Een geïmporteerde back-up is een ander dossier dan het bewaarde
+        // traject waar we aan werkten.
+        wisActief();
+        setDialoog(null);
+        resolve(true);
     };
+
+    const annuleerDialoog = () => {
+        if (dialoog?.soort === 'import') dialoog.resolve(false);
+        setDialoog(null);
+    };
+
+    // Bewaarstatus: wijkt het werkblad af van het bewaarde dossier, dan staat
+    // er werk open. Zonder geopend dossier is alles wat er staat "niet bewaard".
+    const vingerafdruk = useMemo(() => trajectVingerafdruk(traject, settings), [traject, settings]);
+    const nietBewaard = actiefTraject ? actiefTraject.baseline !== vingerafdruk : traject.length > 0;
+
+    // De vakken die een reset zou wissen, met hun kleur — zo ziet de gebruiker
+    // in de dialoog waar het precies over gaat.
+    const resetItems = useMemo<DialogItem[]>(
+        () =>
+            traject
+                .slice()
+                .sort(
+                    (a, b) =>
+                        a.olodNaam.localeCompare(b.olodNaam) || a.klasgroep.localeCompare(b.klasgroep)
+                )
+                .map(s => ({
+                    key: selectieKey(s),
+                    naam: s.olodNaam,
+                    kleur: colorOf(s.olodNaam),
+                    meta: s.klasgroep,
+                })),
+        [traject, colorOf]
+    );
 
     // De periodes waar de topbar-snelkeuze tussen wisselt (semesters of modules).
     const periodes = useMemo(
@@ -319,6 +394,23 @@ export function TrajectPlanner({ onBack, presetApplied = false }: Props) {
                     <ArrowLeft size={14} /> Menu
                 </button>
                 <div className={styles.topbarTitle}>Trajectplanner</div>
+                {(actiefTraject || traject.length > 0) && (
+                    <span
+                        className={`${styles.trajectNaamChip} ${
+                            actiefTraject ? '' : styles.trajectNaamChipLeeg
+                        }`}
+                        title={
+                            actiefTraject
+                                ? nietBewaard
+                                    ? `Je werkt aan "${actiefTraject.naam}" — er zijn wijzigingen die nog niet bewaard zijn.`
+                                    : `Je werkt aan "${actiefTraject.naam}" — alles is bewaard.`
+                                : 'Dit traject hoort nog bij geen enkel bewaard traject. Gebruik "Bewaar traject" om het een naam te geven.'
+                        }
+                    >
+                        {actiefTraject ? actiefTraject.naam : 'niet bewaard'}
+                        {actiefTraject && nietBewaard && <span className={styles.trajectNaamStip} />}
+                    </span>
+                )}
 
                 <div className={styles.tabs}>
                     <button
@@ -346,15 +438,8 @@ export function TrajectPlanner({ onBack, presetApplied = false }: Props) {
                 <div className={styles.topbarSpacer} />
 
                 <button
-                    className={`${styles.toolbarBtn} ${styles.toolbarBtnDanger}`}
-                    onClick={handleReset}
-                    disabled={traject.length === 0}
-                >
-                    <RotateCcw size={14} /> Reset traject
-                </button>
-                <button
                     className={styles.toolbarBtn}
-                    onClick={handleBewaar}
+                    onClick={() => setDialoog({ soort: 'bewaar' })}
                     disabled={traject.length === 0}
                     title="Bewaar het huidige traject onder een naam in deze browser, om het later opnieuw te laden"
                 >
@@ -364,29 +449,63 @@ export function TrajectPlanner({ onBack, presetApplied = false }: Props) {
                 <LaadTrajectKnop
                     items={bewaardeTrajecten}
                     onLaad={handleLaad}
-                    onVerwijder={handleVerwijderBewaard}
+                    onVerwijder={item => setDialoog({ soort: 'verwijderBewaard', item })}
                 />
-                <button
-                    className={styles.toolbarBtn}
-                    onClick={handleResetColors}
-                    disabled={Object.keys(kleurmap).length === 0}
-                    title="Wis de opgeslagen kleurmap en wijs nieuwe unieke kleuren toe"
-                    style={{ display: 'none' }}
+                <TopbarMenu
+                    label={
+                        <>
+                            {copied ? <Check size={14} /> : <Share2 size={14} />}
+                            {copied ? 'Gekopieerd!' : 'Exporteren'}
+                        </>
+                    }
+                    title="Het studenttraject afdrukken of naar het klembord kopiëren"
                 >
-                    <Palette size={14} /> Reset kleuren
-                </button>
-                <button
-                    className={styles.toolbarBtn}
-                    onClick={handleCopy}
-                    disabled={traject.length === 0}
-                    title="Kopieer het studenttraject (zoals het wordt afgedrukt) naar het klembord"
+                    {close => (
+                        <>
+                            <TopbarMenuItem
+                                icon={<Printer size={14} />}
+                                onClick={() => {
+                                    close();
+                                    handlePrint();
+                                }}
+                            >
+                                Print / PDF
+                            </TopbarMenuItem>
+                            <TopbarMenuItem
+                                icon={<Copy size={14} />}
+                                disabled={traject.length === 0}
+                                title="Kopieer het studenttraject (zoals het wordt afgedrukt) naar het klembord"
+                                onClick={() => {
+                                    close();
+                                    handleCopy();
+                                }}
+                            >
+                                Kopieer naar klembord
+                            </TopbarMenuItem>
+                        </>
+                    )}
+                </TopbarMenu>
+                <TopbarMenu
+                    label={<MoreHorizontal size={14} />}
+                    chevron={false}
+                    title="Meer acties"
+                    ariaLabel="Meer acties"
                 >
-                    {copied ? <Check size={14} /> : <Copy size={14} />}
-                    {copied ? 'Gekopieerd!' : 'Kopieer naar klembord'}
-                </button>
-                <button className={styles.toolbarBtn} onClick={handlePrint}>
-                    <Printer size={14} /> Print / PDF
-                </button>
+                    {close => (
+                        <TopbarMenuItem
+                            icon={<RotateCcw size={14} />}
+                            danger
+                            disabled={traject.length === 0}
+                            title="Wist alle gekozen OLODs; je instellingen en bewaarde trajecten blijven staan"
+                            onClick={() => {
+                                close();
+                                setDialoog({ soort: 'reset' });
+                            }}
+                        >
+                            Reset traject
+                        </TopbarMenuItem>
+                    )}
+                </TopbarMenu>
             </div>
 
             {presetApplied && !bannerDismissed && (
@@ -419,6 +538,8 @@ export function TrajectPlanner({ onBack, presetApplied = false }: Props) {
                     onPeriodeGrenzenChange={setPeriodeGrenzen}
                     onExport={handleExport}
                     onImport={handleImport}
+                    onResetColors={resetColors}
+                    aantalKleuren={Object.keys(kleurmap).length}
                     lastBackup={lastBackup}
                     heeftTraject={traject.length > 0}
                     onDone={() => setTab('werkblad')}
@@ -438,11 +559,11 @@ export function TrajectPlanner({ onBack, presetApplied = false }: Props) {
                         traject={traject}
                         blokkenPerKlas={blokkenPerKlas}
                         colorOf={colorOf}
-                        onRemoveOlod={remove}
+                        onRemoveOlod={handleRemoveOlod}
                         onSetPeriode={setPeriode}
                         onSetKlasgroep={setKlasgroep}
-                        onBulkSetKlasgroep={setKlasgroepBulk}
-                        onBulkRemove={removeMany}
+                        onBulkSetKlasgroep={handleBulkSetKlasgroep}
+                        onBulkRemove={handleBulkRemove}
                         onPreview={setKlasgroepPreview}
                         statussen={statussen}
                         actiefBereik={actiefBereik}
@@ -454,6 +575,8 @@ export function TrajectPlanner({ onBack, presetApplied = false }: Props) {
                         klasgroep={actieveKlasgroep}
                         initialWeek={initialWeek}
                         mijnOpleidingKlasgroepen={settings.mijnOpleidingKlasgroepen}
+                        actiefBereik={actiefBereik}
+                        periodeGrenzen={settings.periodeGrenzen}
                         selectieVoor={(k, o, d) => selectieVoor(k, o, d, actiefBereik)}
                         colorOf={colorOf}
                         ensureColor={ensureColor}
@@ -475,6 +598,101 @@ export function TrajectPlanner({ onBack, presetApplied = false }: Props) {
             )}
         </div>
         </div>
+
+        {dialoog?.soort === 'bewaar' && (
+            <BewaarDialog
+                voorstel={actiefTraject?.naam ?? `Traject ${bewaardeTrajecten.length + 1}`}
+                bewaarde={bewaardeTrajecten}
+                aantalOlods={traject.length}
+                onBewaar={doeBewaar}
+                onAnnuleer={annuleerDialoog}
+            />
+        )}
+
+        {dialoog?.soort === 'reset' && (
+            <BevestigDialog
+                titel="Traject wissen?"
+                bericht={
+                    <>
+                        Alle {traject.length} gekozen {traject.length === 1 ? 'OLOD' : 'OLODs'} verdwijnen
+                        uit het studenttraject. Je klasgroepen, periode-instellingen en bewaarde
+                        trajecten blijven staan.
+                    </>
+                }
+                itemsKop="Verdwijnt uit het traject"
+                items={resetItems}
+                bevestigLabel="Traject wissen"
+                danger
+                onBevestig={doeReset}
+                onAnnuleer={annuleerDialoog}
+            />
+        )}
+
+        {dialoog?.soort === 'laad' && (
+            <BevestigDialog
+                titel={`"${dialoog.item.naam}" laden?`}
+                bericht={
+                    <>
+                        Dit vervangt je huidige traject ({traject.length}{' '}
+                        {traject.length === 1 ? 'OLOD' : 'OLODs'}) en je instellingen (klasgroepen en
+                        periode) door die van <strong>{dialoog.item.naam}</strong> (
+                        {dialoog.item.traject.length}{' '}
+                        {dialoog.item.traject.length === 1 ? 'OLOD' : 'OLODs'}).
+                        {nietBewaard && ' Je huidige werk is niet bewaard.'}
+                    </>
+                }
+                bevestigLabel="Laden"
+                danger={nietBewaard}
+                onBevestig={() => doeLaad(dialoog.item)}
+                onAnnuleer={annuleerDialoog}
+            />
+        )}
+
+        {dialoog?.soort === 'verwijderBewaard' && (
+            <BevestigDialog
+                titel="Bewaard traject verwijderen?"
+                bericht={
+                    <>
+                        <strong>{dialoog.item.naam}</strong> ({dialoog.item.traject.length}{' '}
+                        {dialoog.item.traject.length === 1 ? 'OLOD' : 'OLODs'}) wordt uit deze browser
+                        verwijderd. Dit kan niet ongedaan gemaakt worden. Je huidige werkblad verandert
+                        niet.
+                    </>
+                }
+                bevestigLabel="Verwijderen"
+                danger
+                onBevestig={() => doeVerwijderBewaard(dialoog.item)}
+                onAnnuleer={annuleerDialoog}
+            />
+        )}
+
+        {dialoog?.soort === 'import' && (
+            <BevestigDialog
+                titel="Back-up importeren?"
+                bericht={
+                    traject.length > 0 || settings.mijnOpleidingKlasgroepen.length > 0 ? (
+                        <>
+                            De back-up bevat {dialoog.backup.traject.length}{' '}
+                            {dialoog.backup.traject.length === 1 ? 'OLOD' : 'OLODs'} en overschrijft je
+                            huidige instellingen, traject ({traject.length}{' '}
+                            {traject.length === 1 ? 'OLOD' : 'OLODs'}) en kleuren.
+                        </>
+                    ) : (
+                        <>
+                            De back-up bevat {dialoog.backup.traject.length}{' '}
+                            {dialoog.backup.traject.length === 1 ? 'OLOD' : 'OLODs'} en wordt in dit
+                            werkblad geladen.
+                        </>
+                    )
+                }
+                bevestigLabel="Importeren"
+                danger={traject.length > 0}
+                onBevestig={() => doeImport(dialoog.backup, dialoog.resolve)}
+                onAnnuleer={annuleerDialoog}
+            />
+        )}
+
+        <UndoToast melding={undoMelding} onHerstel={herstelUndo} onSluit={sluitUndo} />
         <TrajectPrintView traject={traject} settings={settings} />
       </>
     );

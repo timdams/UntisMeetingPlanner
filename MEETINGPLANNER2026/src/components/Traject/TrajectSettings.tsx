@@ -36,6 +36,7 @@ import {
     GraduationCap,
     Link2,
     Loader2,
+    Palette,
     QrCode,
     RotateCcw,
     Share2,
@@ -56,6 +57,10 @@ interface Props {
     onPeriodeGrenzenChange: (grenzen: PeriodeGrenzen) => void;
     onExport: () => void;
     onImport: (file: File) => Promise<boolean>;
+    // Wist de kleurmap; de kleuren worden opnieuw toegewezen zodra de OLODs
+    // weer in beeld komen. Onderhoud, dus hoort bij back-up & herstel.
+    onResetColors: () => void;
+    aantalKleuren: number;
     // ISO-tijdstip van de laatste back-upexport (null = nog nooit).
     lastBackup: string | null;
     // Of er een studenttraject is — bepaalt of "nooit geëxporteerd" een
@@ -77,6 +82,8 @@ export function TrajectSettingsView({
     onPeriodeGrenzenChange,
     onExport,
     onImport,
+    onResetColors,
+    aantalKleuren,
     lastBackup,
     heeftTraject,
     onDone,
@@ -702,6 +709,17 @@ export function TrajectSettingsView({
                         </div>
                     )}
                     <div className={styles.backupMeta}>{samenvatting.backup.text}</div>
+                    <div className={styles.backupRow}>
+                        <button
+                            className={styles.toolbarBtn}
+                            onClick={onResetColors}
+                            disabled={aantalKleuren === 0}
+                            title="Wis de opgeslagen kleurmap en wijs nieuwe unieke kleuren toe zodra de OLODs weer in beeld komen"
+                        >
+                            <Palette size={14} /> Kleuren opnieuw toewijzen
+                            {aantalKleuren > 0 && ` (${aantalKleuren})`}
+                        </button>
+                    </div>
                     <Uitleg>
                         <p>
                             Het JSON-bestand bevat de periode-instellingen, de geselecteerde

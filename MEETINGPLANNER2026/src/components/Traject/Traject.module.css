@@ -45,6 +45,39 @@
     flex: 1;
 }
 
+/* Naam van het bewaarde traject waar het werkblad aan werkt. */
+.trajectNaamChip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    max-width: 220px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    padding: 0.2rem 0.5rem;
+    border-radius: 999px;
+    background-color: var(--bg-color);
+    border: 1px solid var(--border-color);
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--text-color);
+}
+
+.trajectNaamChipLeeg {
+    font-weight: 400;
+    font-style: italic;
+    color: #64748b;
+}
+
+/* Stip = er staat werk open dat nog niet bewaard is. */
+.trajectNaamStip {
+    width: 7px;
+    height: 7px;
+    flex-shrink: 0;
+    border-radius: 999px;
+    background-color: #F59E0B;
+}
+
 .tabs {
     display: flex;
     gap: 0.25rem;
@@ -797,6 +830,33 @@
     background-color: var(--secondary);
 }
 
+/* Volgnummer in de panelkop: maakt van de drie panelen zichtbaar stap 1-2-3. */
+.panelStap {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    flex-shrink: 0;
+    border-radius: 999px;
+    background-color: var(--primary);
+    color: white;
+    font-size: 0.7rem;
+    font-weight: 700;
+    line-height: 1;
+}
+
+/* Bijschrift in een panelkop (bv. de klasgroep waarvan het rooster toont). */
+.panelHeaderSub {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-weight: 500;
+    font-size: 0.8rem;
+    color: #64748b;
+}
+
 .panelBody {
     flex: 1;
     min-height: 0;
@@ -1293,7 +1353,8 @@
 }
 
 /* ===== Bewaarde trajecten: "Laad traject"-knop + uitklapmenu (topbar) ===== */
-.laadWrap {
+/* ===== Topbar-menu's (Laad traject / Exporteren / meer acties) ===== */
+.menuWrap {
     position: relative;
 }
 
@@ -1313,12 +1374,12 @@
     line-height: 1;
 }
 
-.laadMenu {
+.menuPaneel {
     position: absolute;
     top: calc(100% + 4px);
     right: 0;
     z-index: 1000;
-    min-width: 320px;
+    min-width: 220px;
     max-width: 440px;
     max-height: 60vh;
     overflow: auto;
@@ -1327,6 +1388,51 @@
     border-radius: var(--border-radius);
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
     padding: 0.35rem;
+}
+
+.menuPaneelLinks {
+    right: auto;
+    left: 0;
+}
+
+/* Eén regel in een topbar-menu. */
+.menuItem {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    width: 100%;
+    text-align: left;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: var(--border-radius);
+    padding: 0.45rem 0.55rem;
+    color: var(--text-color);
+    font: inherit;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.menuItem:hover:not(:disabled) {
+    background-color: var(--secondary);
+}
+
+.menuItem:disabled {
+    opacity: 0.45;
+    cursor: default;
+}
+
+.menuItemDanger {
+    color: var(--primary);
+}
+
+.menuItemDanger:hover:not(:disabled) {
+    background-color: var(--selected-bg);
+}
+
+/* De lijst met bewaarde trajecten heeft een bredere kolom nodig dan een
+   gewoon actiemenu. */
+.laadMenuInhoud {
+    min-width: 300px;
 }
 
 .laadMenuKop {
@@ -1855,6 +1961,76 @@
 }
 
 /* Samenvatting bovenaan het overzicht zolang een preview actief is. */
+/* ===== Periodestrip boven het klasgroeprooster (paneel B) ===== */
+/* Benoemt aan welke periode een klik het vak toevoegt — zonder deze regel is
+   dat gevolg van de periode-switcher in de topbar nergens zichtbaar. */
+.roosterPeriodeStrip {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.35rem 0.6rem;
+    font-size: 0.75rem;
+    line-height: 1.3;
+    color: #1E3A8A;
+    background-color: #EFF6FF;
+    border-bottom: 1px solid #BFDBFE;
+}
+
+.roosterPeriodeStrip svg {
+    flex-shrink: 0;
+}
+
+.roosterPeriodeStripWaarschuwing {
+    color: #92400E;
+    background-color: #FFFBEB;
+    border-bottom-color: #FDE68A;
+}
+
+/* ===== Statusregel bovenaan het studenttraject (paneel C) ===== */
+.statusRij {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    width: 100%;
+    padding: 0.35rem 0.6rem;
+    font-size: 0.75rem;
+    font-weight: 500;
+    line-height: 1.3;
+    text-align: left;
+    border: none;
+    border-bottom: 1px solid var(--border-color);
+    background-color: var(--secondary);
+    color: #64748b;
+    font-family: inherit;
+}
+
+.statusRij svg {
+    flex-shrink: 0;
+}
+
+.statusRijOk {
+    color: #166534;
+    background-color: #F0FDF4;
+    border-bottom-color: #BBF7D0;
+}
+
+.statusRijConflict {
+    color: #991B1B;
+    background-color: #FEF2F2;
+    border-bottom-color: #FECACA;
+    cursor: pointer;
+}
+
+.statusRijConflict:hover {
+    background-color: #FEE2E2;
+}
+
+.statusRijActie {
+    margin-left: auto;
+    font-weight: 600;
+    text-decoration: underline;
+}
+
 .previewStrip {
     display: flex;
     align-items: center;
@@ -1988,6 +2164,283 @@
     align-items: center;
     justify-content: center;
     padding: 1.5rem;
+}
+
+/* ===== Dialogen (bevestigen / bewaren) ===== */
+.dialoog {
+    width: min(520px, 94vw);
+    max-height: 88vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    background-color: var(--bg-color);
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    box-shadow: 0 18px 48px rgba(0, 0, 0, 0.3);
+}
+
+.dialoogKop {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.8rem 1rem;
+    border-bottom: 1px solid var(--border-color);
+    background-color: var(--secondary);
+    font-weight: 700;
+    font-size: 0.98rem;
+}
+
+.dialoogKopIcoon {
+    color: var(--primary);
+    flex-shrink: 0;
+}
+
+.dialoogBody {
+    padding: 0.9rem 1rem;
+    overflow: auto;
+}
+
+.dialoogTekst {
+    font-size: 0.88rem;
+    line-height: 1.5;
+}
+
+.dialoogSubkop {
+    margin-top: 0.9rem;
+    margin-bottom: 0.35rem;
+    font-size: 0.72rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #64748b;
+}
+
+.dialoogLijst {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    max-height: 220px;
+    overflow: auto;
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+}
+
+.dialoogLijstItem {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.35rem 0.55rem;
+    font-size: 0.82rem;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.dialoogLijstItem:last-child {
+    border-bottom: none;
+}
+
+.dialoogLijstNaam {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.dialoogLijstMeta {
+    margin-left: auto;
+    padding-left: 0.5rem;
+    flex-shrink: 0;
+    font-size: 0.75rem;
+    color: #64748b;
+}
+
+.dialoogVeld {
+    display: block;
+    margin-top: 0.9rem;
+}
+
+.dialoogVeld span {
+    display: block;
+    margin-bottom: 0.25rem;
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: #64748b;
+}
+
+.dialoogVeld input {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 0.45rem 0.6rem;
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    background-color: var(--bg-color);
+    color: var(--text-color);
+    font: inherit;
+    font-size: 0.9rem;
+}
+
+.dialoogVeld input:focus {
+    outline: none;
+    border-color: var(--primary);
+}
+
+.dialoogWaarschuwing {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.4rem;
+    margin-top: 0.6rem;
+    padding: 0.4rem 0.55rem;
+    border-radius: var(--border-radius);
+    font-size: 0.8rem;
+    line-height: 1.4;
+    color: #92400E;
+    background-color: #FFFBEB;
+    border: 1px solid #FDE68A;
+}
+
+.dialoogWaarschuwing svg {
+    flex-shrink: 0;
+    margin-top: 2px;
+}
+
+.dialoogKeuzeLijst {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    max-height: 180px;
+    overflow: auto;
+}
+
+.dialoogKeuze {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    text-align: left;
+    padding: 0.4rem 0.55rem;
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    background-color: var(--bg-color);
+    color: var(--text-color);
+    font: inherit;
+    cursor: pointer;
+}
+
+.dialoogKeuze:hover {
+    border-color: var(--primary);
+}
+
+.dialoogKeuzeActief {
+    border-color: var(--primary);
+    background-color: var(--selected-bg);
+}
+
+.dialoogKeuzeNaam {
+    font-size: 0.85rem;
+    font-weight: 600;
+}
+
+.dialoogKeuzeMeta {
+    font-size: 0.74rem;
+    color: #64748b;
+}
+
+.dialoogVoet {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.5rem;
+    padding: 0.7rem 1rem;
+    border-top: 1px solid var(--border-color);
+    background-color: var(--secondary);
+}
+
+.dialoogKnopPrimair {
+    background-color: var(--primary);
+    border-color: var(--primary);
+    color: white;
+    font-weight: 600;
+}
+
+.dialoogKnopPrimair:hover:not(:disabled) {
+    filter: brightness(0.94);
+}
+
+.dialoogKnopPrimair:disabled {
+    opacity: 0.5;
+    cursor: default;
+}
+
+.dialoogKnopDanger {
+    background-color: #DC2626;
+    border-color: #DC2626;
+    color: white;
+    font-weight: 600;
+}
+
+.dialoogKnopDanger:hover {
+    background-color: #B91C1C;
+    border-color: #B91C1C;
+}
+
+/* ===== Undo-toast ===== */
+.toast {
+    position: fixed;
+    left: 50%;
+    bottom: 1.5rem;
+    transform: translateX(-50%);
+    z-index: 1200;
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    max-width: min(560px, 92vw);
+    padding: 0.55rem 0.7rem 0.55rem 0.9rem;
+    border-radius: var(--border-radius);
+    background-color: #1E293B;
+    color: #F8FAFC;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+    font-size: 0.85rem;
+}
+
+.toastTekst {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.toastActie {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    flex-shrink: 0;
+    padding: 0.3rem 0.55rem;
+    border: 1px solid rgba(248, 250, 252, 0.35);
+    border-radius: var(--border-radius);
+    background: transparent;
+    color: #F8FAFC;
+    font: inherit;
+    font-size: 0.8rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.toastActie:hover {
+    background-color: rgba(248, 250, 252, 0.12);
+}
+
+.toastSluit {
+    display: inline-flex;
+    align-items: center;
+    flex-shrink: 0;
+    padding: 0.25rem;
+    border: none;
+    border-radius: var(--border-radius);
+    background: transparent;
+    color: rgba(248, 250, 252, 0.7);
+    cursor: pointer;
+}
+
+.toastSluit:hover {
+    color: #F8FAFC;
+    background-color: rgba(248, 250, 252, 0.12);
 }
 
 .zoomDialog {
@@ -2205,6 +2658,11 @@
         display: none !important;
     }
     .zoomBackdrop {
+        display: none !important;
+    }
+    /* De toast hangt in document.body, dus buiten .screenRoot — zonder deze
+       regel komt hij mee op de afdruk. */
+    .toast {
         display: none !important;
     }
     .printRoot {

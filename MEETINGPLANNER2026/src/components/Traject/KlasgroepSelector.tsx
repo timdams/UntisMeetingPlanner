@@ -18,6 +18,7 @@ import {
     type KlasgroepPreview,
     type SelectieStatus,
 } from './useTrajectBlokken';
+import { BevestigDialog, type DialogItem } from './TrajectDialogs';
 import styles from './Traject.module.css';
 
 interface Props {
@@ -54,6 +55,9 @@ interface Props {
 // de klasgroep-kiezer (klasgroepnaam). Hooguit één tegelijk.
 type Kiezer = { key: string; soort: 'periode' | 'klasgroep' };
 
+// Bevestiging die een bulkactie afwacht.
+type BulkDialoog = { soort: 'verzet'; alternatief: BulkAlternatief } | { soort: 'verwijder' };
+
 export function KlasgroepSelector({
     klasgroepen,
     actief,
@@ -80,6 +84,7 @@ export function KlasgroepSelector({
     // bulk-klasgroepkiezer openstaat. Vluchtige UI-state: niet opgeslagen.
     const [gekozen, setGekozen] = useState<Set<string>>(new Set());
     const [bulkOpen, setBulkOpen] = useState(false);
+    const [bulkDialoog, setBulkDialoog] = useState<BulkDialoog | null>(null);
     const kiesbaar = periodeType === 'module';
 
     // Geen preview meer zodra een kiezer sluit of wisselt (de chips waar de
@@ -193,22 +198,14 @@ export function KlasgroepSelector({
         periodeGrenzen
     );
 
-    // Verzet de aangevinkte vakken naar deze klasgroep. Geeft ze die klasgroep
-    // niet allemaal, dan verhuizen enkel de gedekte — na bevestiging, met de
-    // achterblijvers bij naam.
-    const bulkVerzet = (a: BulkAlternatief) => {
-        if (a.huidig || a.verhuizend.length === 0) return;
-        if (a.ontbrekend.length > 0) {
-            const ok = window.confirm(
-                `${a.klasgroep} geeft ${a.gedekt} van de ${a.totaal} aangevinkte vakken in hun periode.\n\n` +
-                    `Enkel die ${a.gedekt} verzetten? Deze blijven bij hun huidige klasgroep:\n` +
-                    a.ontbrekend.map(n => `• ${n}`).join('\n')
-            );
-            if (!ok) return;
-        }
+    const doeBulkVerzet = (a: BulkAlternatief) => {
+        setBulkDialoog(null);
         onBulkSetKlasgroep(a.verhuizend, a.klasgroep);
-        // Dezelfde vakken blijven aangevinkt (onder hun nieuwe sleutel), zodat
-        // meteen een andere klasgroep geprobeerd kan worden.
+        // De kiezer klapt na de wissel dicht: het resultaat staat nu in paneel C,
+        // en een volgende poging verdient een verse vergelijking. De vakken
+        // blijven wel aangevinkt (onder hun nieuwe sleutel), zodat er meteen een
+        // volgende bulkactie op dezelfde set kan volgen.
+        setBulkOpen(false);
         setGekozen(g => {
             const next = new Set(g);
             a.verhuizend.forEach(s => {
@@ -220,23 +217,38 @@ export function KlasgroepSelector({
         onPreview(null);
     };
 
-    const bulkVerwijder = () => {
-        if (gekozenSels.length === 0) return;
-        const ok = window.confirm(
-            `${gekozenSels.length} ${gekozenSels.length === 1 ? 'vak' : 'vakken'} uit het traject verwijderen?\n\n` +
-                gekozenSels
-                    .map(s => `• ${s.olodNaam} (${s.klasgroep}, ${periodeLabelVoor(s.van, s.tot, periodeGrenzen).kort})`)
-                    .join('\n')
-        );
-        if (!ok) return;
+    // Verzet de aangevinkte vakken naar deze klasgroep. Geeft ze die klasgroep
+    // niet allemaal, dan verhuizen enkel de gedekte — dat vraagt eerst een
+    // bevestiging waarin de achterblijvers bij naam staan.
+    const bulkVerzet = (a: BulkAlternatief) => {
+        if (a.huidig || a.verhuizend.length === 0) return;
+        if (a.ontbrekend.length > 0) setBulkDialoog({ soort: 'verzet', alternatief: a });
+        else doeBulkVerzet(a);
+    };
+
+    const doeBulkVerwijder = () => {
+        setBulkDialoog(null);
         onBulkRemove(gekozenSels);
         setGekozen(new Set());
         setBulkOpen(false);
     };
 
+    // Opsomming van de aangevinkte vakken voor de bevestigingsdialoog, met hun
+    // kleur uit het overzicht ernaast.
+    const selsAlsItems = (sels: OLODSelectie[]): DialogItem[] =>
+        sels.map(s => ({
+            key: selectieKey(s),
+            naam: s.olodNaam,
+            kleur: colorOf(s.olodNaam),
+            meta: `${s.klasgroep} · ${periodeLabelVoor(s.van, s.tot, periodeGrenzen).kort}`,
+        }));
+
     return (
         <div className={styles.panel}>
-            <div className={styles.panelHeader}>Klasgroepen</div>
+            <div className={styles.panelHeader}>
+                <span className={styles.panelStap}>1</span>
+                Klasgroepen
+            </div>
             <div className={styles.selectorList}>
                 {klasgroepen.length === 0 ? (
                     <div className={styles.emptyState}>
@@ -329,7 +341,7 @@ export function KlasgroepSelector({
                         <button
                             type="button"
                             className={styles.olodBulkKnop}
-                            onClick={bulkVerwijder}
+                            onClick={() => setBulkDialoog({ soort: 'verwijder' })}
                             title="Deze vakken uit het traject verwijderen"
                         >
                             <Trash2 size={12} />
@@ -482,6 +494,46 @@ export function KlasgroepSelector({
                     })
                 )}
             </div>
+
+            {bulkDialoog?.soort === 'verzet' && (
+                <BevestigDialog
+                    titel={`Verzetten naar ${bulkDialoog.alternatief.klasgroep}?`}
+                    bericht={
+                        <>
+                            <strong>{bulkDialoog.alternatief.klasgroep}</strong> geeft{' '}
+                            {bulkDialoog.alternatief.gedekt} van de {bulkDialoog.alternatief.totaal}{' '}
+                            aangevinkte vakken in hun periode. Enkel die {bulkDialoog.alternatief.gedekt}{' '}
+                            verhuizen; de rest blijft staan waar ze staat.
+                        </>
+                    }
+                    itemsKop="Blijft bij de huidige klasgroep"
+                    items={bulkDialoog.alternatief.ontbrekend.map(naam => ({
+                        key: naam,
+                        naam,
+                        kleur: colorOf(naam),
+                    }))}
+                    bevestigLabel={`${bulkDialoog.alternatief.gedekt} ${
+                        bulkDialoog.alternatief.gedekt === 1 ? 'vak' : 'vakken'
+                    } verzetten`}
+                    onBevestig={() => doeBulkVerzet(bulkDialoog.alternatief)}
+                    onAnnuleer={() => setBulkDialoog(null)}
+                />
+            )}
+
+            {bulkDialoog?.soort === 'verwijder' && (
+                <BevestigDialog
+                    titel={`${gekozenSels.length} ${
+                        gekozenSels.length === 1 ? 'vak' : 'vakken'
+                    } verwijderen?`}
+                    bericht="Deze vakken verdwijnen uit het studenttraject. Je kan dat meteen daarna ongedaan maken."
+                    itemsKop="Verdwijnt uit het traject"
+                    items={selsAlsItems(gekozenSels)}
+                    bevestigLabel="Verwijderen"
+                    danger
+                    onBevestig={doeBulkVerwijder}
+                    onAnnuleer={() => setBulkDialoog(null)}
+                />
+            )}
         </div>
     );
 }

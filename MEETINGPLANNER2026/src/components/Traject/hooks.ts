@@ -20,6 +20,7 @@ const KEY_KLEUR = 'traject_kleurmap';
 const KEY_MIGRATION = 'traject_migration_version';
 const KEY_LAST_BACKUP = 'traject_last_backup';
 const KEY_BEWAARD = 'traject_bewaard';
+const KEY_ACTIEF = 'traject_actief';
 
 // Verhoog dit nummer bij een breaking change in opgeslagen data. runTrajectMigrations()
 // draait dan eenmalig de bijhorende opkuis voor bestaande gebruikers.
@@ -385,9 +386,10 @@ export function useBewaardeTrajecten() {
 
     // Bewaart het traject plus zijn instellingen onder de naam. Met
     // `overschrijfId` vervangt het een bestaand item (zelfde naam) in plaats
-    // van er een tweede naast te zetten.
+    // van er een tweede naast te zetten. Geeft het id terug, zodat de aanroeper
+    // dit item als het geopende dossier kan markeren.
     const bewaar = useCallback(
-        (naam: string, settings: TrajectSettings, traject: StudentTraject, overschrijfId?: string) => {
+        (naam: string, settings: TrajectSettings, traject: StudentTraject, overschrijfId?: string): string => {
         const item: BewaardTraject = {
             id: overschrijfId ?? nieuwBewaardId(),
             naam: naam.trim(),
@@ -400,6 +402,7 @@ export function useBewaardeTrajecten() {
                 ? lijst.map(x => (x.id === overschrijfId ? item : x))
                 : [...lijst, item]
         );
+        return item.id;
         },
         []
     );
@@ -409,6 +412,87 @@ export function useBewaardeTrajecten() {
     }, []);
 
     return { bewaard, bewaar, verwijder };
+}
+
+// ===== Actief traject (welk dossier staat er open) =====
+
+// Naam + inhoud van het bewaarde traject waar het werkblad nu aan werkt. De
+// `baseline` is de serialisatie van traject + instellingen op het moment van
+// bewaren of laden; wijkt de huidige toestand daarvan af, dan staat er werk
+// open dat nog niet bewaard is.
+export interface ActiefTraject {
+    id: string;
+    naam: string;
+    baseline: string;
+}
+
+/**
+ * Stabiele serialisatie van "wat er nu in het werkblad zit". Selecties worden
+ * gesorteerd zodat een andere volgorde in de array (bv. na een bulkwissel) niet
+ * als een wijziging telt; van de instellingen tellen enkel de velden die met
+ * een traject meegaan naar `traject_bewaard`.
+ */
+export function trajectVingerafdruk(traject: StudentTraject, settings: TrajectSettings): string {
+    // Beide kanten normaliseren: de baseline wordt gezet vanuit een bewaard
+    // item, de vergelijking vanuit de live state. Zonder dit zou een selectie
+    // die pas bij het laden haar periode krijgt, meteen als wijziging tellen.
+    const sels = normalizeTraject(traject)
+        .map(selectieKey)
+        .sort()
+        .join('|');
+    const s = normalizeSettings(settings);
+    const kern = [
+        [...s.mijnOpleidingKlasgroepen].sort().join(','),
+        s.semesterStart,
+        s.semesterEind,
+        s.periodeType,
+        s.periodeGrenzen.s1Start,
+        s.periodeGrenzen.s1Eind,
+        s.periodeGrenzen.s2Start,
+        s.periodeGrenzen.s2Eind,
+        s.periodeGrenzen.m2Start,
+        s.periodeGrenzen.m4Start,
+    ].join('|');
+    return `${sels}##${kern}`;
+}
+
+function normalizeActief(raw: unknown): ActiefTraject | null {
+    const it = (raw && typeof raw === 'object' ? raw : null) as Record<string, unknown> | null;
+    if (!it || typeof it.id !== 'string' || typeof it.naam !== 'string') return null;
+    return {
+        id: it.id,
+        naam: it.naam,
+        baseline: typeof it.baseline === 'string' ? it.baseline : '',
+    };
+}
+
+/**
+ * Het bewaarde traject waar het werkblad aan werkt, of null wanneer er los
+ * gewerkt wordt. Blijft over een herlading heen staan, zodat de topbar na F5
+ * nog altijd toont in welk dossier je zit.
+ */
+export function useActiefTraject() {
+    const [actief, setActief] = useState<ActiefTraject | null>(() =>
+        normalizeActief(loadJSON<unknown>(KEY_ACTIEF, null))
+    );
+
+    useEffect(() => {
+        if (actief) persist(KEY_ACTIEF, actief);
+        else localStorage.removeItem(KEY_ACTIEF);
+    }, [actief]);
+
+    // Markeert dit traject als het geopende dossier, met de huidige toestand
+    // als referentiepunt.
+    const markeer = useCallback(
+        (id: string, naam: string, traject: StudentTraject, settings: TrajectSettings) => {
+            setActief({ id, naam, baseline: trajectVingerafdruk(traject, settings) });
+        },
+        []
+    );
+
+    const wis = useCallback(() => setActief(null), []);
+
+    return { actief, markeer, wis };
 }
 
 // Unieke sleutel van een selectie (alle vier velden) — voor React-keys en

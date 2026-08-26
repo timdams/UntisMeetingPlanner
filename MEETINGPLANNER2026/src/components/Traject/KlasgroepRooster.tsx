@@ -2,8 +2,10 @@ import { useEffect, useState, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { Lesblok, OLODSelectie } from './types';
 import { trajectUntisService } from './trajectService';
+import { actievePeriode, allePeriodes, type PeriodeGrenzen } from './academicYear';
 import {
     addDays,
+    bereikOverlapt,
     DAG_HEADERS,
     DAY_START_HOUR,
     formatDateBE,
@@ -16,7 +18,18 @@ import {
     toIsoDate,
 } from './dateUtils';
 import styles from './Traject.module.css';
-import { Loader2, ChevronLeft, ChevronRight, ChevronDown, CalendarClock, Users, X, Check } from 'lucide-react';
+import {
+    Loader2,
+    ChevronLeft,
+    ChevronRight,
+    ChevronDown,
+    CalendarClock,
+    Users,
+    X,
+    Check,
+    AlertTriangle,
+    MousePointerClick,
+} from 'lucide-react';
 import { LesblokIcon } from './LesblokIcon';
 import { layoutDay } from './layout';
 
@@ -29,6 +42,11 @@ interface Props {
     // De week waarop het rooster opent; verandert mee met de actieve periode.
     initialWeek: Date;
     mijnOpleidingKlasgroepen: string[];
+    // De actieve periode: bepaalt aan welke periode een klik het vak toevoegt.
+    // Wordt boven het rooster benoemd, want dat gevolg is anders onzichtbaar.
+    actiefBereik: { van: string; tot: string };
+    // Nodig om die periode een naam te geven (S1, M2, …).
+    periodeGrenzen: PeriodeGrenzen;
     // De selectie die een klik op dit lesblok zou weghalen, of null.
     selectieVoor: (klasgroep: string, olodNaam: string, datum: Date) => OLODSelectie | null;
     colorOf: (olodNaam: string) => string;
@@ -53,6 +71,8 @@ export function KlasgroepRooster({
     klasgroep,
     initialWeek,
     mijnOpleidingKlasgroepen,
+    actiefBereik,
+    periodeGrenzen,
     selectieVoor,
     colorOf,
     ensureColor,
@@ -176,12 +196,66 @@ export function KlasgroepRooster({
 
     const weekLabel = `${formatDateBE(weekMonday)} – ${formatDateBE(addDays(weekMonday, 4))}`;
 
+    // De periode waaraan een klik het vak toevoegt. Een handmatig ingesteld
+    // bereik heeft geen naam (S1, M2, …); dan noemen we enkel de datums, in
+    // plaats van ze twee keer achter elkaar te zetten.
+    const periodeNaam = useMemo(
+        () => actievePeriode(allePeriodes(periodeGrenzen), actiefBereik.van, actiefBereik.tot)?.kort ?? null,
+        [actiefBereik.van, actiefBereik.tot, periodeGrenzen]
+    );
+    const periodeDatums = `${formatDateBE(parseIsoDate(actiefBereik.van))} – ${formatDateBE(
+        parseIsoDate(actiefBereik.tot)
+    )}`;
+    // "S1 (21/09 – 31/01)" of, zonder naam, alleen het datumbereik.
+    const periodeOmschrijving = periodeNaam ? (
+        <>
+            <strong>{periodeNaam}</strong> ({periodeDatums})
+        </>
+    ) : (
+        <strong>{periodeDatums}</strong>
+    );
+    // Buiten de actieve periode blijft een klik toevoegen aan die periode (zie
+    // selectieVoorBlok in hooks.ts). Dat is bruikbaar, maar zonder melding een
+    // stille verrassing — vandaar de waarschuwende variant van de strip.
+    const weekInPeriode = bereikOverlapt(
+        toIsoDate(weekMonday),
+        toIsoDate(addDays(weekMonday, 4)),
+        actiefBereik.van,
+        actiefBereik.tot
+    );
+
     return (
         <div className={styles.panel}>
             <div className={styles.panelHeader}>
-                {klasgroep ? `Rooster ${klasgroep}` : 'Rooster'}
+                <span className={styles.panelStap}>2</span>
+                Klik vakken aan
+                {klasgroep && <span className={styles.panelHeaderSub}>{klasgroep}</span>}
                 {busy && <Loader2 size={14} className="animate-spin" />}
             </div>
+
+            {klasgroep && (
+                <div
+                    className={`${styles.roosterPeriodeStrip} ${
+                        weekInPeriode ? '' : styles.roosterPeriodeStripWaarschuwing
+                    }`}
+                    role="status"
+                >
+                    {weekInPeriode ? (
+                        <>
+                            <MousePointerClick size={13} />
+                            <span>Een klik voegt het vak toe aan {periodeOmschrijving}.</span>
+                        </>
+                    ) : (
+                        <>
+                            <AlertTriangle size={13} />
+                            <span>
+                                Deze week valt buiten de actieve periode — een klik voegt het vak tóch toe
+                                aan {periodeOmschrijving}.
+                            </span>
+                        </>
+                    )}
+                </div>
+            )}
 
             <div className={styles.weekNav}>
                 <div className={styles.weekNavArrows}>

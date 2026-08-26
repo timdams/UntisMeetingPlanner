@@ -28,7 +28,7 @@ import {
 import { academiejaarBereik, periodeMarkeringen, type PeriodeGrenzen, type PeriodeType } from './academicYear';
 import type { KlasgroepPreview } from './useTrajectBlokken';
 import styles from './Traject.module.css';
-import { AlertTriangle, ChevronDown, ChevronRight, Eye, Loader2, ZoomIn } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, ChevronDown, ChevronRight, Eye, Loader2, ZoomIn } from 'lucide-react';
 import { LesblokIcon } from './LesblokIcon';
 import { layoutDay } from './layout';
 import { WeekZoom } from './WeekZoom';
@@ -133,6 +133,16 @@ export function StudentOverzicht({
     const showTip = (e: React.MouseEvent<HTMLElement>, text: string) =>
         setTip({ text, anchor: e.currentTarget.getBoundingClientRect() });
     const hideTip = () => setTip(null);
+
+    // De statusregel bovenaan klapt het conflictpaneel onderaan open en brengt
+    // het in beeld.
+    const conflictPaneelRef = useRef<HTMLDivElement | null>(null);
+    const toonConflicten = () => {
+        setConflictsOpen(true);
+        window.requestAnimationFrame(() =>
+            conflictPaneelRef.current?.scrollIntoView({ block: 'nearest' })
+        );
+    };
 
     // Het overzicht beslaat altijd het volledige academiejaar; elke selectie
     // draagt enkel binnen haar eigen periode bij.
@@ -285,7 +295,8 @@ export function StudentOverzicht({
     return (
         <div className={styles.panel}>
             <div className={styles.panelHeader}>
-                Studenttraject
+                <span className={styles.panelStap}>3</span>
+                Traject van de student
                 {busy && <Loader2 size={14} className="animate-spin" />}
                 <span style={{ marginLeft: 'auto', fontWeight: 400, fontSize: '0.8rem', color: '#64748b' }}>
                     {traject.length} OLOD{traject.length === 1 ? '' : 's'}
@@ -294,6 +305,40 @@ export function StudentOverzicht({
 
             <div className={styles.panelBodyFlex}>
                 {error && <div className={styles.emptyState}>{error}</div>}
+
+                {/* Vaste statusregel: bevestigt ook actief dát het klopt. Het
+                    conflictpaneel onderaan verschijnt enkel bij conflicten, dus
+                    zonder deze regel blijft "alles in orde" onuitgesproken — terwijl
+                    de bulk-kiezer in paneel A wél naar dit getal verwijst ("nu N
+                    conflicten"). Tijdens een wat-als-preview neemt de strip hieronder
+                    het over, met haar eigen referentiepunt. */}
+                {!error && !preview && traject.length > 0 && (
+                    busy ? (
+                        <div className={styles.statusRij}>
+                            <Loader2 size={13} className="animate-spin" />
+                            <span>Rooster laden…</span>
+                        </div>
+                    ) : conflicts.length === 0 ? (
+                        <div className={`${styles.statusRij} ${styles.statusRijOk}`} role="status">
+                            <CheckCircle2 size={13} />
+                            <span>Geen conflicten in dit traject</span>
+                        </div>
+                    ) : (
+                        <button
+                            type="button"
+                            className={`${styles.statusRij} ${styles.statusRijConflict}`}
+                            onClick={toonConflicten}
+                            title="Toon de overlappende lessen onderaan dit paneel"
+                        >
+                            <AlertTriangle size={13} />
+                            <span>
+                                {conflicts.length} {conflicts.length === 1 ? 'conflict' : 'conflicten'} in dit
+                                traject
+                            </span>
+                            <span className={styles.statusRijActie}>toon</span>
+                        </button>
+                    )
+                )}
 
                 {preview && !error && (
                     <div
@@ -475,7 +520,7 @@ export function StudentOverzicht({
 
             {/* Conflicts */}
             {conflicts.length > 0 && (
-                <div className={styles.conflicts}>
+                <div className={styles.conflicts} ref={conflictPaneelRef}>
                     <div
                         className={`${styles.conflictsHeader} ${styles.conflictsHeaderError}`}
                         onClick={() => setConflictsOpen(o => !o)}
