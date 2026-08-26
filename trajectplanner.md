@@ -118,7 +118,7 @@ Drie panelen naast elkaar (grid: `200px 1fr 460px`).
   - Valt het blok onder geen enkele selectie van `(Y, X)` → **toevoegen** voor de actieve periode.
   - Valt het blok onder een bestaande selectie → **die selectie verwijderen** (alle instanties binnen haar periode).
 - Geselecteerde OLODs hebben een donkere rand + witte inset.
-- Hover-popover toont hetzelfde vak in andere klasgroepen van de shortlist (handig om een vak in een volgende module elders te kiezen).
+- **Klasgroep-kiezer per vak**: elk lesblok draagt rechtsboven een knopje dat een modaal venster opent (portal in `document.body`) met, per klasgroep uit de shortlist die dit vak deze week geeft, een mini-weekrooster met het vak gemarkeerd plus zijn lesuren. De huidige klasgroep staat vooraan (badge "huidig"). Het venster **scrollt zelf**, zodat ook een lange shortlist volledig bereikbaar blijft. Een klik op een kaart zet het vak in het traject **bij díe klasgroep** (voor de actieve periode) en sluit de kiezer; een klik op een al gekozen kaart ("in traject") haalt het er weer uit en houdt de kiezer open om meteen een andere klasgroep aan te duiden. Sluiten met Esc, de X of een klik naast het venster. De roosters van de andere klasgroepen worden pas opgehaald wanneer de kiezer opengaat en per week gecachet.
 
 **Paneel C — Studenttraject-overzicht** ([StudentOverzicht.tsx](MEETINGPLANNER2026/src/components/Traject/StudentOverzicht.tsx))
 - **Verticale strip**: één rij per week voor het **volledige academiejaar**; elke selectie draagt enkel binnen haar eigen periode bij. Subtiele **grensmarkeringen** bij de start van elk semester (en in modulemodus elke module); de weken van de actieve periode zijn gemarkeerd en worden bij een periodewissel in beeld gescrold.

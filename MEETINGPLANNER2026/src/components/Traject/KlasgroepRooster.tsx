@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { Lesblok, OLODSelectie } from './types';
 import { trajectUntisService } from './trajectService';
 import {
@@ -15,7 +16,7 @@ import {
     toIsoDate,
 } from './dateUtils';
 import styles from './Traject.module.css';
-import { Loader2, ChevronLeft, ChevronRight, CalendarClock } from 'lucide-react';
+import { Loader2, ChevronLeft, ChevronRight, ChevronDown, CalendarClock, Users, X, Check } from 'lucide-react';
 import { LesblokIcon } from './LesblokIcon';
 import { layoutDay } from './layout';
 
@@ -48,14 +49,6 @@ function heightPct(start: Date, eind: Date, totalMin: number): number {
     return Math.max(1, (m / totalMin) * 100);
 }
 
-interface HoverInfo {
-    olodNaam: string;
-    anchor: { left: number; top: number; right: number; bottom: number };
-}
-
-const POPOVER_MAX_W = 580;
-const POPOVER_MAX_H = 520;
-
 export function KlasgroepRooster({
     klasgroep,
     initialWeek,
@@ -78,11 +71,13 @@ export function KlasgroepRooster({
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
+    // Het vak waarvoor de klasgroep-kiezer openstaat (null = dialoog dicht).
+    const [dialogOlod, setDialogOlod] = useState<string | null>(null);
     const [otherBlokkenPerKlas, setOtherBlokkenPerKlas] = useState<Record<string, Lesblok[]>>({});
     const [otherLoading, setOtherLoading] = useState(false);
-
-    const [hoverInfo, setHoverInfo] = useState<HoverInfo | null>(null);
-    const hideTimerRef = useRef<number | null>(null);
+    // Roosters van de andere klasgroepen per week, zodat een tweede klik op een
+    // knopje in dezelfde week niet opnieuw hoeft te fetchen.
+    const otherCacheRef = useRef<Map<string, Record<string, Lesblok[]>>>(new Map());
 
     useEffect(() => {
         if (!klasgroep) {
@@ -106,15 +101,27 @@ export function KlasgroepRooster({
             .finally(() => setBusy(false));
     }, [klasgroep, weekMonday.getTime()]);
 
-    // Prefetch other shortlist klasgroepen for the current week — used by hover popover.
+    const andereKlasgroepen = useMemo(
+        () => mijnOpleidingKlasgroepen.filter(k => k !== klasgroep),
+        [mijnOpleidingKlasgroepen.join('|'), klasgroep]
+    );
+
+    // De roosters van de andere klasgroepen halen we pas op wanneer de kiezer
+    // opengaat: met een lange shortlist zou dat anders bij elke weekwissel een
+    // stapel overbodige requests zijn.
+    const dialogOpen = dialogOlod !== null;
     useEffect(() => {
-        if (!klasgroep) {
+        if (!dialogOpen || !klasgroep) return;
+        if (andereKlasgroepen.length === 0) {
             setOtherBlokkenPerKlas({});
+            setOtherLoading(false);
             return;
         }
-        const others = mijnOpleidingKlasgroepen.filter(k => k !== klasgroep);
-        if (others.length === 0) {
-            setOtherBlokkenPerKlas({});
+        const cacheKey = `${weekMonday.getTime()}|${andereKlasgroepen.join('|')}`;
+        const cached = otherCacheRef.current.get(cacheKey);
+        if (cached) {
+            setOtherBlokkenPerKlas(cached);
+            setOtherLoading(false);
             return;
         }
         let cancelled = false;
@@ -123,30 +130,31 @@ export function KlasgroepRooster({
         setOtherBlokkenPerKlas({});
         setOtherLoading(true);
         Promise.all(
-            others.map(k =>
+            andereKlasgroepen.map(k =>
                 trajectUntisService
                     .getLesblokken(k, van, tot)
                     .then(bs => [k, bs] as const)
                     .catch(() => [k, [] as Lesblok[]] as const)
             )
         ).then(results => {
-            if (cancelled) return;
             const map: Record<string, Lesblok[]> = {};
             results.forEach(([k, bs]) => {
                 map[k] = bs;
-                bs.forEach(b => ensureColor(b.olodNaam));
             });
+            otherCacheRef.current.set(cacheKey, map);
+            if (cancelled) return;
+            results.forEach(([, bs]) => bs.forEach(b => ensureColor(b.olodNaam)));
             setOtherBlokkenPerKlas(map);
             setOtherLoading(false);
         });
         return () => {
             cancelled = true;
         };
-    }, [klasgroep, weekMonday.getTime(), mijnOpleidingKlasgroepen.join('|')]);
+    }, [dialogOpen, klasgroep, weekMonday.getTime(), andereKlasgroepen]);
 
-    // Hide popover when week or klasgroep changes
+    // Sluit de kiezer wanneer de week of de klasgroep wisselt.
     useEffect(() => {
-        setHoverInfo(null);
+        setDialogOlod(null);
     }, [klasgroep, weekMonday.getTime()]);
 
     const dagen = useMemo(
@@ -167,26 +175,6 @@ export function KlasgroepRooster({
     };
 
     const weekLabel = `${formatDateBE(weekMonday)} – ${formatDateBE(addDays(weekMonday, 4))}`;
-
-    const showHover = (e: React.MouseEvent, olodNaam: string) => {
-        if (hideTimerRef.current !== null) {
-            window.clearTimeout(hideTimerRef.current);
-            hideTimerRef.current = null;
-        }
-        const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
-        setHoverInfo({
-            olodNaam,
-            anchor: { left: r.left, top: r.top, right: r.right, bottom: r.bottom },
-        });
-    };
-
-    const hideHover = () => {
-        if (hideTimerRef.current !== null) window.clearTimeout(hideTimerRef.current);
-        hideTimerRef.current = window.setTimeout(() => {
-            setHoverInfo(null);
-            hideTimerRef.current = null;
-        }, 80);
-    };
 
     return (
         <div className={styles.panel}>
@@ -281,9 +269,24 @@ export function KlasgroepRooster({
                                                 backgroundColor: colorOf(b.olodNaam),
                                             }}
                                             onClick={() => onToggleBlok(b)}
-                                            onMouseEnter={(e) => showHover(e, b.olodNaam)}
-                                            onMouseLeave={hideHover}
                                         >
+                                            <button
+                                                type="button"
+                                                className={styles.roosterBlokBtn}
+                                                title={`Toon ${b.olodNaam} in de andere klasgroepen en kies er een`}
+                                                aria-label={`Toon ${b.olodNaam} in de andere klasgroepen`}
+                                                onClick={ev => {
+                                                    ev.stopPropagation();
+                                                    setDialogOlod(b.olodNaam);
+                                                }}
+                                            >
+                                                <Users size={13} strokeWidth={2.25} />
+                                                <ChevronDown
+                                                    size={10}
+                                                    strokeWidth={2.75}
+                                                    className={styles.roosterBlokBtnChevron}
+                                                />
+                                            </button>
                                             <div className={styles.roosterBlokTime}>
                                                 <LesblokIcon type={b.type} size={11} className={styles.roosterBlokIcon} />
                                                 {formatTime(b.start)}
@@ -298,112 +301,242 @@ export function KlasgroepRooster({
                 </div>
             )}
 
-            {hoverInfo && klasgroep && (
-                <OlodHoverPopover
-                    info={hoverInfo}
+            {dialogOlod && klasgroep && (
+                <KlasgroepKiezer
+                    olodNaam={dialogOlod}
+                    huidigeKlasgroep={klasgroep}
                     weekMonday={weekMonday}
+                    eigenBlokken={blokken}
                     otherBlokkenPerKlas={otherBlokkenPerKlas}
                     otherLoading={otherLoading}
+                    aantalShortlist={mijnOpleidingKlasgroepen.length}
                     colorOf={colorOf}
+                    selectieVoor={selectieVoor}
+                    onToggleBlok={onToggleBlok}
+                    onClose={() => setDialogOlod(null)}
                 />
             )}
         </div>
     );
 }
 
-interface PopoverProps {
-    info: HoverInfo;
+interface Kandidaat {
+    klasgroep: string;
+    huidig: boolean;
+    allBlokken: Lesblok[];
+    matchBlokken: Lesblok[];
+}
+
+interface KiezerProps {
+    olodNaam: string;
+    huidigeKlasgroep: string;
     weekMonday: Date;
+    // Het rooster van de klasgroep die het werkblad toont, deze week.
+    eigenBlokken: Lesblok[];
     otherBlokkenPerKlas: Record<string, Lesblok[]>;
     otherLoading: boolean;
+    // Aantal klasgroepen in de shortlist (de huidige meegeteld) — enkel voor
+    // de toelichting onderaan.
+    aantalShortlist: number;
     colorOf: (olodNaam: string) => string;
+    selectieVoor: (klasgroep: string, olodNaam: string, datum: Date) => OLODSelectie | null;
+    onToggleBlok: (blok: Lesblok) => void;
+    onClose: () => void;
 }
 
-function OlodHoverPopover({
-    info,
+/**
+ * Modale kiezer achter het knopje op een lesblok: toont per klasgroep uit de
+ * shortlist het weekrooster met dit vak erin gemarkeerd. Een klik op een kaart
+ * zet het vak in het traject bij díe klasgroep (of haalt het er weer uit).
+ * De lijst scrollt zelf, zodat ook een lange shortlist bereikbaar blijft.
+ */
+function KlasgroepKiezer({
+    olodNaam,
+    huidigeKlasgroep,
     weekMonday,
+    eigenBlokken,
     otherBlokkenPerKlas,
     otherLoading,
+    aantalShortlist,
     colorOf,
-}: PopoverProps) {
-    const matches = useMemo(() => {
-        const out: { klasgroep: string; allBlokken: Lesblok[]; matchBlokken: Lesblok[] }[] = [];
-        const sortedKeys = Object.keys(otherBlokkenPerKlas).sort((a, b) => a.localeCompare(b));
-        for (const k of sortedKeys) {
-            const all = otherBlokkenPerKlas[k] ?? [];
-            const match = all.filter(b => b.olodNaam === info.olodNaam);
-            if (match.length > 0) out.push({ klasgroep: k, allBlokken: all, matchBlokken: match });
-        }
+    selectieVoor,
+    onToggleBlok,
+    onClose,
+}: KiezerProps) {
+    const closeRef = useRef<HTMLButtonElement | null>(null);
+
+    useEffect(() => {
+        closeRef.current?.focus();
+        const onKey = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') onClose();
+        };
+        window.addEventListener('keydown', onKey);
+        return () => window.removeEventListener('keydown', onKey);
+    }, [onClose]);
+
+    const kandidaten = useMemo<Kandidaat[]>(() => {
+        const maak = (kg: string, all: Lesblok[], huidig: boolean): Kandidaat | null => {
+            const match = all
+                .filter(b => b.olodNaam === olodNaam)
+                .sort((a, b) => a.start.getTime() - b.start.getTime());
+            return match.length > 0
+                ? { klasgroep: kg, huidig, allBlokken: all, matchBlokken: match }
+                : null;
+        };
+        const out: Kandidaat[] = [];
+        const eigen = maak(huidigeKlasgroep, eigenBlokken, true);
+        if (eigen) out.push(eigen);
+        Object.keys(otherBlokkenPerKlas)
+            .sort((a, b) => a.localeCompare(b))
+            .forEach(k => {
+                const kandidaat = maak(k, otherBlokkenPerKlas[k] ?? [], false);
+                if (kandidaat) out.push(kandidaat);
+            });
         return out;
-    }, [otherBlokkenPerKlas, info.olodNaam]);
+    }, [olodNaam, huidigeKlasgroep, eigenBlokken, otherBlokkenPerKlas]);
 
-    const anchorMidX = (info.anchor.left + info.anchor.right) / 2;
-    const placeLeft = anchorMidX > window.innerWidth / 2;
-    const left = placeLeft
-        ? Math.max(8, info.anchor.left - POPOVER_MAX_W - 8)
-        : Math.min(window.innerWidth - POPOVER_MAX_W - 8, info.anchor.right + 8);
-    const top = Math.max(
-        8,
-        Math.min(window.innerHeight - POPOVER_MAX_H - 8, info.anchor.top)
-    );
+    // Kiezen voegt het vak toe bij deze klasgroep en sluit af; een tweede klik
+    // op een al gekozen kaart haalt het weer weg en houdt de kiezer open, zodat
+    // je meteen een andere klasgroep kan aanduiden.
+    const kies = (kandidaat: Kandidaat, gekozen: boolean) => {
+        onToggleBlok(kandidaat.matchBlokken[0]);
+        if (!gekozen) onClose();
+    };
 
-    return (
-        <div
-            className={styles.hoverPopover}
-            style={{ left, top, width: POPOVER_MAX_W, maxHeight: POPOVER_MAX_H }}
-        >
-            <div className={styles.hoverPopoverTitle}>
-                <span
-                    className={styles.legendSwatch}
-                    style={{ backgroundColor: colorOf(info.olodNaam) }}
-                />
-                <strong>{info.olodNaam}</strong>
-                <span className={styles.hoverPopoverSubtitle}>
-                    in andere klasgroepen deze week
-                </span>
+    return createPortal(
+        <div className={styles.zoomBackdrop} onClick={onClose}>
+            <div
+                className={styles.kiesDialog}
+                role="dialog"
+                aria-modal="true"
+                aria-label={`${olodNaam} — kies een klasgroep`}
+                onClick={e => e.stopPropagation()}
+            >
+                <div className={styles.zoomHeaderBar}>
+                    <span
+                        className={styles.legendSwatch}
+                        style={{ backgroundColor: colorOf(olodNaam) }}
+                    />
+                    <span className={styles.zoomTitle}>{olodNaam}</span>
+                    <span className={styles.zoomSubtitle}>
+                        week {formatDateBE(weekMonday)} – {formatDateBE(addDays(weekMonday, 4))}
+                    </span>
+                    <button
+                        ref={closeRef}
+                        type="button"
+                        className={styles.zoomClose}
+                        onClick={onClose}
+                        title="Sluiten (Esc)"
+                        aria-label="Sluiten"
+                    >
+                        <X size={18} />
+                    </button>
+                </div>
+
+                <div className={styles.kiesHint}>
+                    Klik op de klasgroep waarbij je dit vak wil volgen — het vak komt dan bij
+                    die klasgroep in je traject.
+                </div>
+
+                <div className={styles.kiesBody}>
+                    {kandidaten.length === 0 ? (
+                        <div className={styles.kiesEmpty}>
+                            {otherLoading ? (
+                                <>
+                                    <Loader2 size={14} className="animate-spin" /> Klasgroepen laden…
+                                </>
+                            ) : aantalShortlist > 1 ? (
+                                'Dit vak komt deze week in geen enkele klasgroep uit je shortlist voor.'
+                            ) : (
+                                'Je shortlist bevat maar één klasgroep. Voeg er in de instellingen meer toe om te kunnen vergelijken.'
+                            )}
+                        </div>
+                    ) : (
+                        <>
+                            <div className={styles.kiesGrid}>
+                                {kandidaten.map(kandidaat => {
+                                    const gekozen =
+                                        selectieVoor(
+                                            kandidaat.klasgroep,
+                                            olodNaam,
+                                            kandidaat.matchBlokken[0].start
+                                        ) !== null;
+                                    return (
+                                        <button
+                                            key={kandidaat.klasgroep}
+                                            type="button"
+                                            aria-pressed={gekozen}
+                                            className={`${styles.kiesKaart} ${gekozen ? styles.kiesKaartActief : ''}`}
+                                            onClick={() => kies(kandidaat, gekozen)}
+                                        >
+                                            <div className={styles.kiesKaartKop}>
+                                                <span className={styles.kiesKaartNaam}>
+                                                    {kandidaat.klasgroep}
+                                                </span>
+                                                {kandidaat.huidig && (
+                                                    <span className={styles.kiesKaartBadge}>huidig</span>
+                                                )}
+                                                {gekozen && (
+                                                    <span className={styles.kiesKaartGekozen}>
+                                                        <Check size={12} strokeWidth={3} /> in traject
+                                                    </span>
+                                                )}
+                                            </div>
+                                            <MiniWeek
+                                                weekMonday={weekMonday}
+                                                allBlokken={kandidaat.allBlokken}
+                                                highlightOlod={olodNaam}
+                                                colorOf={colorOf}
+                                            />
+                                            <div className={styles.kiesMiniDetails}>
+                                                {kandidaat.matchBlokken.map((b, i) => {
+                                                    const dayIdx = (b.start.getDay() + 6) % 7;
+                                                    return (
+                                                        <div key={i}>
+                                                            <strong>{DAG_HEADERS[dayIdx] ?? ''}</strong>{' '}
+                                                            {formatTime(b.start)}–{formatTime(b.eind)}
+                                                            {b.type ? ` · ${b.type}` : ''}
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                            <div className={styles.kiesKaartActie}>
+                                                {gekozen
+                                                    ? 'Klik om uit je traject te halen'
+                                                    : 'Klik om deze klasgroep te kiezen'}
+                                            </div>
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                            {otherLoading ? (
+                                <div className={styles.kiesEmpty}>
+                                    <Loader2 size={14} className="animate-spin" /> Overige klasgroepen laden…
+                                </div>
+                            ) : (
+                                <div className={styles.kiesVoet}>
+                                    {aantalShortlist > 1
+                                        ? `${kandidaten.length} van je ${aantalShortlist} klasgroepen geven dit vak in deze week.`
+                                        : 'Je shortlist bevat maar één klasgroep. Voeg er in de instellingen meer toe om te kunnen vergelijken.'}
+                                </div>
+                            )}
+                        </>
+                    )}
+                </div>
             </div>
-            {matches.length === 0 ? (
-                <div className={styles.hoverPopoverEmpty}>
-                    {otherLoading
-                        ? 'Andere klasgroepen laden…'
-                        : 'Dit vak komt deze week niet voor in andere klasgroepen uit jouw shortlist.'}
-                </div>
-            ) : (
-                <div className={styles.hoverMiniGrid}>
-                    {matches.map(({ klasgroep: kg, allBlokken, matchBlokken }) => (
-                        <MiniWeek
-                            key={kg}
-                            klasgroep={kg}
-                            weekMonday={weekMonday}
-                            allBlokken={allBlokken}
-                            highlightOlod={info.olodNaam}
-                            matchBlokken={matchBlokken}
-                            colorOf={colorOf}
-                        />
-                    ))}
-                </div>
-            )}
-        </div>
+        </div>,
+        document.body
     );
 }
 
 interface MiniWeekProps {
-    klasgroep: string;
     weekMonday: Date;
     allBlokken: Lesblok[];
     highlightOlod: string;
-    matchBlokken: Lesblok[];
     colorOf: (olodNaam: string) => string;
 }
 
-function MiniWeek({
-    klasgroep,
-    weekMonday,
-    allBlokken,
-    highlightOlod,
-    matchBlokken,
-    colorOf,
-}: MiniWeekProps) {
+function MiniWeek({ weekMonday, allBlokken, highlightOlod, colorOf }: MiniWeekProps) {
     const dagen = useMemo(
         () => Array.from({ length: 5 }, (_, i) => addDays(weekMonday, i)),
         [weekMonday]
@@ -415,57 +548,37 @@ function MiniWeek({
     );
 
     return (
-        <div className={styles.hoverMiniCol}>
-            <div className={styles.hoverMiniLabel}>{klasgroep}</div>
-            <div className={styles.hoverMiniWeek}>
-                {dagen.map((d, di) => {
-                    const dayBlokken = allBlokken.filter(b => sameDay(b.start, d));
-                    const laidOut = layoutDay(dayBlokken);
-                    return (
-                        <div key={di} className={styles.miniDay}>
-                            <div className={styles.miniDayHeader}>{DAG_HEADERS[di]}</div>
-                            <div className={styles.miniDayBody}>
-                                {laidOut.map(({ blok: b, col, cols }, bi) => {
-                                    const isMatch = b.olodNaam === highlightOlod;
-                                    const widthPct = 100 / cols;
-                                    const leftPct = col * widthPct;
-                                    return (
-                                        <div
-                                            key={bi}
-                                            className={`${styles.hoverMiniBlok} ${isMatch ? styles.hoverMiniBlokMatch : styles.hoverMiniBlokDim}`}
-                                            style={{
-                                                top: `${topPct(b.start, totalMin)}%`,
-                                                height: `${heightPct(b.start, b.eind, totalMin)}%`,
-                                                left: `calc(${leftPct}% + 1px)`,
-                                                width: `calc(${widthPct}% - 2px)`,
-                                                backgroundColor: isMatch
-                                                    ? colorOf(b.olodNaam)
-                                                    : undefined,
-                                            }}
-                                            title={`${b.olodNaam}${b.type ? ` (${b.type})` : ''}\n${formatTime(b.start)}–${formatTime(b.eind)}`}
-                                        />
-                                    );
-                                })}
-                            </div>
+        <div className={styles.kiesMiniWeek}>
+            {dagen.map((d, di) => {
+                const dayBlokken = allBlokken.filter(b => sameDay(b.start, d));
+                const laidOut = layoutDay(dayBlokken);
+                return (
+                    <div key={di} className={styles.miniDay}>
+                        <div className={styles.miniDayHeader}>{DAG_HEADERS[di]}</div>
+                        <div className={styles.miniDayBody}>
+                            {laidOut.map(({ blok: b, col, cols }, bi) => {
+                                const isMatch = b.olodNaam === highlightOlod;
+                                const widthPct = 100 / cols;
+                                const leftPct = col * widthPct;
+                                return (
+                                    <div
+                                        key={bi}
+                                        className={`${styles.kiesMiniBlok} ${isMatch ? styles.kiesMiniBlokMatch : styles.kiesMiniBlokDim}`}
+                                        style={{
+                                            top: `${topPct(b.start, totalMin)}%`,
+                                            height: `${heightPct(b.start, b.eind, totalMin)}%`,
+                                            left: `calc(${leftPct}% + 1px)`,
+                                            width: `calc(${widthPct}% - 2px)`,
+                                            backgroundColor: isMatch ? colorOf(b.olodNaam) : undefined,
+                                        }}
+                                        title={`${b.olodNaam}${b.type ? ` (${b.type})` : ''}\n${formatTime(b.start)}–${formatTime(b.eind)}`}
+                                    />
+                                );
+                            })}
                         </div>
-                    );
-                })}
-            </div>
-            <div className={styles.hoverMiniDetails}>
-                {matchBlokken
-                    .slice()
-                    .sort((a, b) => a.start.getTime() - b.start.getTime())
-                    .map((b, i) => {
-                        const dayIdx = (b.start.getDay() + 6) % 7;
-                        return (
-                            <div key={i}>
-                                <strong>{DAG_HEADERS[dayIdx] ?? ''}</strong>{' '}
-                                {formatTime(b.start)}–{formatTime(b.eind)}
-                                {b.type ? ` · ${b.type}` : ''}
-                            </div>
-                        );
-                    })}
-            </div>
+                    </div>
+                );
+            })}
         </div>
     );
 }
