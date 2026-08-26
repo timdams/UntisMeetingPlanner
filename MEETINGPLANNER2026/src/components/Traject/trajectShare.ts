@@ -1,5 +1,5 @@
 import { TrajectSettings } from './types';
-import type { ModuleGrenzen, PeriodeType } from './academicYear';
+import { effectieveGrenzen, type PeriodeGrenzen, type PeriodeType } from './academicYear';
 import { isIsoDate } from './dateUtils';
 
 /** Hash-parameter waaronder de preset in een gedeelde URL verstopt zit. */
@@ -9,7 +9,7 @@ const PRESET_VERSION = 1;
 /**
  * De subset van de instellingen die een trajectbegeleider met een student deelt:
  * de klasgroep-shortlist, de actieve periode en (optioneel, links van na de
- * periode-switcher) de indeling met modulegrenzen. Het studenttraject
+ * periode-switcher) de indeling met haar grensdatums. Het studenttraject
  * (OLOD-keuzes) en de kleurmap horen hier bewust NIET bij — die bouwt de
  * student zelf op.
  */
@@ -18,7 +18,7 @@ export interface TrajectPreset {
     semesterStart: string;
     semesterEind: string;
     periodeType?: PeriodeType;
-    moduleGrenzen?: ModuleGrenzen;
+    periodeGrenzen?: PeriodeGrenzen;
 }
 
 // UTF-8-veilige base64url. Klasgroepnamen kunnen accenten bevatten, dus btoa()
@@ -38,18 +38,24 @@ function fromBase64Url(encoded: string): string {
 }
 
 /**
- * Bouwt een deelbare URL die de klasgroep-shortlist en semesterperiode bevat.
+ * Bouwt een deelbare URL die de klasgroep-shortlist, de actieve periode en de
+ * grensdatums van de periodes bevat.
  * De huidige locatie (origin + pad) is de basis, met de preset in de hash zodat
  * statische hosting (GitHub Pages) niets hoeft te herschrijven.
  */
 export function buildShareUrl(settings: TrajectSettings): string {
+    const g = effectieveGrenzen(settings.periodeGrenzen);
     const payload = JSON.stringify({
         v: PRESET_VERSION,
         k: settings.mijnOpleidingKlasgroepen,
         s: settings.semesterStart,
         e: settings.semesterEind,
         p: settings.periodeType,
-        m: [settings.moduleGrenzen.m2Start, settings.moduleGrenzen.m4Start],
+        // `m` (enkel de modulegrenzen) blijft meegaan voor links die in een
+        // oudere versie van de app geopend worden; `g` bevat alle zes de
+        // grensdatums en heeft bij het lezen voorrang.
+        m: [g.m2Start, g.m4Start],
+        g: [g.s1Start, g.s1Eind, g.s2Start, g.s2Eind, g.m2Start, g.m4Start],
     });
     const root = window.location.origin + window.location.pathname;
     return `${root}#${PRESET_PARAM}=${toBase64Url(payload)}`;
@@ -64,7 +70,7 @@ export function readTrajectPresetFromUrl(): TrajectPreset | null {
         if (!raw) return null;
         const data = JSON.parse(fromBase64Url(raw)) as Record<string, unknown>;
         if (data.v !== PRESET_VERSION) return null;
-        const { k, s, e, p, m } = data;
+        const { k, s, e, p, m, g } = data;
         if (!Array.isArray(k) || !k.every(x => typeof x === 'string')) return null;
         if (typeof s !== 'string' || typeof e !== 'string') return null;
         const preset: TrajectPreset = {
@@ -72,11 +78,21 @@ export function readTrajectPresetFromUrl(): TrajectPreset | null {
             semesterStart: s,
             semesterEind: e,
         };
-        // Indeling en modulegrenzen zijn optioneel (oudere links hebben ze niet);
-        // enkel overnemen als ze volledig geldig zijn.
+        // Indeling en grensdatums zijn optioneel (oudere links hebben ze niet);
+        // enkel overnemen als ze volledig geldig zijn. `g` (alle zes de grenzen)
+        // gaat voor op `m`, dat enkel de twee modulegrenzen bevat.
         if (p === 'semester' || p === 'module') preset.periodeType = p;
-        if (Array.isArray(m) && m.length === 2 && isIsoDate(m[0]) && isIsoDate(m[1])) {
-            preset.moduleGrenzen = { m2Start: m[0], m4Start: m[1] };
+        if (Array.isArray(g) && g.length === 6 && g.every(isIsoDate)) {
+            preset.periodeGrenzen = effectieveGrenzen({
+                s1Start: g[0],
+                s1Eind: g[1],
+                s2Start: g[2],
+                s2Eind: g[3],
+                m2Start: g[4],
+                m4Start: g[5],
+            });
+        } else if (Array.isArray(m) && m.length === 2 && isIsoDate(m[0]) && isIsoDate(m[1])) {
+            preset.periodeGrenzen = effectieveGrenzen({ m2Start: m[0], m4Start: m[1] });
         }
         return preset;
     } catch {

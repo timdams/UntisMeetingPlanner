@@ -3,7 +3,7 @@
 // zodat dit los van de UI te testen is.
 
 import { TrajectSettings } from './types';
-import { effectieveModuleGrenzen } from './academicYear';
+import { effectieveGrenzen } from './academicYear';
 import { formatDateBE, formatDateTime, parseIsoDate } from './dateUtils';
 
 export type SummaryTone = 'normal' | 'warn';
@@ -30,14 +30,15 @@ export function klasgroepenSummary(gesorteerd: string[]): CardSummary {
 // foute invoer toch een leesbare datum oplevert; de waarschuwing zelf komt
 // via `grenzenOngeldig`.
 export function periodeSummary(
-    settings: Pick<TrajectSettings, 'periodeType' | 'moduleGrenzen'>,
+    settings: Pick<TrajectSettings, 'periodeType' | 'periodeGrenzen'>,
     grenzenOngeldig: boolean
 ): CardSummary {
-    if (settings.periodeType !== 'module') return { text: 'Semesters', tone: 'normal' };
-    const g = effectieveModuleGrenzen(settings.moduleGrenzen);
+    const g = effectieveGrenzen(settings.periodeGrenzen);
+    const dag = (iso: string) => formatDateBE(parseIsoDate(iso));
     const basis =
-        `Modules · M2 vanaf ${formatDateBE(parseIsoDate(g.m2Start))}` +
-        ` · M4 vanaf ${formatDateBE(parseIsoDate(g.m4Start))}`;
+        settings.periodeType === 'module'
+            ? `Modules · M2 vanaf ${dag(g.m2Start)} · M4 vanaf ${dag(g.m4Start)}`
+            : `Semesters · S1 ${dag(g.s1Start)}–${dag(g.s1Eind)} · S2 ${dag(g.s2Start)}–${dag(g.s2Eind)}`;
     return grenzenOngeldig
         ? { text: `${basis} · grens ongeldig`, tone: 'warn' }
         : { text: basis, tone: 'normal' };

@@ -2,11 +2,14 @@ import { Fragment, useEffect, useRef, useState } from 'react';
 import { TrajectSettings } from './types';
 import {
     ACADEMIEJAAR,
-    defaultModuleGrenzen,
+    defaultPeriodeGrenzen,
+    grenzenGeldig,
     moduleGrensGeldig,
     modulePeriodes,
+    semesterDefs,
+    semesterGrensGeldig,
     semesterPeriodes,
-    type ModuleGrenzen,
+    type PeriodeGrenzen,
     type PeriodeType,
 } from './academicYear';
 import { formatDateBE, parseIsoDate } from './dateUtils';
@@ -49,7 +52,8 @@ interface Props {
     onSemesterEindChange: (iso: string) => void;
     onSemesterPeriodeChange: (start: string, eind: string) => void;
     onPeriodeTypeChange: (type: PeriodeType) => void;
-    onModuleGrenzenChange: (grenzen: ModuleGrenzen) => void;
+    // Zet alle grensdatums in één keer (semesterstart/-einde, start module 2 en 4).
+    onPeriodeGrenzenChange: (grenzen: PeriodeGrenzen) => void;
     onExport: () => void;
     onImport: (file: File) => Promise<boolean>;
     // ISO-tijdstip van de laatste back-upexport (null = nog nooit).
@@ -70,7 +74,7 @@ export function TrajectSettingsView({
     onSemesterEindChange,
     onSemesterPeriodeChange,
     onPeriodeTypeChange,
-    onModuleGrenzenChange,
+    onPeriodeGrenzenChange,
     onExport,
     onImport,
     lastBackup,
@@ -197,20 +201,31 @@ export function TrajectSettingsView({
         settings.semesterStart,
         settings.semesterEind,
         settings.periodeType,
-        settings.moduleGrenzen.m2Start,
-        settings.moduleGrenzen.m4Start,
+        settings.periodeGrenzen,
     ]);
 
     const noKlasgroepen = settings.mijnOpleidingKlasgroepen.length === 0;
 
-    const [sem1, sem2] = ACADEMIEJAAR.semesters;
+    // De grenzen zoals ingesteld, en de semesters zoals ze daarmee effectief
+    // gelden (een onbruikbare grens valt terug op het standaard-academiejaar).
+    const grenzen = settings.periodeGrenzen;
+    const [sem1, sem2] = semesterDefs(grenzen);
     const isModule = settings.periodeType === 'module';
-    const grenzenOngeldig =
+    const semesterOngeldig =
+        !semesterGrensGeldig(grenzen.s1Start, grenzen.s1Eind) ||
+        !semesterGrensGeldig(grenzen.s2Start, grenzen.s2Eind);
+    const moduleOngeldig =
         isModule &&
-        (!moduleGrensGeldig(settings.moduleGrenzen.m2Start, sem1) ||
-            !moduleGrensGeldig(settings.moduleGrenzen.m4Start, sem2));
-    const standaardGrenzen = defaultModuleGrenzen();
-    const modules = modulePeriodes(settings.moduleGrenzen);
+        (!moduleGrensGeldig(grenzen.m2Start, sem1) || !moduleGrensGeldig(grenzen.m4Start, sem2));
+    const grenzenOngeldig = !grenzenGeldig(grenzen, settings.periodeType);
+    // Standaard van het academiejaar (voor de herstelknop) en, apart, de
+    // modulegrenzen die bij de nu ingestelde semesters horen (voor de melding).
+    const standaardGrenzen = defaultPeriodeGrenzen();
+    const standaardModuleGrenzen = defaultPeriodeGrenzen(grenzen);
+    const modules = modulePeriodes(grenzen);
+    const zetGrens = (veld: keyof PeriodeGrenzen, iso: string) =>
+        onPeriodeGrenzenChange({ ...grenzen, [veld]: iso });
+    const dag = (iso: string) => formatDateBE(parseIsoDate(iso));
 
     const heeftData = heeftTraject || !noKlasgroepen;
     const samenvatting = {
@@ -385,6 +400,62 @@ export function TrajectSettingsView({
                         </button>
                     </div>
 
+                    <div className={styles.subtitleRow}>
+                        <div className={styles.settingsSubtitle}>Semestergrenzen</div>
+                        <button
+                            type="button"
+                            className={styles.toolbarBtn}
+                            onClick={() => onPeriodeGrenzenChange(defaultPeriodeGrenzen())}
+                            title={`Zet alle grensdatums terug op die van academiejaar ${ACADEMIEJAAR.naam}`}
+                        >
+                            <RotateCcw size={14} /> Standaarddatums
+                        </button>
+                    </div>
+                    <div className={styles.dateRow}>
+                        <div className={styles.dateField}>
+                            <label>Semester 1 · start</label>
+                            <input
+                                type="date"
+                                value={grenzen.s1Start}
+                                onChange={e => zetGrens('s1Start', e.target.value)}
+                            />
+                        </div>
+                        <div className={styles.dateField}>
+                            <label>Semester 1 · einde</label>
+                            <input
+                                type="date"
+                                value={grenzen.s1Eind}
+                                min={grenzen.s1Start || undefined}
+                                onChange={e => zetGrens('s1Eind', e.target.value)}
+                            />
+                        </div>
+                        <div className={styles.dateField}>
+                            <label>Semester 2 · start</label>
+                            <input
+                                type="date"
+                                value={grenzen.s2Start}
+                                onChange={e => zetGrens('s2Start', e.target.value)}
+                            />
+                        </div>
+                        <div className={styles.dateField}>
+                            <label>Semester 2 · einde</label>
+                            <input
+                                type="date"
+                                value={grenzen.s2Eind}
+                                min={grenzen.s2Start || undefined}
+                                onChange={e => zetGrens('s2Eind', e.target.value)}
+                            />
+                        </div>
+                    </div>
+                    {semesterOngeldig && (
+                        <div className={styles.importMsgErr}>
+                            Een semestergrens is leeg of loopt achteruit. Tot je dat corrigeert
+                            gelden de standaarddatums (semester 1: {dag(standaardGrenzen.s1Start)}
+                            {"–"}{dag(standaardGrenzen.s1Eind)}, semester 2:{' '}
+                            {dag(standaardGrenzen.s2Start)}{"–"}{dag(standaardGrenzen.s2Eind)}).
+                        </div>
+                    )}
+
                     {isModule && (
                         <>
                             <div className={styles.settingsSubtitle}>Modulegrenzen</div>
@@ -393,33 +464,29 @@ export function TrajectSettingsView({
                                     <label>Start module 2</label>
                                     <input
                                         type="date"
-                                        value={settings.moduleGrenzen.m2Start}
+                                        value={grenzen.m2Start}
                                         min={sem1.start}
                                         max={sem1.eind}
-                                        onChange={e =>
-                                            onModuleGrenzenChange({ ...settings.moduleGrenzen, m2Start: e.target.value })
-                                        }
+                                        onChange={e => zetGrens('m2Start', e.target.value)}
                                     />
                                 </div>
                                 <div className={styles.dateField}>
                                     <label>Start module 4</label>
                                     <input
                                         type="date"
-                                        value={settings.moduleGrenzen.m4Start}
+                                        value={grenzen.m4Start}
                                         min={sem2.start}
                                         max={sem2.eind}
-                                        onChange={e =>
-                                            onModuleGrenzenChange({ ...settings.moduleGrenzen, m4Start: e.target.value })
-                                        }
+                                        onChange={e => zetGrens('m4Start', e.target.value)}
                                     />
                                 </div>
                             </div>
-                            {grenzenOngeldig && (
+                            {moduleOngeldig && (
                                 <div className={styles.importMsgErr}>
                                     Een modulegrens is leeg of valt niet binnen haar semester. Tot je
                                     dat corrigeert wordt de standaardgrens gebruikt (module 2:{' '}
-                                    {formatDateBE(parseIsoDate(standaardGrenzen.m2Start))}, module 4:{' '}
-                                    {formatDateBE(parseIsoDate(standaardGrenzen.m4Start))}).
+                                    {dag(standaardModuleGrenzen.m2Start)}, module 4:{' '}
+                                    {dag(standaardModuleGrenzen.m4Start)}).
                                 </div>
                             )}
                             <div className={styles.moduleStrip} aria-label="Moduleperiodes">
@@ -427,7 +494,7 @@ export function TrajectSettingsView({
                                     <div key={p.id} className={styles.moduleCell}>
                                         <span className={styles.moduleCellKort}>{p.label}</span>
                                         <span className={styles.moduleCellDatums}>
-                                            {formatDateBE(parseIsoDate(p.start))} – {formatDateBE(parseIsoDate(p.eind))}
+                                            {dag(p.start)} – {dag(p.eind)}
                                         </span>
                                     </div>
                                 ))}
@@ -444,18 +511,28 @@ export function TrajectSettingsView({
                             {ACADEMIEJAAR.naam}.
                         </p>
                         <p>
+                            Semestergrenzen: de eerste en laatste dag van elk semester. Alle
+                            periodes worden hieruit afgeleid, en ze blijven bewaard — de
+                            periode-knoppen hierboven en in de topbar gebruiken exact deze datums.
+                        </p>
+                        <p>
                             Modulegrenzen: de eerste dag van module 2 (binnen semester 1) en van
                             module 4 (binnen semester 2). Standaard halverwege het semester.
+                            Module 1 loopt dus tot de dag vóór de start van module 2, en module 2
+                            tot het einde van semester 1 (idem voor 3 en 4 in semester 2).
                         </p>
                     </Uitleg>
 
                     <Uitleg label="Geavanceerd: actieve periode handmatig">
                         <div className={styles.settingsHint}>
                             In het werkblad wissel je van periode via de knoppen in de topbar. Hier
-                            kan je ook een eigen start- en einddatum instellen.
+                            kan je de actieve periode ook op een eigen start- en einddatum zetten.
+                            Let op: dit is enkel het bereik dat het werkblad nú toont — het
+                            verandert de semester- of modulegrenzen hierboven niet, dus een klik op
+                            een periodeknop zet die datums weer naar die van de periode.
                         </div>
                         <PeriodeSwitcher
-                            periodes={semesterPeriodes()}
+                            periodes={semesterPeriodes(grenzen)}
                             actieveStart={settings.semesterStart}
                             actieveEind={settings.semesterEind}
                             onKies={p => onSemesterPeriodeChange(p.start, p.eind)}

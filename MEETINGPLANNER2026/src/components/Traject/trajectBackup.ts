@@ -24,7 +24,7 @@ export function buildBackup(
 }
 
 // Versie 1 blijft geldig sinds de periode-switcher: de nieuwe velden
-// (periodeType, moduleGrenzen, van/tot per selectie) zijn optioneel en krijgen
+// (periodeType, periodeGrenzen, van/tot per selectie) zijn optioneel en krijgen
 // bij het inlezen hun standaard via normalizeSettings()/normalizeTraject().
 export function parseBackup(raw: string): TrajectBackup {
     let data: unknown;

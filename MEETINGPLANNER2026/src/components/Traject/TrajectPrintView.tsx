@@ -1,6 +1,6 @@
 import { StudentTraject, TrajectSettings } from './types';
 import { formatDateBE, parseIsoDate } from './dateUtils';
-import { actievePeriode, modulePeriodes, periodeLabelVoor, semesterPeriodes } from './academicYear';
+import { actievePeriode, allePeriodes, periodeLabelVoor } from './academicYear';
 import styles from './Traject.module.css';
 
 interface Props {
@@ -13,7 +13,7 @@ interface Props {
 function periodeKop(settings: TrajectSettings): string {
     const datums = `${formatDateBE(parseIsoDate(settings.semesterStart))} – ${formatDateBE(parseIsoDate(settings.semesterEind))}`;
     const match = actievePeriode(
-        [...semesterPeriodes(), ...modulePeriodes(settings.moduleGrenzen)],
+        allePeriodes(settings.periodeGrenzen),
         settings.semesterStart,
         settings.semesterEind
     );
@@ -34,7 +34,7 @@ function groupByKlas(traject: StudentTraject, settings: TrajectSettings): Map<st
         )
         .forEach(s => {
             const arr = byKlas.get(s.klasgroep) ?? [];
-            arr.push(`${s.olodNaam} (${periodeLabelVoor(s.van, s.tot, settings.moduleGrenzen).kort})`);
+            arr.push(`${s.olodNaam} (${periodeLabelVoor(s.van, s.tot, settings.periodeGrenzen).kort})`);
             byKlas.set(s.klasgroep, arr);
         });
     return byKlas;

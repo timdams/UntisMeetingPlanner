@@ -5,7 +5,7 @@ import {
     matchtPeriode,
     periodeLabelVoor,
     periodeOptiesVoor,
-    type ModuleGrenzen,
+    type PeriodeGrenzen,
     type PeriodeType,
 } from './academicYear';
 import { bereikOverlapt } from './dateUtils';
@@ -39,7 +39,7 @@ interface Props {
     // het hele semester en één module gekozen worden.
     periodeType: PeriodeType;
     // Nodig om de periode-badge van een selectie te benoemen (M1 … M4).
-    moduleGrenzen: ModuleGrenzen;
+    periodeGrenzen: PeriodeGrenzen;
 }
 
 // Welke kiezer onder een selectie open staat: de periode-kiezer (badge) of
@@ -59,7 +59,7 @@ export function KlasgroepSelector({
     statussen,
     actiefBereik,
     periodeType,
-    moduleGrenzen,
+    periodeGrenzen,
 }: Props) {
     // Selectie waarvan een kiezer open staat. De sleutel bevat klasgroep én
     // periode; na een keuze volgt ze de gewijzigde selectie zodat de kiezer
@@ -160,7 +160,7 @@ export function KlasgroepSelector({
                 ) : (
                     gesorteerd.map(sel => {
                         const key = selectieKey(sel);
-                        const periode = periodeLabelVoor(sel.van, sel.tot, moduleGrenzen);
+                        const periode = periodeLabelVoor(sel.van, sel.tot, periodeGrenzen);
                         const zichtbaar = bereikOverlapt(sel.van, sel.tot, actiefBereik.van, actiefBereik.tot);
                         const openPeriode = kiesbaar && open?.key === key && open.soort === 'periode';
                         const openKlas = open?.key === key && open.soort === 'klasgroep';
@@ -236,7 +236,7 @@ export function KlasgroepSelector({
                                 )}
                                 {openPeriode && (
                                     <div className={styles.olodPeriodeKiezer} role="group" aria-label="Periode van deze OLOD">
-                                        {periodeOptiesVoor(sel.van, sel.tot, moduleGrenzen).map(p => {
+                                        {periodeOptiesVoor(sel.van, sel.tot, periodeGrenzen).map(p => {
                                             const isSemester = p.id.startsWith('S');
                                             const gekozen = matchtPeriode(p, sel.van, sel.tot);
                                             return (

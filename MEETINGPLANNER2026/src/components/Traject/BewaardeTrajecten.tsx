@@ -23,7 +23,7 @@ function samenvatting(item: BewaardTraject): string {
         const periode = periodeLabelVoor(
             item.settings.semesterStart,
             item.settings.semesterEind,
-            item.settings.moduleGrenzen
+            item.settings.periodeGrenzen
         );
         delen.push(item.settings.periodeType === 'module' ? `modules, ${periode.kort}` : periode.kort);
     }

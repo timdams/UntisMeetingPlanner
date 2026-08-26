@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Lesblok, OLODSelectie, StudentTraject } from './types';
 import { trajectUntisService } from './trajectService';
-import { academiejaarBereik } from './academicYear';
+import { academiejaarBereik, type GrenzenInput } from './academicYear';
 import { DAG_HEADERS, datumInBereik, formatTime, periodeBereik } from './dateUtils';
 import { selectieKey } from './hooks';
 
@@ -13,12 +13,18 @@ import { selectieKey } from './hooks';
  * Tijdens een herlading (bv. een nieuwe klasgroep erbij) blijft de vorige
  * kaart staan, zodat de statussen van al geladen klasgroepen niet flikkeren.
  */
-export function useTrajectBlokken(traject: StudentTraject, ensureColor: (olodNaam: string) => void) {
+export function useTrajectBlokken(
+    traject: StudentTraject,
+    ensureColor: (olodNaam: string) => void,
+    // De ingestelde grensdatums bepalen hoe ver het academiejaar loopt; zonder
+    // meegegeven grenzen geldt het standaardjaar.
+    grenzen?: GrenzenInput
+) {
     const [blokkenPerKlas, setBlokkenPerKlas] = useState<Record<string, Lesblok[]>>({});
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
-    const jaar = useMemo(() => academiejaarBereik(), []);
+    const jaar = useMemo(() => academiejaarBereik(grenzen), [grenzen]);
     const { van, tot } = useMemo(() => periodeBereik(jaar.van, jaar.tot), [jaar]);
 
     const klasgroepen = useMemo(

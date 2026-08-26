@@ -1,4 +1,4 @@
-import type { ModuleGrenzen, PeriodeType } from './academicYear';
+import type { PeriodeGrenzen, PeriodeType } from './academicYear';
 
 export interface Lesblok {
     klasgroep: string;
@@ -29,7 +29,10 @@ export interface TrajectSettings {
     semesterStart: string;
     semesterEind: string;
     periodeType: PeriodeType;
-    moduleGrenzen: ModuleGrenzen;
+    // Alle grensdatums van het academiejaar (semesterstart/-einde en de eerste
+    // dag van module 2 en 4). Historische naam in oudere opslag: moduleGrenzen,
+    // dat enkel de twee modulegrenzen bevatte — normalizeSettings leest die nog.
+    periodeGrenzen: PeriodeGrenzen;
 }
 
 export type KleurMap = Record<string, string>;

@@ -549,6 +549,18 @@
     font-size: 0.85rem;
 }
 
+.subtitleRow {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.subtitleRow .settingsSubtitle {
+    margin-bottom: 0;
+}
+
 .settingsSubtitle {
     font-size: 0.85rem;
     font-weight: 600;

@@ -90,7 +90,7 @@ export function TrajectPlanner({ onBack, presetApplied = false }: Props) {
         setSemesterEind,
         setSemesterPeriode,
         setPeriodeType,
-        setModuleGrenzen,
+        setPeriodeGrenzen,
         replaceSettings,
         setKlasgroepen,
     } = useTrajectSettings();
@@ -264,8 +264,8 @@ export function TrajectPlanner({ onBack, presetApplied = false }: Props) {
 
     // De periodes waar de topbar-snelkeuze tussen wisselt (semesters of modules).
     const periodes = useMemo(
-        () => periodesVoor(settings.periodeType, settings.moduleGrenzen),
-        [settings.periodeType, settings.moduleGrenzen.m2Start, settings.moduleGrenzen.m4Start]
+        () => periodesVoor(settings.periodeType, settings.periodeGrenzen),
+        [settings.periodeType, settings.periodeGrenzen]
     );
     const actiefBereik = useMemo(
         () => ({ van: settings.semesterStart, tot: settings.semesterEind }),
@@ -283,7 +283,11 @@ export function TrajectPlanner({ onBack, presetApplied = false }: Props) {
 
     // Jaarrooster per klasgroep in het traject: voedt het overzicht (paneel C)
     // en de controle of elke selectie wel lessen oplevert (paneel A).
-    const { blokkenPerKlas, busy: blokkenBusy, error: blokkenError } = useTrajectBlokken(traject, ensureColor);
+    const { blokkenPerKlas, busy: blokkenBusy, error: blokkenError } = useTrajectBlokken(
+        traject,
+        ensureColor,
+        settings.periodeGrenzen
+    );
     const statussen = useMemo(() => selectieStatussen(traject, blokkenPerKlas), [traject, blokkenPerKlas]);
 
     // Wat-als-preview vanuit de klasgroep-kiezer (paneel A): zolang de
@@ -401,7 +405,7 @@ export function TrajectPlanner({ onBack, presetApplied = false }: Props) {
                     onSemesterEindChange={setSemesterEind}
                     onSemesterPeriodeChange={setSemesterPeriode}
                     onPeriodeTypeChange={setPeriodeType}
-                    onModuleGrenzenChange={setModuleGrenzen}
+                    onPeriodeGrenzenChange={setPeriodeGrenzen}
                     onExport={handleExport}
                     onImport={handleImport}
                     lastBackup={lastBackup}
@@ -429,7 +433,7 @@ export function TrajectPlanner({ onBack, presetApplied = false }: Props) {
                         statussen={statussen}
                         actiefBereik={actiefBereik}
                         periodeType={settings.periodeType}
-                        moduleGrenzen={settings.moduleGrenzen}
+                        periodeGrenzen={settings.periodeGrenzen}
                     />
                     <Splitter orientation="left" onDelta={adjustPanelA} />
                     <KlasgroepRooster
@@ -449,7 +453,7 @@ export function TrajectPlanner({ onBack, presetApplied = false }: Props) {
                         error={blokkenError}
                         actiefBereik={actiefBereik}
                         periodeType={settings.periodeType}
-                        moduleGrenzen={settings.moduleGrenzen}
+                        periodeGrenzen={settings.periodeGrenzen}
                         colorOf={colorOf}
                         preview={klasgroepPreview}
                     />

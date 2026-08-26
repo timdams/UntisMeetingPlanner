@@ -19,7 +19,7 @@ import {
     toIsoDate,
     weeksBetween,
 } from './dateUtils';
-import { academiejaarBereik, periodeGrenzen, type ModuleGrenzen, type PeriodeType } from './academicYear';
+import { academiejaarBereik, periodeMarkeringen, type PeriodeGrenzen, type PeriodeType } from './academicYear';
 import type { KlasgroepPreview } from './useTrajectBlokken';
 import styles from './Traject.module.css';
 import { AlertTriangle, ChevronDown, ChevronRight, Eye, Loader2 } from 'lucide-react';
@@ -38,7 +38,9 @@ interface Props {
     // het volledige academiejaar.
     actiefBereik: { van: string; tot: string };
     periodeType: PeriodeType;
-    moduleGrenzen: ModuleGrenzen;
+    // Alle grensdatums: bepalen zowel het bestreken academiejaar als de
+    // markeringen bij elke semester-/modulestart.
+    periodeGrenzen: PeriodeGrenzen;
     colorOf: (olodNaam: string) => string;
     // Wat-als-preview vanuit de klasgroep-kiezer: de lessen van het vak bij de
     // huidige klasgroep vervagen, die bij de kandidaat-klasgroep verschijnen
@@ -130,7 +132,7 @@ export function StudentOverzicht({
     error,
     actiefBereik,
     periodeType,
-    moduleGrenzen,
+    periodeGrenzen,
     colorOf,
     preview = null,
 }: Props) {
@@ -142,7 +144,7 @@ export function StudentOverzicht({
 
     // Het overzicht beslaat altijd het volledige academiejaar; elke selectie
     // draagt enkel binnen haar eigen periode bij.
-    const jaar = useMemo(() => academiejaarBereik(), []);
+    const jaar = useMemo(() => academiejaarBereik(periodeGrenzen), [periodeGrenzen]);
     const { van: start, tot: eind } = useMemo(() => periodeBereik(jaar.van, jaar.tot), [jaar]);
 
     const klasgroepen = useMemo(
@@ -251,8 +253,8 @@ export function StudentOverzicht({
     // Grensmarkeringen (semester-/modulestart) per week: de week waarin de
     // grensdatum valt krijgt er een boven zich.
     const grenzen = useMemo(
-        () => periodeGrenzen(periodeType, moduleGrenzen),
-        [periodeType, moduleGrenzen.m2Start, moduleGrenzen.m4Start]
+        () => periodeMarkeringen(periodeType, periodeGrenzen),
+        [periodeType, periodeGrenzen]
     );
     const grenzenVoorWeek = (wkMonday: Date) => {
         const ma = toIsoDate(wkMonday);

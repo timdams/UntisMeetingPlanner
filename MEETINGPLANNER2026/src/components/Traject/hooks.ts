@@ -4,12 +4,12 @@ import type { TrajectPreset } from './trajectShare';
 import {
     academiejaarBereik,
     actievePeriode,
-    defaultModuleGrenzen,
+    allePeriodes,
     defaultSemesterPeriode,
-    modulePeriodes,
+    effectieveGrenzen,
     periodesVoor,
     valtBinnenAcademiejaar,
-    type ModuleGrenzen,
+    type PeriodeGrenzen,
     type PeriodeType,
 } from './academicYear';
 import { datumInBereik, isIsoDate, parseIsoDate } from './dateUtils';
@@ -27,7 +27,7 @@ const KEY_BEWAARD = 'traject_bewaard';
 //   v2 — semesterperiode die buiten het academiejaar valt (oude today-based
 //        default) resetten naar het lopende semester van het nieuwe jaar.
 // Nieuwe velden die enkel een standaardwaarde nodig hebben (periodeType,
-// moduleGrenzen, van/tot op een selectie) vergen géén migratie: die vult
+// periodeGrenzen, van/tot op een selectie) vergen géén migratie: die vult
 // normalizeSettings()/normalizeTraject() bij elke load aan.
 const CURRENT_MIGRATION = 2;
 
@@ -45,27 +45,31 @@ function allocateColor(index: number): string {
  * Maakt van willekeurige (oudere of onvolledige) opgeslagen instellingen een
  * volledig TrajectSettings-object. Ontbrekende velden krijgen hun standaard:
  * lege klasgroep-shortlist, het lopende semester als actieve periode,
- * semester-indeling en modulegrenzen halverwege elk semester.
+ * semester-indeling en de grensdatums van het standaard-academiejaar (met de
+ * modulegrenzen halverwege elk semester). Een onbruikbare grens (leeg veld, of
+ * een semester dat achteruit loopt) valt op diezelfde standaard terug.
  */
 export function normalizeSettings(raw: unknown): TrajectSettings {
     const r = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
-    const { start, eind } = defaultSemesterPeriode();
     const klasgroepen = Array.isArray(r.mijnOpleidingKlasgroepen)
         ? r.mijnOpleidingKlasgroepen.filter((x): x is string => typeof x === 'string')
         : [];
-    const grenzen = (r.moduleGrenzen && typeof r.moduleGrenzen === 'object'
-        ? r.moduleGrenzen
-        : {}) as Record<string, unknown>;
-    const def = defaultModuleGrenzen();
+    // `moduleGrenzen` is de historische naam: dat veld bevatte enkel m2Start en
+    // m4Start, want de semestergrenzen lagen toen vast in ACADEMIEJAAR. Die twee
+    // waarden blijven geldig; de semestervelden vult effectieveGrenzen aan.
+    const ruweGrenzen = (r.periodeGrenzen && typeof r.periodeGrenzen === 'object'
+        ? r.periodeGrenzen
+        : r.moduleGrenzen && typeof r.moduleGrenzen === 'object'
+          ? r.moduleGrenzen
+          : {}) as Record<string, unknown>;
+    const periodeGrenzen = effectieveGrenzen(ruweGrenzen);
+    const { start, eind } = defaultSemesterPeriode(new Date(), periodeGrenzen);
     return {
         mijnOpleidingKlasgroepen: klasgroepen,
-        semesterStart: typeof r.semesterStart === 'string' ? r.semesterStart : start,
-        semesterEind: typeof r.semesterEind === 'string' ? r.semesterEind : eind,
+        semesterStart: isIsoDate(r.semesterStart) ? r.semesterStart : start,
+        semesterEind: isIsoDate(r.semesterEind) ? r.semesterEind : eind,
         periodeType: r.periodeType === 'module' ? 'module' : 'semester',
-        moduleGrenzen: {
-            m2Start: isIsoDate(grenzen.m2Start) ? grenzen.m2Start : def.m2Start,
-            m4Start: isIsoDate(grenzen.m4Start) ? grenzen.m4Start : def.m4Start,
-        },
+        periodeGrenzen,
     };
 }
 
@@ -180,7 +184,7 @@ export function runTrajectMigrations(): void {
 
 /**
  * Past een gedeelde preset (klasgroep-shortlist + actieve periode, en — bij
- * een link van na de periode-switcher — de indeling en modulegrenzen) toe op
+ * een link van na de periode-switcher — de indeling en grensdatums) toe op
  * de opgeslagen instellingen. Wordt door {@link App} aangeroepen vóór React de
  * hooks initialiseert, zodat een student via een trajectbegeleider-link meteen
  * de juiste klasgroepen ziet. Ontbreekt de indeling in de link (oudere link),
@@ -195,7 +199,7 @@ export function applyTrajectSettingsPreset(preset: TrajectPreset): void {
         semesterStart: preset.semesterStart,
         semesterEind: preset.semesterEind,
         periodeType: preset.periodeType ?? current.periodeType,
-        moduleGrenzen: preset.moduleGrenzen ?? current.moduleGrenzen,
+        periodeGrenzen: preset.periodeGrenzen ?? current.periodeGrenzen,
     });
 }
 
@@ -250,10 +254,10 @@ export function useTrajectSettings() {
     const setPeriodeType = useCallback((type: PeriodeType) => {
         setSettings(s => {
             if (s.periodeType === type) return s;
-            const oud = actievePeriode(periodesVoor(s.periodeType, s.moduleGrenzen), s.semesterStart, s.semesterEind);
+            const oud = actievePeriode(periodesVoor(s.periodeType, s.periodeGrenzen), s.semesterStart, s.semesterEind);
             const nieuwId = oud ? PERIODE_BIJ_TYPEWISSEL[oud.id] : undefined;
             const nieuw = nieuwId
-                ? periodesVoor(type, s.moduleGrenzen).find(p => p.id === nieuwId)
+                ? periodesVoor(type, s.periodeGrenzen).find(p => p.id === nieuwId)
                 : undefined;
             return {
                 ...s,
@@ -264,14 +268,16 @@ export function useTrajectSettings() {
         });
     }, []);
 
-    // Was de actieve periode exact een module, dan volgt ze de nieuwe grenzen.
-    const setModuleGrenzen = useCallback((grenzen: ModuleGrenzen) => {
+    // Verzet een of meer grensdatums (semester- of modulegrens). Was de actieve
+    // periode exact een van de benoemde periodes, dan volgt ze haar nieuwe
+    // grenzen; een handmatig ingesteld bereik blijft staan.
+    const setPeriodeGrenzen = useCallback((grenzen: PeriodeGrenzen) => {
         setSettings(s => {
-            const oud = actievePeriode(modulePeriodes(s.moduleGrenzen), s.semesterStart, s.semesterEind);
-            const nieuw = oud ? modulePeriodes(grenzen).find(p => p.id === oud.id) : undefined;
+            const oud = actievePeriode(allePeriodes(s.periodeGrenzen), s.semesterStart, s.semesterEind);
+            const nieuw = oud ? allePeriodes(grenzen).find(p => p.id === oud.id) : undefined;
             return {
                 ...s,
-                moduleGrenzen: grenzen,
+                periodeGrenzen: grenzen,
                 semesterStart: nieuw ? nieuw.start : s.semesterStart,
                 semesterEind: nieuw ? nieuw.eind : s.semesterEind,
             };
@@ -298,7 +304,7 @@ export function useTrajectSettings() {
         setSemesterEind,
         setSemesterPeriode,
         setPeriodeType,
-        setModuleGrenzen,
+        setPeriodeGrenzen,
         replaceSettings,
         setKlasgroepen,
     };
@@ -323,7 +329,7 @@ export function useLastBackup() {
 // Een traject dat de gebruiker onder een eigen naam bewaarde om later terug
 // te laden: de OLOD-selecties samen met de instellingen waar ze bij horen
 // (klasgroep-shortlist, actieve periode, semester/module-indeling en
-// modulegrenzen). De kleurmap zit er niet bij — die is cosmetisch en wordt
+// grensdatums). De kleurmap zit er niet bij — die is cosmetisch en wordt
 // per OLOD automatisch opnieuw toegewezen.
 export interface BewaardTraject {
     id: string;

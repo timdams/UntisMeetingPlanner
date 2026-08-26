@@ -50,13 +50,19 @@ type TrajectSettings = {
   semesterStart: string;              // actieve periode — ISO date (historische naam)
   semesterEind: string;               // actieve periode — ISO date
   periodeType: 'semester' | 'module'; // indeling van de opleiding
-  moduleGrenzen: { m2Start: string; m4Start: string }; // eerste dag van M2 resp. M4
+  periodeGrenzen: {                   // alle grensdatums van het academiejaar
+    s1Start: string; s1Eind: string;  // semester 1 (inclusieve ISO-datums)
+    s2Start: string; s2Eind: string;  // semester 2
+    m2Start: string; m4Start: string; // eerste dag van M2 resp. M4
+  };
 };
 
 type KleurMap = Record<string, string>; // olodNaam → kleur
 ```
 
-Ontbrekende velden worden bij het laden aangevuld (`normalizeSettings`): semester-indeling en modulegrenzen halverwege elk semester (dichtstbijzijnde maandag). De periodes zelf (`S1`, `S2`, `M1`…`M4`) worden afgeleid in [academicYear.ts](MEETINGPLANNER2026/src/components/Traject/academicYear.ts) (`periodesVoor`); een ongeldige modulegrens valt terug op de standaard.
+Ontbrekende velden worden bij het laden aangevuld (`normalizeSettings`): semester-indeling en de grensdatums van het standaard-academiejaar, met de modulegrenzen halverwege elk semester (dichtstbijzijnde maandag). De periodes zelf (`S1`, `S2`, `M1`…`M4`) worden volledig uit `periodeGrenzen` afgeleid in [academicYear.ts](MEETINGPLANNER2026/src/components/Traject/academicYear.ts) (`periodesVoor`); een onbruikbare grens (leeg veld, semester dat achteruit loopt, modulegrens buiten haar semester) valt per semester terug op de standaard uit `ACADEMIEJAAR`.
+
+De grensdatums zijn dus **instelbaar en bewaard**: de periode-knoppen (instellingen én topbar) zetten de actieve periode op exact deze datums, zodat een periodewissel nooit een ingestelde datum overschrijft. Opslag van vóór deze wijziging bevat enkel `moduleGrenzen: { m2Start, m4Start }`; die twee waarden worden bij het laden overgenomen en aangevuld met de standaard semestergrenzen.
 
 LocalStorage-sleutels:
 - `traject_settings` — `TrajectSettings`
@@ -89,7 +95,7 @@ Een aparte stub-implementatie is niet nodig: er is al een echte Untis-backend.
 ### Scherm 1 — Instellingen ([TrajectSettings.tsx](MEETINGPLANNER2026/src/components/Traject/TrajectSettings.tsx))
 Gecentreerde kolom (max. 960px) met een sticky bovenbalk (*Klaar — terug naar werkblad*, titel, academiejaar-badge) en vier **inklapbare kaarten** ([SettingsCard.tsx](MEETINGPLANNER2026/src/components/Traject/SettingsCard.tsx)). Elke kaartkop toont een live één-regel-samenvatting ([settingsSummaries.ts](MEETINGPLANNER2026/src/components/Traject/settingsSummaries.ts)), zodat het scherm dichtgeklapt als overzicht leest; enkel *Mijn opleiding* staat standaard open. Lange uitleg zit per kaart achter een *Meer uitleg*-disclosure (native `<details>`).
 - **Mijn opleiding**: geselecteerde klasgroepen als chips (met *Wis selectie*), zoekveld, *Selecteer alle/geen* (op de zichtbare lijst) en een checkbox-raster gegroepeerd per jaar (1e/2e/3e jaar, *Overige*).
-- **Periode**: **indeling** als segmented control (Semesters / Modules, 2 per semester); in modulemodus datepickers voor de **modulegrenzen** (start module 2 en 4, met waarschuwing bij een ongeldige grens) en een strip met de vier moduleperiodes. De snelkeuze van de **actieve periode** ([PeriodeSwitcher.tsx](MEETINGPLANNER2026/src/components/Traject/PeriodeSwitcher.tsx)) en de handmatige start/einde-datepickers zitten onder *Geavanceerd: actieve periode handmatig* — de topbar van het werkblad wisselt al van periode.
+- **Periode**: **indeling** als segmented control (Semesters / Modules, 2 per semester); datepickers voor de **semestergrenzen** (start en einde van semester 1 en 2) met een knop *Standaarddatums* die alles terugzet op `ACADEMIEJAAR`; in modulemodus daarnaast datepickers voor de **modulegrenzen** (start module 2 en 4, begrensd door hun semester) en een strip met de vier moduleperiodes. Een onbruikbare grens geeft een waarschuwing die de standaard vermeldt die zolang geldt. De snelkeuze van de **actieve periode** ([PeriodeSwitcher.tsx](MEETINGPLANNER2026/src/components/Traject/PeriodeSwitcher.tsx)) en de handmatige start/einde-datepickers zitten onder *Geavanceerd: actieve periode handmatig* — dat bereik is enkel wat het werkblad nú toont en verandert de grenzen niet.
 - **Deel met student**: student-link genereren/kopiëren en QR tonen/downloaden (zie [trajectShare.ts](MEETINGPLANNER2026/src/components/Traject/trajectShare.ts)); een gegenereerde link verdwijnt zodra klasgroepen of periode wijzigen.
 - **Back-up & herstel**: compacte herinnering dat alles browser-lokaal staat, *Exporteer back-up* (downloadt JSON) en *Importeer back-up…* (bestandskiezer; overschrijft instellingen + traject + kleurmap na bevestiging). Het tijdstip van de laatste export staat in localStorage (`traject_last_backup`, `useLastBackup` in [hooks.ts](MEETINGPLANNER2026/src/components/Traject/hooks.ts)) en wordt in de kaartkop getoond; "nooit" krijgt een waarschuwingskleur zodra er klasgroepen of een traject zijn.
 - Wijzigingen worden direct gepersisteerd in localStorage.
@@ -128,7 +134,7 @@ Drie panelen naast elkaar (grid: `200px 1fr 460px`).
 - Tab-switcher Werkblad / Instellingen.
 - **Periode-switcher** (compact: `S1 | S2` of `M1 | M2 | M3 | M4`, afhankelijk van de indeling) — zet de actieve periode; paneel B en C volgen.
 - **Reset traject** → confirm → wist enkel `StudentTraject`.
-- **Bewaar traject** → vraagt een naam (`prompt`) en bewaart het huidige `StudentTraject` **samen met de `TrajectSettings`** (klasgroep-shortlist, actieve periode, semester/module-indeling, modulegrenzen) in `traject_bewaard` (`useBewaardeTrajecten` in [hooks.ts](MEETINGPLANNER2026/src/components/Traject/hooks.ts)). Een bestaande naam wordt na bevestiging overschreven. Kleurmap wordt niet meebewaard.
+- **Bewaar traject** → vraagt een naam (`prompt`) en bewaart het huidige `StudentTraject` **samen met de `TrajectSettings`** (klasgroep-shortlist, actieve periode, semester/module-indeling, grensdatums) in `traject_bewaard` (`useBewaardeTrajecten` in [hooks.ts](MEETINGPLANNER2026/src/components/Traject/hooks.ts)). Een bestaande naam wordt na bevestiging overschreven. Kleurmap wordt niet meebewaard.
 - **Laad traject** ([BewaardeTrajecten.tsx](MEETINGPLANNER2026/src/components/Traject/BewaardeTrajecten.tsx)) → uitklapmenu met alle bewaarde trajecten (naam, aantal OLODs/klasgroepen, periode, datum). Klik = na bevestiging traject **én instellingen** vervangen (zoals een back-up-import, zonder kleurmap); prullenbakje = bewaard traject verwijderen uit localStorage. Reset en import raken de bewaarde trajecten niet.
 - **Print / PDF** → `window.print()`.
 
@@ -161,7 +167,7 @@ Geen kleurenlegende, geen conflictlijst, geen mini-kalender in de afdruk.
 ```
 MEETINGPLANNER2026/src/components/Traject/
 ├── types.ts                 # Lesblok, OLODSelectie, StudentTraject, TrajectSettings, KleurMap, Conflict, TrajectUntisService
-├── academicYear.ts          # Academiejaar, semesters, modules (Periode, periodesVoor, modulegrenzen), defaultRoosterWeek
+├── academicYear.ts          # Academiejaar, instelbare grensdatums (PeriodeGrenzen), periodes (periodesVoor), defaultRoosterWeek
 ├── trajectService.ts        # Adapter rond untisService met range-aware cache
 ├── hooks.ts                 # useTrajectSettings, useStudentTraject, useKleurMap (+ normalize/replace-functies voor import)
 ├── useTrajectBlokken.ts     # Jaarrooster per klasgroep in het traject + selectieStatussen (geen lessen / niet beschikbaar) + useKlasgroepAlternatieven (klasgroep-kiezer)
