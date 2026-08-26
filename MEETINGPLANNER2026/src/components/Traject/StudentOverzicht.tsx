@@ -22,9 +22,10 @@ import {
 import { academiejaarBereik, periodeMarkeringen, type PeriodeGrenzen, type PeriodeType } from './academicYear';
 import type { KlasgroepPreview } from './useTrajectBlokken';
 import styles from './Traject.module.css';
-import { AlertTriangle, ChevronDown, ChevronRight, Eye, Loader2 } from 'lucide-react';
+import { AlertTriangle, ChevronDown, ChevronRight, Eye, Loader2, ZoomIn } from 'lucide-react';
 import { LesblokIcon } from './LesblokIcon';
 import { layoutDay } from './layout';
+import { WeekZoom } from './WeekZoom';
 
 interface Props {
     traject: StudentTraject;
@@ -137,6 +138,9 @@ export function StudentOverzicht({
     preview = null,
 }: Props) {
     const [conflictsOpen, setConflictsOpen] = useState(true);
+    // De week die via het vergrootglas alleen-lezen wordt uitvergroot (maandag
+    // van die week), of null wanneer er geen zoomvenster open staat.
+    const [zoomWeek, setZoomWeek] = useState<Date | null>(null);
     const [tip, setTip] = useState<TipState | null>(null);
     const showTip = (e: React.MouseEvent<HTMLElement>, text: string) =>
         setTip({ text, anchor: e.currentTarget.getBoundingClientRect() });
@@ -225,6 +229,15 @@ export function StudentOverzicht({
         () => (preview ? [...effectieveBlokken.filter(b => !wegBlokken.has(b)), ...ghostBlokken] : effectieveBlokken),
         [preview, effectieveBlokken, wegBlokken, ghostBlokken]
     );
+
+    // De blokken van de uitvergrote week (zie WeekZoom).
+    const zoomBlokken = useMemo<Lesblok[]>(() => {
+        if (!zoomWeek) return [];
+        const weekEind = fridayEndOf(zoomWeek);
+        return getoondeBlokken.filter(
+            b => b.start.getTime() >= zoomWeek.getTime() && b.start.getTime() <= weekEind.getTime()
+        );
+    }, [zoomWeek, getoondeBlokken]);
 
     // Alle weekstroken delen dezelfde hoogte: standaard tot 18u, uitgerekt tot
     // max 22u zodra het traject een avondschoolblok bevat dat later eindigt.
@@ -367,6 +380,18 @@ export function StudentOverzicht({
                                     <div className={styles.weekLabel}>
                                         Week {isoWeekNumber(wkMonday)}
                                         <small>{formatDateBE(wkMonday)}</small>
+                                        <button
+                                            type="button"
+                                            className={styles.weekZoomBtn}
+                                            onClick={() => {
+                                                hideTip();
+                                                setZoomWeek(wkMonday);
+                                            }}
+                                            title={`Week ${isoWeekNumber(wkMonday)} groot tonen`}
+                                            aria-label={`Week ${isoWeekNumber(wkMonday)} groot tonen`}
+                                        >
+                                            <ZoomIn size={13} />
+                                        </button>
                                     </div>
                                     <div className={styles.miniWeek}>
                                         {dagen.map((dag, di) => {
@@ -488,6 +513,18 @@ export function StudentOverzicht({
             )}
 
             {tip && <MiniTooltip tip={tip} />}
+
+            {zoomWeek && traject.length > 0 && (
+                <WeekZoom
+                    weekMonday={zoomWeek}
+                    blokken={zoomBlokken}
+                    conflictMap={conflictMap}
+                    ghostSet={ghostSet}
+                    wegSet={wegBlokken}
+                    colorOf={colorOf}
+                    onClose={() => setZoomWeek(null)}
+                />
+            )}
         </div>
     );
 }

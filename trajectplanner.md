@@ -128,6 +128,7 @@ Drie panelen naast elkaar (grid: `200px 1fr 460px`).
 - **Legende** onderaan met OLOD-namen + swatches.
 - **Uitklapbaar conflictpaneel** onderaan met datum, uur, OLOD-naam en klasgroep per conflict.
 - Hover-tooltip per blokje (CSS `data-tip`).
+- **Vergrootglas per week** ([WeekZoom.tsx](MEETINGPLANNER2026/src/components/Traject/WeekZoom.tsx)): het knopje bij het weeklabel opent die week **alleen-lezen** in een groot venster (portal in `document.body`) — een volwaardig rooster met uurkolom en rasterlijnen, waarin elk blok zijn uren, OLOD-naam, klasgroep, type en lokaal uitgeschreven toont. Conflicten en de wat-als-preview zijn er in dezelfde codering zichtbaar; onderaan staat een legende met per vak de klasgroep(en). Sluiten met Esc, de X of een klik naast het venster. Klikken op blokken doet niets: aanpassen gebeurt in paneel B.
 - **Wat-als-preview** vanuit de klasgroep-kiezer van paneel A (`preview`-prop, type `KlasgroepPreview`): de lessen van de verhuizende selectie bij de huidige klasgroep vervagen (tenzij een andere selectie van hetzelfde vak bij die klasgroep ze ook dekt), de lessen bij de kandidaat-klasgroep verschijnen als gestreepte, gestippeld omrande *ghost*-blokjes (zonder blokken die al in het traject zitten), en conflictdetectie + conflictpaneel rekenen voor dat scenario ("… bij wissel naar 2 TI B"). Een strip bovenaan vat samen: vak, nieuwe i.p.v. huidige klasgroep, aantal lessen en het aantal *nieuwe* conflicten (rood zodra > 0). De eerste week met een ghost-blok wordt zo nodig in beeld gescrold.
 
 ### Globale acties (toolbar in [TrajectPlanner.tsx](MEETINGPLANNER2026/src/components/Traject/TrajectPlanner.tsx))
@@ -179,6 +180,7 @@ MEETINGPLANNER2026/src/components/Traject/
 ├── KlasgroepSelector.tsx    # Paneel A
 ├── KlasgroepRooster.tsx     # Paneel B
 ├── StudentOverzicht.tsx     # Paneel C + print-only OLOD-lijst
+├── WeekZoom.tsx             # Alleen-lezen uitvergroting van één weekstrook uit paneel C
 └── Traject.module.css       # Alle styling + @media print
 ```
 

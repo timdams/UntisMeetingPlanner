@@ -1471,6 +1471,26 @@
     font-weight: 400;
 }
 
+/* Vergrootglas per weekstrook: opent die week groot en alleen-lezen. */
+.weekZoomBtn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin-top: 0.2rem;
+    padding: 2px;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 4px;
+    color: #94a3b8;
+    cursor: pointer;
+}
+
+.weekZoomBtn:hover {
+    color: var(--primary);
+    border-color: var(--border-color);
+    background-color: var(--secondary);
+}
+
 /* Weken van de actieve periode (de periode uit de topbar-switcher). */
 .weekRowActief .weekLabel {
     color: var(--primary);
@@ -1703,6 +1723,217 @@
     border-radius: 3px;
 }
 
+/* ===== Week-zoom: één weekstrook uitvergroot, alleen-lezen ===== */
+.zoomBackdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 1100;
+    background-color: rgba(15, 23, 42, 0.55);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1.5rem;
+}
+
+.zoomDialog {
+    width: min(1400px, 96vw);
+    height: min(920px, 92vh);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    background-color: var(--bg-color);
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    box-shadow: 0 18px 48px rgba(0, 0, 0, 0.3);
+}
+
+.zoomHeaderBar {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    flex-shrink: 0;
+    padding: 0.6rem 0.9rem;
+    background-color: var(--secondary);
+    border-bottom: 1px solid var(--border-color);
+}
+
+.zoomTitle {
+    font-weight: 700;
+    font-size: 1rem;
+    color: var(--text-color);
+}
+
+.zoomSubtitle {
+    font-size: 0.85rem;
+    color: #64748b;
+}
+
+.zoomBadge {
+    font-size: 0.68rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #64748b;
+    background-color: var(--bg-color);
+    border: 1px solid var(--border-color);
+    border-radius: 999px;
+    padding: 2px 8px;
+}
+
+.zoomClose {
+    margin-left: auto;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 4px;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: var(--border-radius);
+    color: var(--text-color);
+    cursor: pointer;
+}
+
+.zoomClose:hover {
+    border-color: var(--primary);
+}
+
+.zoomEmpty {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #64748b;
+    font-size: 0.9rem;
+}
+
+.zoomGrid {
+    flex: 1;
+    min-height: 0;
+    display: grid;
+    grid-template-columns: 64px repeat(5, 1fr);
+    grid-template-rows: 32px 1fr;
+    overflow: hidden;
+}
+
+.zoomHeaderCell {
+    background-color: var(--secondary);
+    border-bottom: 1px solid var(--border-color);
+    border-right: 1px solid var(--border-color);
+    font-size: 0.85rem;
+    font-weight: 600;
+    text-align: center;
+    padding: 6px 2px;
+    color: var(--text-color);
+}
+
+.zoomTimeCol {
+    position: relative;
+    border-right: 1px solid var(--border-color);
+}
+
+.zoomDayCol {
+    position: relative;
+    border-right: 1px solid var(--border-color);
+}
+
+.zoomTimeLabel {
+    position: absolute;
+    left: 6px;
+    font-size: 0.75rem;
+    color: #64748b;
+    transform: translateY(-50%);
+}
+
+.zoomGridLine {
+    position: absolute;
+    left: 0;
+    right: 0;
+    border-top: 1px dashed #e2e8f0;
+    pointer-events: none;
+}
+
+.zoomBlok {
+    position: absolute;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    padding: 4px 6px;
+    border: 2px solid transparent;
+    border-radius: 6px;
+    background-color: #94a3b8;
+    color: #ffffff;
+    font-size: 0.8rem;
+    line-height: 1.2;
+    overflow: hidden;
+}
+
+.zoomBlokTime {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    opacity: 0.95;
+}
+
+.zoomBlokTime svg {
+    flex-shrink: 0;
+}
+
+.zoomBlokNaam {
+    font-weight: 600;
+}
+
+.zoomBlokMeta {
+    font-size: 0.72rem;
+    opacity: 0.92;
+}
+
+.zoomBlokConflict {
+    outline: 3px dashed #DC2626;
+    outline-offset: -2px;
+    z-index: 2;
+}
+
+.zoomBlokConflictIcon {
+    color: #ffffff;
+    filter: drop-shadow(0 0 1px rgba(0, 0, 0, 0.55));
+}
+
+/* Wat-als-preview, zelfde codering als in het miniatuuroverzicht. */
+.zoomBlokWeg {
+    opacity: 0.3;
+    filter: grayscale(0.7);
+}
+
+.zoomBlokGhost {
+    background-image: repeating-linear-gradient(
+        45deg,
+        transparent 0 4px,
+        rgba(255, 255, 255, 0.5) 4px 7px
+    );
+    border: 2px dashed #ffffff;
+    box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.45);
+    z-index: 1;
+}
+
+.zoomLegend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem 1rem;
+    flex-shrink: 0;
+    max-height: 6rem;
+    overflow: auto;
+    padding: 0.5rem 0.9rem;
+    background-color: var(--secondary);
+    border-top: 1px solid var(--border-color);
+}
+
+.zoomLegendKlas {
+    color: #64748b;
+}
+
 /* ===== Print ===== */
 .printRoot {
     display: none;
@@ -1716,6 +1947,9 @@
         padding: 0 !important;
     }
     .screenRoot {
+        display: none !important;
+    }
+    .zoomBackdrop {
         display: none !important;
     }
     .printRoot {
