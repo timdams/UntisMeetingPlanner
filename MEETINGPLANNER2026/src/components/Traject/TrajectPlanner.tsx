@@ -25,7 +25,7 @@ import {
     useTrajectSettings,
     type BewaardTraject,
 } from './hooks';
-import type { OLODSelectie } from './types';
+import { isActief, type OLODSelectie } from './types';
 import { LaadTrajectKnop } from './BewaardeTrajecten';
 import { TopbarMenu, TopbarMenuItem } from './TopbarMenu';
 import { BevestigDialog, BewaarDialog, type DialogItem } from './TrajectDialogs';
@@ -130,6 +130,8 @@ export function TrajectPlanner({ onBack, presetApplied = false }: Props) {
         selectieVoor,
         remove,
         removeMany,
+        toggleActief,
+        setActiefBulk,
         setPeriode,
         setKlasgroep,
         setKlasgroepBulk,
@@ -216,6 +218,15 @@ export function TrajectPlanner({ onBack, presetApplied = false }: Props) {
     const handleBulkRemove = (sels: OLODSelectie[]) => {
         if (sels.length === 0) return;
         metUndo(`${vakken(sels.length)} verwijderd uit het traject`, () => removeMany(sels));
+    };
+
+    // Eén vak (de)activeren is met dezelfde knop meteen terug te draaien;
+    // enkel de bulkactie krijgt daarom een undo-melding.
+    const handleBulkSetActief = (sels: OLODSelectie[], actief: boolean) => {
+        if (sels.length === 0) return;
+        metUndo(`${vakken(sels.length)} ${actief ? 'geactiveerd' : 'gedeactiveerd'}`, () =>
+            setActiefBulk(sels, actief)
+        );
     };
 
     const handleBulkSetKlasgroep = (sels: OLODSelectie[], klasgroep: string) => {
@@ -343,7 +354,7 @@ export function TrajectPlanner({ onBack, presetApplied = false }: Props) {
                     key: selectieKey(s),
                     naam: s.olodNaam,
                     kleur: colorOf(s.olodNaam),
-                    meta: s.klasgroep,
+                    meta: isActief(s) ? s.klasgroep : `${s.klasgroep} · uit`,
                 })),
         [traject, colorOf]
     );
@@ -564,6 +575,8 @@ export function TrajectPlanner({ onBack, presetApplied = false }: Props) {
                         onSetKlasgroep={setKlasgroep}
                         onBulkSetKlasgroep={handleBulkSetKlasgroep}
                         onBulkRemove={handleBulkRemove}
+                        onToggleActief={toggleActief}
+                        onBulkSetActief={handleBulkSetActief}
                         onPreview={setKlasgroepPreview}
                         statussen={statussen}
                         actiefBereik={actiefBereik}

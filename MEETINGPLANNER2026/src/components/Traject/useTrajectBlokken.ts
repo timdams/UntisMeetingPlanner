@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Lesblok, OLODSelectie, StudentTraject } from './types';
+import { isActief, Lesblok, OLODSelectie, StudentTraject } from './types';
 import { trajectUntisService } from './trajectService';
 import { academiejaarBereik, type GrenzenInput } from './academicYear';
 import {
@@ -101,6 +101,9 @@ export function selectieStatussen(
 ): Map<string, SelectieStatus> {
     const out = new Map<string, SelectieStatus>();
     for (const sel of traject) {
+        // Een gedeactiveerde selectie hoort bewust niet in het rooster: geen
+        // waarschuwing over lessen die toch niet meetellen.
+        if (!isActief(sel)) continue;
         const bs = blokkenPerKlas[sel.klasgroep];
         if (!bs) continue;
         if (heeftLessen(sel, bs)) continue;

@@ -11,10 +11,11 @@ De module gebruikt de Untis-data van de parent-tool via een dunne adapter rond `
 1. Trajectbegeleider markeert in **instellingen** welke klasgroepen tot zijn opleiding behoren — die shortlist filtert al de rest.
 2. Trajectbegeleider kiest de **periode-indeling** (semesters, of modules = 2 per semester) en de **actieve periode**. In het werkblad wisselt hij via de **periode-switcher** in de topbar snel van periode (S1/S2 of M1…M4).
 3. Trajectbegeleider bladert door een **klasgroeprooster** en klikt lesblokken aan om OLODs toe te voegen of te verwijderen uit het studenttraject. Een keuze geldt voor de **actieve periode**; hetzelfde vak kan in een volgende module bij een andere klasgroep gekozen worden.
-4. Een **live overzicht** toont het opgebouwde studentrooster, week per week, voor de actieve periode, met conflictdetectie.
-5. **Reset**-knop wist het volledige studenttraject (met bevestiging).
-6. **Print/PDF-export** van het studenttraject als **eenvoudige lijst** (OLOD-naam + klasgroep), gegroepeerd per klasgroep — géén visuele weergave.
-7. **Back-up & herstel**: instellingen + traject + kleurmap exporteren naar JSON en importeren vanuit JSON.
+4. Een gekozen OLOD kan **gedeactiveerd** worden: ze blijft in de lijst staan (met haar klasgroep en periode), maar telt niet meer mee — handig om een scenario te vergelijken zonder de keuze weg te gooien.
+5. Een **live overzicht** toont het opgebouwde studentrooster, week per week, voor de actieve periode, met conflictdetectie.
+6. **Reset**-knop wist het volledige studenttraject (met bevestiging).
+7. **Print/PDF-export** van het studenttraject als **eenvoudige lijst** (OLOD-naam + klasgroep), gegroepeerd per klasgroep — géén visuele weergave.
+8. **Back-up & herstel**: instellingen + traject + kleurmap exporteren naar JSON en importeren vanuit JSON.
 
 Expliciet **niet** in MVP: favorieten/templates, alternatievensuggesties, conflict-solver, meerdere studentdossiers parallel.
 
@@ -36,8 +37,13 @@ type Lesblok = {
 ### OLOD-selectie (interne state)
 Een OLOD-keuze is **periodegebonden**: de student volgt `olodNaam` bij `klasgroep` tussen `van` en `tot` (inclusieve ISO-datums; het actieve periodebereik op het moment van klikken). Zo kan hetzelfde vak in module 1 bij klasgroep A en in module 2 bij klasgroep B gekozen worden zonder dat beide keuzes elkaar overlappen. Het studenttraject is één lijst voor het hele academiejaar; het overzicht toont enkel de selecties die de actieve periode raken. Alle lesblokken van de tuple `(klasgroep, olodNaam)` waarvan de datum binnen `[van, tot]` én binnen de actieve periode valt, horen bij het traject.
 
+Een selectie kan bovendien **uitgeschakeld** staan (`actief: false`). Ze blijft dan volwaardig in het traject — met haar klasgroep en periode — maar levert nergens lessen: niet in het totaalrooster, niet in de conflictdetectie, niet in de afdruk. Het veld is optioneel; ontbreekt het (oudere opslag, back-ups), dan is de selectie actief. `isActief(sel)` in [types.ts](MEETINGPLANNER2026/src/components/Traject/types.ts) is de enige plaats waar die regel staat.
+
 ```typescript
-type OLODSelectie = { klasgroep: string; olodNaam: string; van: string; tot: string; };
+type OLODSelectie = {
+  klasgroep: string; olodNaam: string; van: string; tot: string;
+  actief?: boolean; // afwezig of true = telt mee; false = gedeactiveerd
+};
 type StudentTraject = OLODSelectie[];
 ```
 
@@ -113,6 +119,7 @@ Drie panelen naast elkaar (grid: `200px 1fr 460px`). De panelkoppen dragen een *
 - **Bulkselectie** (voor studenten die niet het hele programma volgen): elke selectie draagt een **checkbox**, en boven de lijst staan **snelkeuze-chips** per periode die in het traject voorkomt (`M1`, `M2`, …, plus *alles* en *wis*) — één klik vinkt alle vakken van die module aan. Zodra er iets aangevinkt is verschijnt een **actiebalk**: *N gekozen · Verzet naar… · 🗑 · ✕*. De aangevinkte set is vluchtige UI-state (`Set<selectieKey>`); ze wordt niet bewaard en gesnoeid zodra een selectie uit het traject verdwijnt.
 - **Bulk-klasgroepkiezer**: *Verzet naar…* toont elke klasgroep uit de shortlist met **hoeveel van de aangevinkte vakken ze in hun periode geeft** (`gedekt/totaal`) en **hoeveel conflicten het traject na de wissel zou tellen**, met het huidige aantal als referentie ("nu N conflicten"). Beste eerst (meeste dekking, dan minste conflicten); de aanrader krijgt een ✨, een slechtere score staat rood. Klikken verzet alle gedekte selecties in één atomaire mutatie (`setKlasgroepBulk` in [hooks.ts](MEETINGPLANNER2026/src/components/Traject/hooks.ts), dedupliceert op `selectieKey` zodat samenvallende selecties versmelten); dekt de klasgroep maar een deel, dan vraagt een dialoog eerst bevestiging en blijven de andere vakken staan. Na de wissel klapt de kiezer dicht — het resultaat staat dan in paneel C, en een volgende poging verdient een verse vergelijking; de vakken blijven wel aangevinkt (onder hun nieuwe sleutel), zodat er meteen een volgende bulkactie op dezelfde set kan volgen. Kandidaten komen uit `useBulkAlternatieven` in [useTrajectBlokken.ts](MEETINGPLANNER2026/src/components/Traject/useTrajectBlokken.ts): één fetch per klasgroep voor het **volledige academiejaar** (zelfde range als `useTrajectBlokken`, dus grotendeels uit de range-cache), waarna scoren zonder nieuwe fetch gebeurt — ook na een wissel. Een klasgroep waarvan het rooster (nog) niet opgehaald kan worden zakt naar onderen met een aparte melding.
 - **Wat-als-preview**: zolang de muis (of de toetsenbordfocus) op een andere klasgroep-chip in de kiezer staat, toont paneel C waar het vak dan zou vallen — zie hieronder. Bij de bulk-kiezer geldt dat voor de hele set tegelijk (`KlasgroepPreview.sels`), en enkel voor de selecties die effectief verhuizen. De preview verdwijnt zodra de muis de chip verlaat, de kiezer sluit of de wissel effectief gebeurt.
+- **Activeren / deactiveren**: elke selectie draagt een oogknopje (open oog = telt mee, doorstreept oog = uit) dat haar uitschakelt of weer inschakelt (`toggleActief` in [hooks.ts](MEETINGPLANNER2026/src/components/Traject/hooks.ts)). Een uitgeschakelde selectie krijgt een gestippelde, doffe rij, verdwijnt uit paneel C (rooster, conflicten, teller) en uit de afdruk, maar blijft met klasgroep en periode in de lijst staan — zo kan een vak opzijgezet worden zonder het weg te gooien, en met één klik terug. De teller-tooltip vermeldt hoeveel er gedeactiveerd zijn. In de actiebalk van de bulkselectie zit dezelfde knop voor de hele aangevinkte set (alles uit zodra er nog iets aanstaat, anders alles aan; met undo-melding). Ook het rooster van paneel B toont zo'n blok gestippeld en doffer, naast de gewone "gekozen"-markering.
 - **Waarschuwing** bij een selectie die in haar periode geen enkele les van dat vak bij die klasgroep oplevert (bv. na een wissel naar een module waarin het vak niet loopt): oranje kader + melding "Geen lessen van dit vak bij … in …". Is het rooster van die periode nog niet beschikbaar (Untis 404), dan staat er een informatieve melding in plaats van een vals alarm. Statussen komen uit `selectieStatussen` in [useTrajectBlokken.ts](MEETINGPLANNER2026/src/components/Traject/useTrajectBlokken.ts), dat ook het jaarrooster voor paneel C levert.
 
 **Paneel B — Klasgroeprooster** ([KlasgroepRooster.tsx](MEETINGPLANNER2026/src/components/Traject/KlasgroepRooster.tsx))
@@ -121,7 +128,7 @@ Drie panelen naast elkaar (grid: `200px 1fr 460px`). De panelkoppen dragen een *
 - Lesblokken zijn klikbaar:
   - Valt het blok onder geen enkele selectie van `(Y, X)` → **toevoegen** voor de actieve periode.
   - Valt het blok onder een bestaande selectie → **die selectie verwijderen** (alle instanties binnen haar periode).
-- Geselecteerde OLODs hebben een donkere rand + witte inset.
+- Geselecteerde OLODs hebben een donkere rand + witte inset; is de selectie gedeactiveerd, dan is die rand gestippeld en het blok doffer (klikken verwijdert de selectie dan nog steeds — activeren gebeurt in paneel A).
 - **Klasgroep-kiezer per vak**: elk lesblok draagt rechtsboven een knopje dat een modaal venster opent (portal in `document.body`) met, per klasgroep uit de shortlist die dit vak deze week geeft, een mini-weekrooster met het vak gemarkeerd plus zijn lesuren. De huidige klasgroep staat vooraan (badge "huidig"). Het venster **scrollt zelf**, zodat ook een lange shortlist volledig bereikbaar blijft. Een klik op een kaart zet het vak in het traject **bij díe klasgroep** (voor de actieve periode) en sluit de kiezer; een klik op een al gekozen kaart ("in traject") haalt het er weer uit en houdt de kiezer open om meteen een andere klasgroep aan te duiden. Sluiten met Esc, de X of een klik naast het venster. De roosters van de andere klasgroepen worden pas opgehaald wanneer de kiezer opengaat en per week gecachet.
 
 **Paneel C — Studenttraject-overzicht** ([StudentOverzicht.tsx](MEETINGPLANNER2026/src/components/Traject/StudentOverzicht.tsx))
@@ -158,6 +165,8 @@ const overlapt = (a: Lesblok, b: Lesblok) =>
 ```
 Conflictdetectie loopt over alle effectieve lesblokken binnen het semester (uitgerold uit de OLOD-selecties), met een vroege break op gesorteerde startijden.
 
+Gedeactiveerde selecties (`actief: false`) doen in dit alles niet mee: `effectieveBlokken` laat ze weg, en `wegBlokkenVoor` / `ghostBlokkenVoor` negeren ze zowel als verhuizende selectie als bij de vraag of een andere selectie een blok in het rooster houdt.
+
 Alles wat "welke blokken zitten er effectief in het traject en wat zou een wissel daaraan veranderen" beantwoordt, staat in [conflicts.ts](MEETINGPLANNER2026/src/components/Traject/conflicts.ts): `effectieveBlokken` (uitrollen van de selecties, elk blok hoogstens één keer), `wegBlokkenVoor` / `ghostBlokkenVoor` (wat verdwijnt en wat erbij komt bij een wissel van één of meerdere selecties) en `scenarioBlokken` (bestaand − weg + ghost). Paneel C tekent daarmee de preview en paneel A scoort er de bulk-kiezer mee, zodat het conflictaantal in de kiezer exact overeenkomt met wat het overzicht daarna toont.
 
 ## Kleurtoekenning
@@ -169,7 +178,7 @@ Alles wat "welke blokken zitten er effectief in het traject en wat zou een wisse
 **Visuele weergave wordt onderdrukt in print** (`@media print` verbergt `.overzichtScroll`, `.legendRow`, `.conflicts`).
 De afdruk bevat:
 - **Titel + actieve periode (naam + datums) + afdrukdatum** bovenaan.
-- Een **eenvoudige lijst van OLODs** voor het volledige traject, gegroepeerd per klasgroep (alfabetisch), elk vak als bullet met zijn periode, bv. `Web Development (M2)`.
+- Een **eenvoudige lijst van OLODs** voor het volledige traject, gegroepeerd per klasgroep (alfabetisch), elk vak als bullet met zijn periode, bv. `Web Development (M2)`. **Gedeactiveerde OLODs staan er niet bij** (ze tellen ook in het rooster niet mee); staan er, dan sluit een voetnoot af met hoeveel er niet meegeteld zijn. Hetzelfde geldt voor *Kopieer naar klembord*.
 
 Geen kleurenlegende, geen conflictlijst, geen mini-kalender in de afdruk.
 

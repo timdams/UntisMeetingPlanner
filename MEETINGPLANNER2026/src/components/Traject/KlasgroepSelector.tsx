@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, ArrowLeftRight, ChevronDown, Eye, Info, Loader2, Sparkles, Trash2, X } from 'lucide-react';
-import { Lesblok, OLODSelectie, StudentTraject } from './types';
+import { AlertTriangle, ArrowLeftRight, ChevronDown, Eye, EyeOff, Info, Loader2, Sparkles, Trash2, X } from 'lucide-react';
+import { isActief, Lesblok, OLODSelectie, StudentTraject } from './types';
 import {
     matchtPeriode,
     periodeLabelVoor,
@@ -36,6 +36,10 @@ interface Props {
     // Bulkacties op de aangevinkte selecties.
     onBulkSetKlasgroep: (sels: OLODSelectie[], klasgroep: string) => void;
     onBulkRemove: (sels: OLODSelectie[]) => void;
+    // Een OLOD tijdelijk uitschakelen: ze blijft in de lijst staan, maar telt
+    // niet mee in het totaalrooster. De bulkvariant werkt op de aangevinkte set.
+    onToggleActief: (sel: OLODSelectie) => void;
+    onBulkSetActief: (sels: OLODSelectie[], actief: boolean) => void;
     // Wat-als-preview: de klasgroep waar de gebruiker in de kiezer over
     // beweegt (of null). Het studentoverzicht toont dan waar het vak zou vallen.
     onPreview: (preview: KlasgroepPreview | null) => void;
@@ -70,6 +74,8 @@ export function KlasgroepSelector({
     onSetKlasgroep,
     onBulkSetKlasgroep,
     onBulkRemove,
+    onToggleActief,
+    onBulkSetActief,
     onPreview,
     statussen,
     actiefBereik,
@@ -147,6 +153,8 @@ export function KlasgroepSelector({
         [traject, actiefBereik.van, actiefBereik.tot]
     );
 
+    const gedeactiveerd = useMemo(() => traject.filter(s => !isActief(s)).length, [traject]);
+
     // Kandidaat-klasgroepen worden enkel opgehaald voor de selectie waarvan de
     // klasgroep-kiezer open staat.
     const openKlasSel = useMemo(
@@ -161,6 +169,10 @@ export function KlasgroepSelector({
         () => gesorteerd.filter(s => gekozen.has(selectieKey(s))),
         [gesorteerd, gekozen]
     );
+
+    // Eén knop voor de hele aangevinkte set: staat er nog iets aan, dan zet ze
+    // alles uit; staat alles uit, dan zet ze alles weer aan.
+    const bulkNaarActief = gekozenSels.length > 0 && !gekozenSels.some(isActief);
 
     // Snelkeuze-chips: elke periode die in het traject voorkomt, met de
     // selecties die erin vallen. Zo staat "alles van M1" op één klik.
@@ -240,7 +252,9 @@ export function KlasgroepSelector({
             key: selectieKey(s),
             naam: s.olodNaam,
             kleur: colorOf(s.olodNaam),
-            meta: `${s.klasgroep} · ${periodeLabelVoor(s.van, s.tot, periodeGrenzen).kort}`,
+            meta: `${s.klasgroep} · ${periodeLabelVoor(s.van, s.tot, periodeGrenzen).kort}${
+                isActief(s) ? '' : ' · uit'
+            }`,
         }));
 
     return (
@@ -275,9 +289,12 @@ export function KlasgroepSelector({
                 <span
                     className={styles.olodListCount}
                     title={
-                        inPeriode === traject.length
+                        (inPeriode === traject.length
                             ? `${traject.length} in het traject`
-                            : `${inPeriode} in de actieve periode, ${traject.length} in het volledige traject`
+                            : `${inPeriode} in de actieve periode, ${traject.length} in het volledige traject`) +
+                        (gedeactiveerd > 0
+                            ? `\n${gedeactiveerd} gedeactiveerd — die tellen niet mee in het totaalrooster`
+                            : '')
                     }
                 >
                     {inPeriode === traject.length ? traject.length : `${inPeriode} / ${traject.length}`}
@@ -341,6 +358,19 @@ export function KlasgroepSelector({
                         <button
                             type="button"
                             className={styles.olodBulkKnop}
+                            onClick={() => onBulkSetActief(gekozenSels, bulkNaarActief)}
+                            title={
+                                bulkNaarActief
+                                    ? 'Deze vakken weer laten meetellen in het totaalrooster'
+                                    : 'Deze vakken uit het totaalrooster halen — ze blijven wel in de lijst staan'
+                            }
+                            aria-label={bulkNaarActief ? 'Vakken activeren' : 'Vakken deactiveren'}
+                        >
+                            {bulkNaarActief ? <Eye size={12} /> : <EyeOff size={12} />}
+                        </button>
+                        <button
+                            type="button"
+                            className={styles.olodBulkKnop}
                             onClick={() => setBulkDialoog({ soort: 'verwijder' })}
                             title="Deze vakken uit het traject verwijderen"
                         >
@@ -384,12 +414,13 @@ export function KlasgroepSelector({
                         const badgeClass = `${styles.olodListPeriode} ${zichtbaar ? styles.olodListPeriodeActief : ''}`;
                         const badgeTitle = `${periode.label}: ${sel.van} t/m ${sel.tot}${zichtbaar ? '' : ' — buiten de actieve periode'}`;
                         const aangevinkt = gekozen.has(key);
+                        const staatAan = isActief(sel);
                         return (
                             <div
                                 key={key}
                                 className={`${styles.olodListItem} ${waarschuwing ? styles.olodListItemWaarschuwing : ''} ${
                                     aangevinkt ? styles.olodListItemGekozen : ''
-                                }`}
+                                } ${staatAan ? '' : styles.olodListItemUit}`}
                             >
                                 <input
                                     type="checkbox"
@@ -436,6 +467,20 @@ export function KlasgroepSelector({
                                         </button>
                                     </div>
                                 </div>
+                                <button
+                                    type="button"
+                                    className={`${styles.olodListToggle} ${staatAan ? '' : styles.olodListToggleUit}`}
+                                    onClick={() => onToggleActief(sel)}
+                                    title={
+                                        staatAan
+                                            ? `${sel.olodNaam} (${sel.klasgroep}, ${periode.kort}) uitschakelen — blijft in de lijst staan, maar verdwijnt uit het totaalrooster`
+                                            : `${sel.olodNaam} (${sel.klasgroep}, ${periode.kort}) weer laten meetellen in het totaalrooster`
+                                    }
+                                    aria-label={staatAan ? 'OLOD deactiveren' : 'OLOD activeren'}
+                                    aria-pressed={!staatAan}
+                                >
+                                    {staatAan ? <Eye size={13} /> : <EyeOff size={13} />}
+                                </button>
                                 <button
                                     type="button"
                                     className={styles.olodListRemove}

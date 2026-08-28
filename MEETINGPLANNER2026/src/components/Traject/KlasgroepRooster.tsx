@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { Lesblok, OLODSelectie } from './types';
+import { isActief, Lesblok, OLODSelectie } from './types';
 import { trajectUntisService } from './trajectService';
 import { actievePeriode, allePeriodes, type PeriodeGrenzen } from './academicYear';
 import {
@@ -328,13 +328,19 @@ export function KlasgroepRooster({
                                     />
                                 ))}
                                 {laidOut.map(({ blok: b, col, cols }, i) => {
-                                    const selected = selectieVoor(b.klasgroep, b.olodNaam, b.start) !== null;
+                                    const sel = selectieVoor(b.klasgroep, b.olodNaam, b.start);
+                                    // Een uitgeschakelde keuze blijft zichtbaar als gekozen,
+                                    // maar gestippeld: ze telt niet mee in het totaalrooster.
+                                    const selected = sel !== null;
+                                    const uit = sel !== null && !isActief(sel);
                                     const widthPct = 100 / cols;
                                     const leftPct = col * widthPct;
                                     return (
                                         <div
                                             key={i}
-                                            className={`${styles.roosterBlok} ${selected ? styles.roosterBlokSelected : ''}`}
+                                            className={`${styles.roosterBlok} ${selected ? styles.roosterBlokSelected : ''} ${
+                                                uit ? styles.roosterBlokUit : ''
+                                            }`}
                                             style={{
                                                 top: `${topPct(b.start, totalMin)}%`,
                                                 height: `${heightPct(b.start, b.eind, totalMin)}%`,

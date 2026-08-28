@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { TrajectSettings, StudentTraject, KleurMap, OLODSelectie, Lesblok } from './types';
+import { isActief, TrajectSettings, StudentTraject, KleurMap, OLODSelectie, Lesblok } from './types';
 import type { TrajectPreset } from './trajectShare';
 import {
     academiejaarBereik,
@@ -95,6 +95,9 @@ export function normalizeTraject(raw: unknown): StudentTraject {
             van: isIsoDate(it.van) ? it.van : jaar.van,
             tot: isIsoDate(it.tot) ? it.tot : jaar.tot,
         };
+        // Een gedeactiveerde selectie blijft gedeactiveerd; alles zonder het
+        // veld (oudere opslag, back-ups) telt gewoon mee.
+        if (it.actief === false) sel.actief = false;
         const key = selectieKey(sel);
         if (gezien.has(key)) continue;
         gezien.add(key);
@@ -437,7 +440,9 @@ export function trajectVingerafdruk(traject: StudentTraject, settings: TrajectSe
     // item, de vergelijking vanuit de live state. Zonder dit zou een selectie
     // die pas bij het laden haar periode krijgt, meteen als wijziging tellen.
     const sels = normalizeTraject(traject)
-        .map(selectieKey)
+        // Het actief/inactief-vlaggetje hoort bij de toestand van het traject:
+        // een vak deactiveren is een wijziging die bewaard moet worden.
+        .map(s => `${selectieKey(s)}${isActief(s) ? '' : '::uit'}`)
         .sort()
         .join('|');
     const s = normalizeSettings(settings);
@@ -586,6 +591,23 @@ export function useStudentTraject() {
         setTraject(t => t.filter(x => !sameSelectie(x, sel)));
     }, []);
 
+    // Schakelt een selectie uit of weer in. Een uitgeschakelde OLOD blijft in
+    // het traject staan — met haar klasgroep en periode — maar telt niet mee in
+    // het totaalrooster, de conflictdetectie en de afdruk. Zo kan een keuze
+    // even opzijgezet worden zonder ze weg te gooien.
+    const toggleActief = useCallback((sel: OLODSelectie) => {
+        setTraject(t => t.map(x => (sameSelectie(x, sel) ? { ...x, actief: !isActief(x) } : x)));
+    }, []);
+
+    // Zet meerdere selecties in één keer aan of uit (bv. een hele module).
+    const setActiefBulk = useCallback((sels: OLODSelectie[], actief: boolean) => {
+        if (sels.length === 0) return;
+        setTraject(t => {
+            const keys = new Set(sels.map(selectieKey));
+            return t.map(x => (keys.has(selectieKey(x)) ? { ...x, actief } : x));
+        });
+    }, []);
+
     // Wijzigt de periode van een bestaande selectie (bv. van het hele semester
     // naar enkel module 2). Bestaat er al een identieke selectie met de nieuwe
     // periode, dan valt de gewijzigde ermee samen.
@@ -655,6 +677,8 @@ export function useStudentTraject() {
         selectieVoor,
         remove,
         removeMany,
+        toggleActief,
+        setActiefBulk,
         setPeriode,
         setKlasgroep,
         setKlasgroepBulk,

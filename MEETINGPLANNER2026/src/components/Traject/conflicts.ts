@@ -5,6 +5,7 @@
 // daarna toont.
 
 import type { Conflict, Lesblok, OLODSelectie, StudentTraject } from './types';
+import { isActief } from './types';
 import { datumInBereik } from './dateUtils';
 
 export function overlapt(a: Lesblok, b: Lesblok): boolean {
@@ -42,15 +43,18 @@ export function effectieveBlokken(
     start: Date,
     eind: Date
 ): Lesblok[] {
+    // Gedeactiveerde selecties tellen niet mee: hun lessen horen niet in het
+    // rooster en dus evenmin in de conflictdetectie.
+    const actieve = traject.filter(isActief);
     const perTuple = new Map<string, StudentTraject>();
-    for (const s of traject) {
+    for (const s of actieve) {
         const key = `${s.klasgroep}||${s.olodNaam}`;
         const arr = perTuple.get(key);
         if (arr) arr.push(s);
         else perTuple.set(key, [s]);
     }
     const out: Lesblok[] = [];
-    for (const k of new Set(traject.map(s => s.klasgroep))) {
+    for (const k of new Set(actieve.map(s => s.klasgroep))) {
         const bs = blokkenPerKlas[k] ?? [];
         for (const b of bs) {
             const sels = perTuple.get(`${b.klasgroep}||${b.olodNaam}`);
@@ -78,11 +82,15 @@ export function wegBlokkenVoor(
     effectieve: Lesblok[]
 ): Set<Lesblok> {
     const out = new Set<Lesblok>();
-    if (sels.length === 0) return out;
-    const verhuist = (s: OLODSelectie) => sels.some(sel => zelfdeSelectie(sel, s));
-    for (const sel of sels) {
+    // Een gedeactiveerde selectie heeft geen lessen in het rooster: er kan er
+    // dus geen van verdwijnen, en ze houdt evenmin blokken van een andere
+    // selectie in het rooster.
+    const verhuizend = sels.filter(isActief);
+    if (verhuizend.length === 0) return out;
+    const verhuist = (s: OLODSelectie) => verhuizend.some(sel => zelfdeSelectie(sel, s));
+    for (const sel of verhuizend) {
         const anderen = traject.filter(
-            s => s.klasgroep === sel.klasgroep && s.olodNaam === sel.olodNaam && !verhuist(s)
+            s => isActief(s) && s.klasgroep === sel.klasgroep && s.olodNaam === sel.olodNaam && !verhuist(s)
         );
         for (const b of effectieve) {
             if (b.klasgroep !== sel.klasgroep || b.olodNaam !== sel.olodNaam) continue;
@@ -112,14 +120,17 @@ export function ghostBlokkenVoor(
     start: Date,
     eind: Date
 ): Lesblok[] {
-    if (sels.length === 0) return [];
+    // Enkel actieve selecties leveren lessen op: een gedeactiveerd vak
+    // verschijnt ook bij de doelklasgroep niet in het rooster.
+    const verhuizend = sels.filter(isActief);
+    if (verhuizend.length === 0) return [];
     const aanwezig = new Set(effectieve.map(blokKey));
     const out: Lesblok[] = [];
     const gezien = new Set<string>();
     for (const b of kandidaatBlokken) {
         if (b.klasgroep !== klasgroep) continue;
         if (b.start.getTime() < start.getTime() || b.eind.getTime() > eind.getTime()) continue;
-        if (!sels.some(s => s.olodNaam === b.olodNaam && datumInBereik(b.start, s.van, s.tot))) continue;
+        if (!verhuizend.some(s => s.olodNaam === b.olodNaam && datumInBereik(b.start, s.van, s.tot))) continue;
         const key = blokKey(b);
         if (aanwezig.has(key) || gezien.has(key)) continue;
         gezien.add(key);

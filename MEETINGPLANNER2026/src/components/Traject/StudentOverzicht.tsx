@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Lesblok, StudentTraject } from './types';
+import { isActief, Lesblok, StudentTraject } from './types';
 import {
     detectConflicts,
     effectieveBlokken as berekenEffectieveBlokken,
@@ -236,7 +236,11 @@ export function StudentOverzicht({
 
     // Bij een periodewissel scrollen we de eerste week van die periode in beeld.
     const eersteActieveRij = useRef<HTMLDivElement | null>(null);
-    const heeftRijen = !error && traject.length > 0;
+    // Gedeactiveerde selecties staan wel in de lijst links, maar niet in dit
+    // rooster: de teller en de lege staat rekenen dus met de actieve.
+    const actieveSelecties = useMemo(() => traject.filter(isActief).length, [traject]);
+    const gedeactiveerd = traject.length - actieveSelecties;
+    const heeftRijen = !error && actieveSelecties > 0;
     useEffect(() => {
         eersteActieveRij.current?.scrollIntoView({ block: 'start' });
     }, [actiefBereik.van, actiefBereik.tot, heeftRijen]);
@@ -298,8 +302,16 @@ export function StudentOverzicht({
                 <span className={styles.panelStap}>3</span>
                 Traject van de student
                 {busy && <Loader2 size={14} className="animate-spin" />}
-                <span style={{ marginLeft: 'auto', fontWeight: 400, fontSize: '0.8rem', color: '#64748b' }}>
-                    {traject.length} OLOD{traject.length === 1 ? '' : 's'}
+                <span
+                    style={{ marginLeft: 'auto', fontWeight: 400, fontSize: '0.8rem', color: '#64748b' }}
+                    title={
+                        gedeactiveerd > 0
+                            ? `${actieveSelecties} in dit rooster, ${gedeactiveerd} gedeactiveerd (staan wel nog in de lijst links)`
+                            : undefined
+                    }
+                >
+                    {actieveSelecties} OLOD{actieveSelecties === 1 ? '' : 's'}
+                    {gedeactiveerd > 0 && ` (+${gedeactiveerd} uit)`}
                 </span>
             </div>
 
@@ -312,7 +324,7 @@ export function StudentOverzicht({
                     de bulk-kiezer in paneel A wél naar dit getal verwijst ("nu N
                     conflicten"). Tijdens een wat-als-preview neemt de strip hieronder
                     het over, met haar eigen referentiepunt. */}
-                {!error && !preview && traject.length > 0 && (
+                {!error && !preview && actieveSelecties > 0 && (
                     busy ? (
                         <div className={styles.statusRij}>
                             <Loader2 size={13} className="animate-spin" />
@@ -387,9 +399,11 @@ export function StudentOverzicht({
                     </div>
                 )}
 
-                {!error && traject.length === 0 ? (
+                {!error && actieveSelecties === 0 ? (
                     <div className={styles.emptyState}>
-                        Klik op lesblokken in het klasgroeprooster om OLODs aan het traject toe te voegen.
+                        {traject.length === 0
+                            ? 'Klik op lesblokken in het klasgroeprooster om OLODs aan het traject toe te voegen.'
+                            : 'Alle gekozen OLODs staan uit. Zet er een terug aan in de lijst links om ze hier te zien.'}
                     </div>
                 ) : (
                     <div className={styles.overzichtScroll} onScroll={hideTip}>
@@ -551,7 +565,7 @@ export function StudentOverzicht({
 
             {tip && <MiniTooltip tip={tip} />}
 
-            {zoomWeek && traject.length > 0 && (
+            {zoomWeek && actieveSelecties > 0 && (
                 <WeekZoom
                     weekMonday={zoomWeek}
                     blokken={zoomBlokken}

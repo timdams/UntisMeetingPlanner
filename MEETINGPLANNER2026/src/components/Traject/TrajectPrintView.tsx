@@ -1,4 +1,4 @@
-import { StudentTraject, TrajectSettings } from './types';
+import { isActief, StudentTraject, TrajectSettings } from './types';
 import { formatDateBE, parseIsoDate } from './dateUtils';
 import { actievePeriode, allePeriodes, periodeLabelVoor } from './academicYear';
 import styles from './Traject.module.css';
@@ -23,9 +23,12 @@ function periodeKop(settings: TrajectSettings): string {
 // Per klasgroep de OLODs mét de periode waarin de student ze daar volgt,
 // bv. "Web Development (M2)". Het hele traject wordt afgedrukt, niet enkel de
 // actieve periode: de afdruk is het overzicht voor het volledige jaar.
+// Gedeactiveerde selecties staan er niet bij: die tellen ook in het rooster
+// niet mee.
 function groupByKlas(traject: StudentTraject, settings: TrajectSettings): Map<string, string[]> {
     const byKlas = new Map<string, string[]>();
     [...traject]
+        .filter(isActief)
         .sort(
             (a, b) =>
                 a.klasgroep.localeCompare(b.klasgroep) ||
@@ -45,6 +48,8 @@ export function buildTrajectClipboardText(
     settings: TrajectSettings
 ): string {
     const byKlas = groupByKlas(traject, settings);
+    const aantal = traject.filter(isActief).length;
+    const uit = traject.length - aantal;
 
     const lines: string[] = [];
     lines.push('Studenttraject');
@@ -52,10 +57,10 @@ export function buildTrajectClipboardText(
         `${periodeKop(settings)} · Afgedrukt op ${new Date().toLocaleDateString('nl-BE')}`
     );
     lines.push('');
-    lines.push(`OLODs (${traject.length})`);
+    lines.push(`OLODs (${aantal})`);
     lines.push('');
 
-    if (traject.length === 0) {
+    if (aantal === 0) {
         lines.push('Geen OLODs in het traject.');
     } else {
         const entries = Array.from(byKlas.entries());
@@ -66,11 +71,18 @@ export function buildTrajectClipboardText(
         });
     }
 
+    if (uit > 0) {
+        lines.push('');
+        lines.push(`(${uit} gedeactiveerde OLOD${uit === 1 ? '' : 's'} niet meegeteld.)`);
+    }
+
     return lines.join('\n');
 }
 
 export function TrajectPrintView({ traject, settings }: Props) {
     const byKlas = groupByKlas(traject, settings);
+    const aantal = traject.filter(isActief).length;
+    const uit = traject.length - aantal;
 
     return (
         <div className={styles.printRoot}>
@@ -83,8 +95,8 @@ export function TrajectPrintView({ traject, settings }: Props) {
             </div>
 
             <div className={styles.printOlodList}>
-                <h2>OLODs ({traject.length})</h2>
-                {traject.length === 0 ? (
+                <h2>OLODs ({aantal})</h2>
+                {aantal === 0 ? (
                     <div>Geen OLODs in het traject.</div>
                 ) : (
                     Array.from(byKlas.entries()).map(([klas, olods]) => (
@@ -97,6 +109,11 @@ export function TrajectPrintView({ traject, settings }: Props) {
                             </ul>
                         </div>
                     ))
+                )}
+                {uit > 0 && (
+                    <div className={styles.printNoot}>
+                        {uit} gedeactiveerde OLOD{uit === 1 ? '' : 's'} niet meegeteld.
+                    </div>
                 )}
             </div>
         </div>

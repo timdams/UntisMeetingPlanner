@@ -18,6 +18,17 @@ export interface OLODSelectie {
     olodNaam: string;
     van: string;
     tot: string;
+    // Een gedeactiveerde selectie blijft in de lijst staan (mét haar klasgroep
+    // en periode), maar telt nergens mee: haar lessen verschijnen niet in het
+    // totaalrooster, de conflictdetectie of de afdruk. Ontbreekt het veld, dan
+    // is de selectie gewoon actief — zo blijven oudere opslag en back-ups
+    // zonder dit veld werken.
+    actief?: boolean;
+}
+
+/** Telt deze selectie mee in het rooster? Zie {@link OLODSelectie.actief}. */
+export function isActief(sel: OLODSelectie): boolean {
+    return sel.actief !== false;
 }
 
 export type StudentTraject = OLODSelectie[];

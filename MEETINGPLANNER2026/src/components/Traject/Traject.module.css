@@ -1345,6 +1345,50 @@
     border-color: rgba(255, 0, 0, 0.3);
 }
 
+/* Oogknopje dat een selectie uitschakelt of weer inschakelt. Zelfde maat als
+   het verwijderkruisje ernaast, maar zonder de rode hover: uitschakelen gooit
+   niets weg. */
+.olodListToggle {
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    padding: 0;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 4px;
+    color: #64748b;
+    cursor: pointer;
+}
+
+.olodListToggle:hover {
+    background-color: var(--selected-bg);
+    border-color: var(--primary);
+    color: var(--primary);
+}
+
+/* Gedeactiveerde OLOD: blijft in de lijst staan, maar telt nergens mee. De
+   gestippelde rand en de doffe kleuren spiegelen het blokje in het rooster. */
+.olodListItemUit {
+    border-style: dashed;
+    background-color: #F8FAFC;
+}
+
+.olodListItemUit .olodListName,
+.olodListItemUit .olodListKlas {
+    color: #94a3b8;
+}
+
+.olodListItemUit .olodListSwatch {
+    opacity: 0.35;
+}
+
+.olodListToggleUit {
+    color: #94a3b8;
+}
+
 .emptyState {
     padding: 1rem;
     color: #64748b;
@@ -1591,6 +1635,13 @@
 .roosterBlokSelected {
     border-color: #111827;
     box-shadow: 0 0 0 1px white inset;
+}
+
+/* Gekozen maar uitgeschakeld: wel herkenbaar in het klasgroeprooster, maar
+   afwezig in het totaalrooster. */
+.roosterBlokUit {
+    border-style: dashed;
+    opacity: 0.55;
 }
 
 .roosterBlokTime {
@@ -2708,4 +2759,10 @@
 
 .printKlasBlock li {
     line-height: 1.5;
+}
+
+.printNoot {
+    margin-top: 0.5rem;
+    font-size: 0.8rem;
+    color: #475569;
 }
