@@ -12,6 +12,7 @@ import {
     Save,
     Share2,
     MoreHorizontal,
+    BookOpen,
 } from 'lucide-react';
 import styles from './Traject.module.css';
 import {
@@ -41,6 +42,10 @@ import { selectieStatussen, useTrajectBlokken, type KlasgroepPreview } from './u
 import { backupFilename, buildBackup, downloadBackup, parseBackup, type TrajectBackup } from './trajectBackup';
 
 type Tab = 'werkblad' | 'instellingen';
+
+// De handleiding staat als PDF in public/ en wordt mee gedeployed. BASE_URL
+// zorgt dat de link ook onder het GitHub Pages-subpad klopt.
+const handleidingUrl = `${import.meta.env.BASE_URL}trajectplannerHandleiding.pdf`;
 
 // De dialoog die momenteel openstaat. Alle bevestigingen en het benoemen van
 // een traject lopen hierlangs, in plaats van via window.confirm/prompt.
@@ -448,6 +453,15 @@ export function TrajectPlanner({ onBack, presetApplied = false }: Props) {
 
                 <div className={styles.topbarSpacer} />
 
+                <a
+                    className={`${styles.toolbarBtn} ${styles.toolbarLink}`}
+                    href={handleidingUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    title="Open de handleiding van de trajectplanner (PDF) in een nieuw tabblad"
+                >
+                    <BookOpen size={14} /> Handleiding
+                </a>
                 <button
                     className={styles.toolbarBtn}
                     onClick={() => setDialoog({ soort: 'bewaar' })}

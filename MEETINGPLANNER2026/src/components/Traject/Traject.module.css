@@ -120,6 +120,14 @@
     border-color: var(--primary);
 }
 
+.toolbarLink {
+    text-decoration: none;
+    font-size: inherit;
+    font-family: inherit;
+    line-height: normal;
+    white-space: nowrap;
+}
+
 .toolbarBtnDanger {
     color: var(--primary);
     border-color: rgba(255, 0, 0, 0.3);
