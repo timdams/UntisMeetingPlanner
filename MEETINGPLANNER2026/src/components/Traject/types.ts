@@ -44,6 +44,12 @@ export interface TrajectSettings {
     // dag van module 2 en 4). Historische naam in oudere opslag: moduleGrenzen,
     // dat enkel de twee modulegrenzen bevatte — normalizeSettings leest die nog.
     periodeGrenzen: PeriodeGrenzen;
+    // OLOD-namen die in modulemodus tóch over beide modules van hun semester
+    // lopen. De gebruiker markeert ze in het werkblad (niet in de instellingen);
+    // ze staan hier omdat het een eigenschap van de opleiding is die met een
+    // back-up, een bewaard traject en de student-link mee moet reizen.
+    // Zie semesterOlods.ts.
+    semesterOlods: string[];
 }
 
 export type KleurMap = Record<string, string>;

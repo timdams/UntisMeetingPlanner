@@ -51,8 +51,13 @@ export interface SavedGroup {
 
 export interface RosterEntry {
     id: number;
+    // Alle entry-ids van Untis (id = ids[0]). Eén les die voor meerdere
+    // klasgroepen geldt kan meerdere ids dragen.
+    ids?: number[];
     start: string; // ISO DateTime
     end: string;   // ISO DateTime
+    // Afgeleid uit de CLASS/TEACHER/ROOM/SUBJECT-posities (position1..5) van
+    // de gridEntry. Ontbreekt een positie, dan is de lijst leeg.
     classes: UntisResource[];
     teachers: UntisResource[];
     rooms: UntisResource[];
@@ -60,4 +65,9 @@ export interface RosterEntry {
     lessonText?: string;  // e.g. "Wiskunde 3A"
     lessonInfo?: string;  // extra info from Untis
     info?: string;        // INFO-type label uit positions, bv. "Theorie", "Labo"
+    // Ruwe Untis-velden: `status` (bv. REGULAR, CANCELLED) en `type` van de
+    // gridEntry. Niet genormaliseerd — consumenten beslissen zelf wat een
+    // afwijkende status betekent.
+    status?: string;
+    type?: string;
 }

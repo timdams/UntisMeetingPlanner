@@ -13,6 +13,7 @@ import {
     type PeriodeType,
 } from './academicYear';
 import { datumInBereik, isIsoDate, parseIsoDate } from './dateUtils';
+import { metSemesterOlod, normalizeSemesterOlods, verbreedNaarSemesters } from './semesterOlods';
 
 const KEY_SETTINGS = 'traject_settings';
 const KEY_TRAJECT = 'traject_student';
@@ -71,6 +72,9 @@ export function normalizeSettings(raw: unknown): TrajectSettings {
         semesterEind: isIsoDate(r.semesterEind) ? r.semesterEind : eind,
         periodeType: r.periodeType === 'module' ? 'module' : 'semester',
         periodeGrenzen,
+        // Ontbreekt in opslag van vóór de semestervak-tag: dan is er gewoon
+        // geen enkel vak als semestervak gemarkeerd.
+        semesterOlods: normalizeSemesterOlods(r.semesterOlods),
     };
 }
 
@@ -204,6 +208,7 @@ export function applyTrajectSettingsPreset(preset: TrajectPreset): void {
         semesterEind: preset.semesterEind,
         periodeType: preset.periodeType ?? current.periodeType,
         periodeGrenzen: preset.periodeGrenzen ?? current.periodeGrenzen,
+        semesterOlods: preset.semesterOlods ?? current.semesterOlods,
     });
 }
 
@@ -288,6 +293,15 @@ export function useTrajectSettings() {
         });
     }, []);
 
+    // Markeert een OLOD-naam als semestervak (of haalt de markering weg). De
+    // knop staat in het werkblad, maar de tag hoort bij de instellingen zodat
+    // ze met een back-up, een bewaard traject en de deel-link meereist.
+    // Het verbreden van bestaande keuzes gebeurt apart, op het traject zelf
+    // (verbreedOlodNaarSemester), zodat beide samen één undo-punt vormen.
+    const setSemesterOlod = useCallback((olodNaam: string, aan: boolean) => {
+        setSettings(s => ({ ...s, semesterOlods: metSemesterOlod(s.semesterOlods, olodNaam, aan) }));
+    }, []);
+
     const replaceSettings = useCallback((next: TrajectSettings) => {
         setSettings(normalizeSettings(next));
     }, []);
@@ -309,6 +323,7 @@ export function useTrajectSettings() {
         setSemesterPeriode,
         setPeriodeType,
         setPeriodeGrenzen,
+        setSemesterOlod,
         replaceSettings,
         setKlasgroepen,
     };
@@ -457,6 +472,9 @@ export function trajectVingerafdruk(traject: StudentTraject, settings: TrajectSe
         s.periodeGrenzen.s2Eind,
         s.periodeGrenzen.m2Start,
         s.periodeGrenzen.m4Start,
+        // Een vak als semestervak markeren verandert hoe het traject gelezen
+        // wordt, dus telt het als niet-bewaard werk.
+        s.semesterOlods.join(','),
     ].join('|');
     return `${sels}##${kern}`;
 }
@@ -621,6 +639,13 @@ export function useStudentTraject() {
         });
     }, []);
 
+    // Verbreedt elke keuze van dit vak naar haar volledige semester — wat er
+    // gebeurt zodra het vak als semestervak gemarkeerd wordt. Keuzes die
+    // daardoor samenvallen (M1 én M2 bij dezelfde klasgroep) smelten samen.
+    const verbreedOlodNaarSemester = useCallback((olodNaam: string, grenzen: PeriodeGrenzen) => {
+        setTraject(t => verbreedNaarSemesters(t, olodNaam, grenzen));
+    }, []);
+
     // Verhuist een bestaande selectie naar een andere klasgroep (zelfde vak,
     // zelfde periode). Bestaat er al een identieke selectie bij die klasgroep,
     // dan valt de gewijzigde ermee samen.
@@ -680,6 +705,7 @@ export function useStudentTraject() {
         toggleActief,
         setActiefBulk,
         setPeriode,
+        verbreedOlodNaarSemester,
         setKlasgroep,
         setKlasgroepBulk,
         reset,

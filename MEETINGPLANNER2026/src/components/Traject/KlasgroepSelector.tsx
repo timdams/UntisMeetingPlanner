@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, ArrowLeftRight, ChevronDown, Eye, EyeOff, Info, Loader2, Sparkles, Trash2, X } from 'lucide-react';
+import { AlertTriangle, ArrowLeftRight, CalendarRange, ChevronDown, Eye, EyeOff, Info, Loader2, Sparkles, Trash2, X } from 'lucide-react';
 import { isActief, Lesblok, OLODSelectie, StudentTraject } from './types';
 import {
     matchtPeriode,
@@ -10,6 +10,7 @@ import {
 } from './academicYear';
 import { bereikOverlapt } from './dateUtils';
 import { selectieKey } from './hooks';
+import { botsendeKlasgroepen, isSemesterOlod, semesterBereikVoor } from './semesterOlods';
 import {
     useBulkAlternatieven,
     useKlasgroepAlternatieven,
@@ -53,6 +54,11 @@ interface Props {
     periodeType: PeriodeType;
     // Nodig om de periode-badge van een selectie te benoemen (M1 … M4).
     periodeGrenzen: PeriodeGrenzen;
+    // OLOD-namen die als semestervak gemarkeerd zijn: die lopen over beide
+    // modules en kunnen dus geen module meer kiezen. Enkel van tel in
+    // modulemodus. Zie semesterOlods.ts.
+    semesterOlods: string[];
+    onToggleSemesterOlod: (olodNaam: string) => void;
 }
 
 // Welke kiezer onder een selectie open staat: de periode-kiezer (badge) of
@@ -81,6 +87,8 @@ export function KlasgroepSelector({
     actiefBereik,
     periodeType,
     periodeGrenzen,
+    semesterOlods,
+    onToggleSemesterOlod,
 }: Props) {
     // Selectie waarvan een kiezer open staat. De sleutel bevat klasgroep én
     // periode; na een keuze volgt ze de gewijzigde selectie zodat de kiezer
@@ -113,6 +121,18 @@ export function KlasgroepSelector({
     const toggleKiezer = (key: string, soort: Kiezer['soort']) => {
         setBulkOpen(false);
         setOpen(o => (o && o.key === key && o.soort === soort ? null : { key, soort }));
+    };
+
+    // Het vak als semestervak markeren verbreedt meteen ook deze selectie, dus
+    // krijgt ze een nieuwe sleutel. We laten de kiezer op die nieuwe sleutel
+    // openstaan, zodat het resultaat meteen zichtbaar is (zelfde patroon als
+    // kiesPeriode hieronder).
+    const kiesSemestervak = (sel: OLODSelectie, wordtSemester: boolean) => {
+        onToggleSemesterOlod(sel.olodNaam);
+        const bereik = wordtSemester
+            ? semesterBereikVoor(sel.van, sel.tot, periodeGrenzen)
+            : { van: sel.van, tot: sel.tot };
+        setOpen({ key: selectieKey({ ...sel, ...bereik }), soort: 'periode' });
     };
 
     const kiesPeriode = (sel: OLODSelectie, van: string, tot: string) => {
@@ -410,9 +430,21 @@ export function KlasgroepSelector({
                         const openPeriode = kiesbaar && open?.key === key && open.soort === 'periode';
                         const openKlas = open?.key === key && open.soort === 'klasgroep';
                         const status = statussen.get(key);
-                        const waarschuwing = status === 'geen-lessen';
-                        const badgeClass = `${styles.olodListPeriode} ${zichtbaar ? styles.olodListPeriodeActief : ''}`;
-                        const badgeTitle = `${periode.label}: ${sel.van} t/m ${sel.tot}${zichtbaar ? '' : ' — buiten de actieve periode'}`;
+                        // Semestervak: loopt over beide modules van zijn semester,
+                        // dus de module-opties in de kiezer gaan op slot. Enkel in
+                        // modulemodus van tel.
+                        const semestervak = kiesbaar && isSemesterOlod(sel.olodNaam, semesterOlods);
+                        // Hetzelfde semestervak bij twee klasgroepen tegelijk laat
+                        // het vak twee keer naast elkaar lopen — dat moet de
+                        // gebruiker zelf oplossen, wij wijzen het enkel aan.
+                        const botsers = semestervak ? botsendeKlasgroepen(traject, sel) : [];
+                        const waarschuwing = status === 'geen-lessen' || botsers.length > 0;
+                        const badgeClass = `${styles.olodListPeriode} ${zichtbaar ? styles.olodListPeriodeActief : ''} ${
+                            semestervak ? styles.olodListPeriodeSemester : ''
+                        }`;
+                        const badgeTitle = `${periode.label}: ${sel.van} t/m ${sel.tot}${
+                            zichtbaar ? '' : ' — buiten de actieve periode'
+                        }${semestervak ? '\nSemestervak — loopt over beide modules' : ''}`;
                         const aangevinkt = gekozen.has(key);
                         const staatAan = isActief(sel);
                         return (
@@ -444,9 +476,10 @@ export function KlasgroepSelector({
                                                 type="button"
                                                 className={`${badgeClass} ${styles.olodListPeriodeKnop}`}
                                                 onClick={() => toggleKiezer(key, 'periode')}
-                                                title={`${badgeTitle}\nKlik om te kiezen: hele semester of één module`}
+                                                title={`${badgeTitle}\nKlik om te kiezen: heel het semester, één module, of dit vak als semestervak markeren`}
                                                 aria-expanded={openPeriode}
                                             >
+                                                {semestervak && <CalendarRange size={9} />}
                                                 {periode.kort}
                                                 <ChevronDown size={10} />
                                             </button>
@@ -505,18 +538,57 @@ export function KlasgroepSelector({
                                         <span>Rooster van {periode.kort} nog niet beschikbaar — nog niet gecontroleerd.</span>
                                     </div>
                                 )}
+                                {botsers.length > 0 && (
+                                    <div className={`${styles.olodListStatus} ${styles.olodListStatusWaarschuwing}`} role="alert">
+                                        <AlertTriangle size={12} />
+                                        <span>
+                                            Dit semestervak staat in {periode.kort} ook bij{' '}
+                                            {botsers.join(', ')}. Het loopt over beide modules, dus
+                                            houd er één klasgroep van over.
+                                        </span>
+                                    </div>
+                                )}
                                 {openPeriode && (
                                     <div className={styles.olodPeriodeKiezer} role="group" aria-label="Periode van deze OLOD">
+                                        <button
+                                            type="button"
+                                            className={`${styles.semesterVakToggle} ${
+                                                semestervak ? styles.semesterVakToggleAan : ''
+                                            }`}
+                                            onClick={() => kiesSemestervak(sel, !semestervak)}
+                                            aria-pressed={semestervak}
+                                            title={
+                                                semestervak
+                                                    ? `${sel.olodNaam} staat als semestervak gemarkeerd: het loopt over beide modules, bij elke klasgroep. Klik om het weer een modulevak te maken.`
+                                                    : `Markeer ${sel.olodNaam} als semestervak: het loopt dan over beide modules, bij elke klasgroep, en bestaande keuzes worden meteen verbreed.`
+                                            }
+                                        >
+                                            <CalendarRange size={12} />
+                                            <span className={styles.semesterVakToggleTekst}>
+                                                Dit is een semestervak
+                                            </span>
+                                            <span className={styles.semesterVakToggleStand}>
+                                                {semestervak ? 'aan' : 'uit'}
+                                            </span>
+                                        </button>
                                         {periodeOptiesVoor(sel.van, sel.tot, periodeGrenzen).map(p => {
                                             const isSemester = p.id.startsWith('S');
                                             const gekozen = matchtPeriode(p, sel.van, sel.tot);
+                                            // Een semestervak loopt per definitie over beide
+                                            // modules: enkel de semester-optie blijft klikbaar.
+                                            const opSlot = semestervak && !isSemester;
                                             return (
                                                 <button
                                                     key={p.id}
                                                     type="button"
                                                     className={`${styles.olodPeriodeOptie} ${gekozen ? styles.olodPeriodeOptieActief : ''}`}
                                                     onClick={() => kiesPeriode(sel, p.start, p.eind)}
-                                                    title={`${p.label}: ${p.start} t/m ${p.eind}`}
+                                                    disabled={opSlot}
+                                                    title={
+                                                        opSlot
+                                                            ? `${sel.olodNaam} staat als semestervak gemarkeerd en loopt dus over beide modules. Zet die schakelaar uit om ${p.kort} te kunnen kiezen.`
+                                                            : `${p.label}: ${p.start} t/m ${p.eind}`
+                                                    }
                                                     aria-pressed={gekozen}
                                                 >
                                                     {isSemester ? `Heel ${p.kort} (beide modules)` : `Enkel ${p.kort}`}

@@ -1,6 +1,7 @@
 import { TrajectSettings } from './types';
 import { effectieveGrenzen, type PeriodeGrenzen, type PeriodeType } from './academicYear';
 import { isIsoDate } from './dateUtils';
+import { normalizeSemesterOlods } from './semesterOlods';
 
 /** Hash-parameter waaronder de preset in een gedeelde URL verstopt zit. */
 const PRESET_PARAM = 'traject';
@@ -19,6 +20,10 @@ export interface TrajectPreset {
     semesterEind: string;
     periodeType?: PeriodeType;
     periodeGrenzen?: PeriodeGrenzen;
+    // De vakken die als semestervak gemarkeerd zijn: een eigenschap van de
+    // opleiding, dus die hoort de student net zo goed te kennen. Optioneel,
+    // want links van vóór deze tag hebben het veld niet.
+    semesterOlods?: string[];
 }
 
 // UTF-8-veilige base64url. Klasgroepnamen kunnen accenten bevatten, dus btoa()
@@ -56,6 +61,8 @@ export function buildShareUrl(settings: TrajectSettings): string {
         // grensdatums en heeft bij het lezen voorrang.
         m: [g.m2Start, g.m4Start],
         g: [g.s1Start, g.s1Eind, g.s2Start, g.s2Eind, g.m2Start, g.m4Start],
+        // Enkel meesturen als er iets te melden valt: houdt de URL kort.
+        ...(settings.semesterOlods.length > 0 ? { o: settings.semesterOlods } : {}),
     });
     const root = window.location.origin + window.location.pathname;
     return `${root}#${PRESET_PARAM}=${toBase64Url(payload)}`;
@@ -70,7 +77,7 @@ export function readTrajectPresetFromUrl(): TrajectPreset | null {
         if (!raw) return null;
         const data = JSON.parse(fromBase64Url(raw)) as Record<string, unknown>;
         if (data.v !== PRESET_VERSION) return null;
-        const { k, s, e, p, m, g } = data;
+        const { k, s, e, p, m, g, o } = data;
         if (!Array.isArray(k) || !k.every(x => typeof x === 'string')) return null;
         if (typeof s !== 'string' || typeof e !== 'string') return null;
         const preset: TrajectPreset = {
@@ -93,6 +100,10 @@ export function readTrajectPresetFromUrl(): TrajectPreset | null {
             });
         } else if (Array.isArray(m) && m.length === 2 && isIsoDate(m[0]) && isIsoDate(m[1])) {
             preset.periodeGrenzen = effectieveGrenzen({ m2Start: m[0], m4Start: m[1] });
+        }
+        if (Array.isArray(o)) {
+            const semesterOlods = normalizeSemesterOlods(o);
+            if (semesterOlods.length > 0) preset.semesterOlods = semesterOlods;
         }
         return preset;
     } catch {

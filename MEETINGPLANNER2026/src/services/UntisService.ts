@@ -1,4 +1,4 @@
-import { Teacher, ClassGroup, RosterEntry } from '../types';
+import { Teacher, ClassGroup, RosterEntry, UntisResource } from '../types';
 
 // Temporarily pointing to local development proxy or final Cloudflare worker
 // In a real scenario, this would be an environment variable
@@ -538,22 +538,47 @@ class UntisService {
                     endTime = `${isoDate}T${endTime}:00`;
                 }
 
-                // Scan all position fields for SUBJECT, CLASS and INFO entries
+                // Scan all position fields for SUBJECT, CLASS, TEACHER, ROOM and
+                // INFO entries. The typed resource lists feed the Examenoverzicht
+                // (rooms, teachers, all participating classes); lessonText and
+                // lessonInfo keep their historical shape for the Meeting Planner.
                 const subjects: string[] = [];
                 const classNames: string[] = [];
                 const infos: string[] = [];
+                const classRes: UntisResource[] = [];
+                const teacherRes: UntisResource[] = [];
+                const roomRes: UntisResource[] = [];
+                const subjectRes: UntisResource[] = [];
+                const toResource = (p: any): UntisResource => ({
+                    id: typeof p.id === 'number' ? p.id : 0,
+                    shortName: p.shortName ?? p.displayName ?? '',
+                    longName: p.longName ?? p.displayName ?? '',
+                    displayName: p.displayName ?? p.shortName ?? '',
+                });
                 for (const posKey of ['position1', 'position2', 'position3', 'position4', 'position5']) {
                     const pos = ge[posKey];
                     if (!pos || !Array.isArray(pos)) continue;
                     for (const p of pos) {
-                        if (p.current?.type === 'SUBJECT' && p.current.displayName) {
-                            subjects.push(p.current.displayName);
-                        }
-                        if (p.current?.type === 'CLASS' && p.current.displayName) {
-                            classNames.push(p.current.displayName);
-                        }
-                        if (p.current?.type === 'INFO' && p.current.displayName) {
-                            infos.push(p.current.displayName);
+                        const cur = p.current;
+                        if (!cur || !cur.displayName) continue;
+                        switch (cur.type) {
+                            case 'SUBJECT':
+                                subjects.push(cur.displayName);
+                                subjectRes.push(toResource(cur));
+                                break;
+                            case 'CLASS':
+                                classNames.push(cur.displayName);
+                                classRes.push(toResource(cur));
+                                break;
+                            case 'TEACHER':
+                                teacherRes.push(toResource(cur));
+                                break;
+                            case 'ROOM':
+                                roomRes.push(toResource(cur));
+                                break;
+                            case 'INFO':
+                                infos.push(cur.displayName);
+                                break;
                         }
                     }
                 }
@@ -563,18 +588,24 @@ class UntisService {
                     ? classNames.join(', ')
                     : ge.lessonInfo || undefined;
                 const info = infos.length > 0 ? infos.join(', ') : undefined;
+                const ids: number[] = Array.isArray(ge.ids)
+                    ? ge.ids.filter((x: unknown): x is number => typeof x === 'number')
+                    : [];
 
                 entries.push({
-                    id: ge.ids ? ge.ids[0] : 0, // Use first ID or 0
+                    id: ids[0] ?? 0, // Use first ID or 0
+                    ids,
                     start: startTime,
                     end: endTime,
-                    classes: [], // Detailed mapping omitted for now
-                    teachers: [],
-                    rooms: [],
-                    subjects: [],
+                    classes: classRes,
+                    teachers: teacherRes,
+                    rooms: roomRes,
+                    subjects: subjectRes,
                     lessonText,
                     lessonInfo,
                     info,
+                    status: typeof ge.status === 'string' ? ge.status : undefined,
+                    type: typeof ge.type === 'string' ? ge.type : undefined,
                 });
             }
         }

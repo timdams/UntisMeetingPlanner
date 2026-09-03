@@ -1,0 +1,770 @@
+/* Examenoverzicht — eigen stijlen. De schil (topbar, knoppen, instellingen-
+   kaarten, klasgroepkiezer, dialogen) komt uit Traject.module.css. */
+
+/* ===== Overzicht ===== */
+.body {
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
+    padding: 0.75rem 1rem 2rem;
+}
+
+.bodyInner {
+    max-width: 1240px;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.statusRij {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.4rem 1rem;
+    padding: 0.3rem 0;
+    font-size: 0.85rem;
+    color: #64748b;
+}
+
+.statusItem {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+}
+
+.statusWaarschuwing {
+    color: #B45309;
+    font-weight: 600;
+}
+
+.statusFout {
+    color: #B91C1C;
+    font-weight: 600;
+}
+
+.kaart {
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    background-color: var(--bg-color);
+    overflow: hidden;
+}
+
+.kaartKop {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 0.5rem 0.75rem;
+    padding: 0.6rem 0.9rem;
+    background-color: var(--secondary);
+    border-bottom: 1px solid var(--border-color);
+}
+
+.kaartTitel {
+    font-weight: 700;
+    font-size: 1rem;
+    color: var(--text-color);
+}
+
+.kaartMeta {
+    margin-left: 0.5rem;
+    font-size: 0.82rem;
+    color: #64748b;
+}
+
+.kaartMetaWaarschuwing {
+    color: #B45309;
+    font-weight: 600;
+}
+
+.kaartActies {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+}
+
+.kaartActies button {
+    padding: 0.3rem 0.6rem;
+    font-size: 0.82rem;
+}
+
+.rasterWrap {
+    padding: 0.5rem;
+}
+
+.rasterWrap svg {
+    width: 100%;
+    height: auto;
+    display: block;
+}
+
+.rasterLaden {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    min-height: 160px;
+    color: #64748b;
+    font-size: 0.9rem;
+}
+
+.afwijkingen {
+    margin: 0;
+    padding: 0.5rem 0.9rem 0.75rem;
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+    border-top: 1px solid var(--border-color);
+    font-size: 0.85rem;
+}
+
+.afwijkingenKop {
+    font-size: 0.72rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #64748b;
+    margin-bottom: 0.1rem;
+}
+
+.afwijking {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.45rem;
+    line-height: 1.4;
+}
+
+.afwijking svg {
+    flex-shrink: 0;
+    margin-top: 0.15em;
+}
+
+.afwijkingSubset {
+    color: #92400E;
+}
+
+.afwijkingStatus,
+.afwijkingMislukt {
+    color: #B91C1C;
+}
+
+.afwijkingLeeg {
+    color: #64748b;
+}
+
+/* Melding in plaats van een raster (geen examens, geen examenweek, geen rooster) */
+.melding2 {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.6rem;
+    margin: 0.6rem;
+    padding: 0.7rem 0.9rem;
+    border: 1px solid var(--border-color);
+    border-left-width: 4px;
+    border-radius: var(--border-radius);
+    font-size: 0.88rem;
+    line-height: 1.45;
+}
+
+.melding2 svg {
+    flex-shrink: 0;
+    margin-top: 0.1em;
+}
+
+.meldingNeutraal {
+    background-color: var(--secondary);
+    border-color: var(--border-color);
+    border-left-color: #94a3b8;
+    color: #475569;
+}
+
+.meldingWaarschuwing {
+    background-color: #FEF3C7;
+    border-color: #F59E0B;
+    border-left-color: #B45309;
+    color: #78350F;
+}
+
+.meldingFout {
+    background-color: #FEE2E2;
+    border-color: #DC2626;
+    border-left-color: #B91C1C;
+    color: #7F1D1D;
+}
+
+.meldingDetail {
+    margin-top: 0.35rem;
+    font-size: 0.82rem;
+    opacity: 0.85;
+}
+
+/* Weekpicker in de topbar */
+.weekPicker {
+    display: inline-flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.3rem;
+}
+
+.weekPicker button {
+    padding: 0.35rem 0.5rem;
+}
+
+.weekLabel {
+    padding: 0 0.3rem;
+    font-weight: 600;
+    font-size: 0.9rem;
+    white-space: nowrap;
+}
+
+.weekDatum {
+    width: auto;
+    padding: 0.3rem 0.4rem;
+    font-size: 0.8rem;
+}
+
+/* Markering in de topbar wanneer de opleiding eigen semestergrenzen heeft:
+   de S1/S2-knoppen ernaast wijzen dan naar andere weken dan bij de rest. */
+.eigenPeriodeChip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0.25rem 0.6rem;
+    border: 1px solid var(--primary);
+    border-radius: 999px;
+    background-color: var(--selected-bg);
+    color: var(--primary);
+    font-size: 0.75rem;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.eigenPeriodeChip:hover {
+    background-color: var(--bg-color);
+}
+
+.opleidingSelect {
+    max-width: 280px;
+    padding: 0.4rem 0.6rem;
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    background-color: var(--bg-color);
+    color: var(--text-color);
+    font: inherit;
+    font-weight: 600;
+}
+
+.leeg {
+    margin: 2rem auto;
+    max-width: 560px;
+    padding: 2rem 1.5rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.75rem;
+    text-align: center;
+    border: 1px dashed var(--border-color);
+    border-radius: var(--border-radius);
+    color: #64748b;
+}
+
+.leeg h2 {
+    margin: 0;
+    font-size: 1.1rem;
+    color: var(--text-color);
+}
+
+.leeg p {
+    margin: 0;
+    line-height: 1.5;
+}
+
+/* Diagnose (fase 0) */
+.diagnose {
+    margin-top: 0.5rem;
+    font-size: 0.82rem;
+    color: #64748b;
+}
+
+.diagnose summary {
+    cursor: pointer;
+    font-weight: 500;
+}
+
+.diagnoseBody {
+    margin-top: 0.5rem;
+    padding: 0.6rem 0.85rem;
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.diagnoseTabel {
+    border-collapse: collapse;
+    font-size: 0.8rem;
+}
+
+.diagnoseTabel th,
+.diagnoseTabel td {
+    text-align: left;
+    vertical-align: top;
+    padding: 0.15rem 0.6rem 0.15rem 0;
+}
+
+.diagnoseCode {
+    margin: 0;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 0.75rem;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.melding {
+    position: fixed;
+    left: 50%;
+    bottom: 1.5rem;
+    transform: translateX(-50%);
+    z-index: 1200;
+    padding: 0.55rem 0.9rem;
+    border-radius: var(--border-radius);
+    background-color: #1E293B;
+    color: #F8FAFC;
+    font-size: 0.85rem;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+}
+
+/* ===== Instellingen ===== */
+.opleidingChips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    margin-bottom: 0.75rem;
+}
+
+.opleidingChip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.35rem 0.75rem;
+    border: 1px solid var(--border-color);
+    border-radius: 999px;
+    background-color: var(--bg-color);
+    color: var(--text-color);
+    font-weight: 500;
+    cursor: pointer;
+}
+
+.opleidingChip:hover {
+    border-color: var(--primary);
+    background-color: var(--bg-color);
+}
+
+.opleidingChipActief,
+.opleidingChipActief:hover {
+    border-color: var(--primary);
+    background-color: var(--selected-bg);
+    color: var(--primary);
+    font-weight: 600;
+}
+
+.opleidingChipMeta {
+    padding: 0 0.4em;
+    border-radius: 999px;
+    background-color: var(--secondary);
+    color: #64748b;
+    font-size: 0.72rem;
+    font-weight: 600;
+}
+
+.nieuwRij {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.75rem;
+}
+
+.tekstInput {
+    flex: 1 1 240px;
+    max-width: 420px;
+    padding: 0.45rem 0.6rem;
+    font-size: 0.9rem;
+}
+
+.opleidingPaneel {
+    margin-top: 0.5rem;
+    padding-top: 0.75rem;
+    border-top: 1px solid var(--border-color);
+}
+
+.veldRij {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 0.5rem;
+    margin-bottom: 0.75rem;
+}
+
+.veld {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    flex: 1 1 240px;
+    max-width: 420px;
+    font-size: 0.8rem;
+    color: #64748b;
+}
+
+/* In de kolomflex van .veld zou de flex-basis van .tekstInput als hoogte
+   gelden — vandaar flex: none. */
+.veld input {
+    width: 100%;
+    box-sizing: border-box;
+    flex: none;
+    max-width: none;
+}
+
+/* Weekkiezer in de instellingen (examenweken S1/S2 + vorige/volgende) */
+.weekKeuze {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.3rem;
+    margin-bottom: 0.5rem;
+}
+
+.weekKeuze button {
+    padding: 0.35rem 0.6rem;
+}
+
+.weekKeuzeScheiding {
+    width: 1px;
+    height: 1.4rem;
+    margin: 0 0.3rem;
+    background-color: var(--border-color);
+}
+
+/* De afgeleide examenweken onder de semestergrenzen */
+.examenWekenStrip {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-top: 0.75rem;
+}
+
+.examenWeekCel {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    padding: 0.45rem 0.7rem;
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    background-color: var(--secondary);
+    font-size: 0.82rem;
+}
+
+.examenWeekKort {
+    font-weight: 700;
+    color: var(--text-color);
+}
+
+.examenWeekDatums {
+    color: #64748b;
+}
+
+/* Eigen semestergrenzen per opleiding (de overrule op de algemene grenzen) */
+.overruleNoot {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.4rem;
+    margin-top: 0.6rem;
+    color: #64748b;
+    font-size: 0.82rem;
+}
+
+.overruleNoot svg {
+    flex: none;
+    margin-top: 0.1rem;
+}
+
+.overruleRij {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.5rem;
+    padding: 0.5rem 0.7rem;
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    background-color: var(--secondary);
+    font-size: 0.88rem;
+    cursor: pointer;
+}
+
+.overruleRij input {
+    margin-top: 0.15rem;
+    flex: none;
+}
+
+.overruleUitleg {
+    display: block;
+    margin-top: 0.15rem;
+    color: #64748b;
+    font-size: 0.8rem;
+}
+
+.overruleBlok {
+    margin-top: 0.6rem;
+    padding-left: 0.7rem;
+    border-left: 3px solid var(--primary);
+}
+
+/* Klasgroepen toevoegen aan een jaargroep */
+.toevoegKnop {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.25rem 0.6rem;
+    border: 1px dashed var(--border-color);
+    border-radius: 999px;
+    background-color: var(--bg-color);
+    color: #64748b;
+    font-family: inherit;
+    font-size: 0.8rem;
+    font-weight: 500;
+    cursor: pointer;
+}
+
+.toevoegKnop:hover:not(:disabled) {
+    border-color: var(--primary);
+    color: var(--primary);
+    background-color: var(--bg-color);
+}
+
+.toevoegKnop:disabled {
+    opacity: 0.5;
+    cursor: default;
+}
+
+.toevoegKnopActief,
+.toevoegKnopActief:hover:not(:disabled) {
+    border-style: solid;
+    border-color: var(--primary);
+    color: var(--primary);
+    background-color: var(--selected-bg);
+}
+
+.toevoegPaneel {
+    grid-column: 1 / -1;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    padding: 0.6rem 0.75rem;
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    background-color: var(--secondary);
+}
+
+.toevoegKop {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    font-size: 0.82rem;
+    color: #64748b;
+}
+
+.toevoegChips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+}
+
+.toevoegChip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.25rem 0.65rem 0.25rem 0.5rem;
+    border: 1px solid var(--border-color);
+    border-radius: 999px;
+    background-color: var(--bg-color);
+    font-size: 0.85rem;
+    cursor: pointer;
+    user-select: none;
+}
+
+.toevoegChip:hover {
+    border-color: var(--primary);
+}
+
+.toevoegChipActief {
+    border-color: var(--selected-border);
+    background-color: var(--selected-bg);
+    font-weight: 600;
+}
+
+.jaargroepLijst {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    margin-top: 0.75rem;
+}
+
+.jaargroepRij {
+    display: grid;
+    grid-template-columns: minmax(140px, 220px) 1fr auto;
+    align-items: start;
+    gap: 0.6rem;
+    padding: 0.5rem 0.6rem;
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+}
+
+.jaargroepNaam {
+    width: 100%;
+    max-width: none;
+    flex: none;
+    box-sizing: border-box;
+}
+
+.jaargroepChips {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.35rem;
+    min-height: 2rem;
+}
+
+.jaargroepLeeg {
+    font-size: 0.82rem;
+    font-style: italic;
+    color: #64748b;
+}
+
+.jaargroepSelect {
+    padding: 0.25rem 0.4rem;
+    border: 1px dashed var(--border-color);
+    border-radius: 999px;
+    background-color: var(--bg-color);
+    color: #64748b;
+    font-family: inherit;
+    font-size: 0.8rem;
+}
+
+.losRij {
+    margin-top: 0.6rem;
+    font-size: 0.85rem;
+    color: #64748b;
+}
+
+.voorstel {
+    margin: 0.75rem 0;
+    padding: 0.6rem 0.75rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    border: 1px solid #3B82F6;
+    border-radius: var(--border-radius);
+    background-color: #EFF6FF;
+}
+
+.voorstelKop {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-weight: 600;
+    font-size: 0.9rem;
+    color: #1E3A8A;
+}
+
+.voorstelGroep {
+    display: grid;
+    grid-template-columns: minmax(140px, 220px) 1fr;
+    align-items: start;
+    gap: 0.5rem;
+    padding: 0.4rem 0.5rem;
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    background-color: var(--bg-color);
+}
+
+.voorstelKlassen {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.3rem;
+    padding-top: 0.2rem;
+}
+
+.voorstelVerschil {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: flex-start;
+    gap: 0.35rem;
+    font-size: 0.8rem;
+    color: #92400E;
+}
+
+.voorstelVerschil svg {
+    flex-shrink: 0;
+    margin-top: 0.15em;
+}
+
+@media (max-width: 700px) {
+    .jaargroepRij,
+    .voorstelGroep {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* ===== Print ===== */
+.printRoot {
+    display: none;
+}
+
+.printKop {
+    font-weight: 700;
+    font-size: 1rem;
+    margin-bottom: 0.3rem;
+}
+
+@media print {
+    .printRoot {
+        display: block !important;
+        color: black;
+    }
+
+    .printPagina {
+        break-after: page;
+        page-break-after: always;
+    }
+
+    .printPagina:last-child {
+        break-after: auto;
+        page-break-after: auto;
+    }
+
+    .printPagina svg {
+        width: 100%;
+        height: auto;
+    }
+
+    /* Een jaargroep zonder raster (geen examens, geen examenweek) verdient geen
+       eigen pagina: die notities schuiven samen op de laatste bladzijde. */
+    .printNotitie {
+        break-inside: avoid;
+        page-break-inside: avoid;
+        margin-bottom: 0.75rem;
+    }
+
+    .afwijkingen {
+        border-top: none;
+    }
+
+    .melding {
+        display: none !important;
+    }
+}

@@ -2,7 +2,8 @@ import { useEffect, useState, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { isActief, Lesblok, OLODSelectie } from './types';
 import { trajectUntisService } from './trajectService';
-import { actievePeriode, allePeriodes, type PeriodeGrenzen } from './academicYear';
+import { actievePeriode, allePeriodes, type PeriodeGrenzen, type PeriodeType } from './academicYear';
+import { isSemesterOlod } from './semesterOlods';
 import {
     addDays,
     bereikOverlapt,
@@ -47,6 +48,14 @@ interface Props {
     actiefBereik: { van: string; tot: string };
     // Nodig om die periode een naam te geven (S1, M2, …).
     periodeGrenzen: PeriodeGrenzen;
+    // Indeling van de opleiding: enkel in modulemodus bestaat het onderscheid
+    // tussen een modulevak en een semestervak, en dus ook de tag-knop.
+    periodeType: PeriodeType;
+    // OLOD-namen die als semestervak gemarkeerd zijn (zie semesterOlods.ts),
+    // en de schakelaar om dat per vak aan of uit te zetten. De knop op een
+    // lesblok is meteen de indicator: aan = semestervak, uit = modulevak.
+    semesterOlods: string[];
+    onToggleSemesterOlod: (olodNaam: string) => void;
     // De selectie die een klik op dit lesblok zou weghalen, of null.
     selectieVoor: (klasgroep: string, olodNaam: string, datum: Date) => OLODSelectie | null;
     colorOf: (olodNaam: string) => string;
@@ -73,6 +82,9 @@ export function KlasgroepRooster({
     mijnOpleidingKlasgroepen,
     actiefBereik,
     periodeGrenzen,
+    periodeType,
+    semesterOlods,
+    onToggleSemesterOlod,
     selectieVoor,
     colorOf,
     ensureColor,
@@ -243,7 +255,11 @@ export function KlasgroepRooster({
                     {weekInPeriode ? (
                         <>
                             <MousePointerClick size={13} />
-                            <span>Een klik voegt het vak toe aan {periodeOmschrijving}.</span>
+                            <span>
+                                Een klik voegt het vak toe aan {periodeOmschrijving}.
+                                {periodeType === 'module' &&
+                                    ' Een vak met een S-knopje is een semestervak en komt altijd in het hele semester.'}
+                            </span>
                         </>
                     ) : (
                         <>
@@ -333,6 +349,10 @@ export function KlasgroepRooster({
                                     // maar gestippeld: ze telt niet mee in het totaalrooster.
                                     const selected = sel !== null;
                                     const uit = sel !== null && !isActief(sel);
+                                    // In modulemodus draagt elk blok een schakelaar die meteen
+                                    // toont wat het vak is: S = semestervak (loopt over beide
+                                    // modules), M = modulevak.
+                                    const semestervak = isSemesterOlod(b.olodNaam, semesterOlods);
                                     const widthPct = 100 / cols;
                                     const leftPct = col * widthPct;
                                     return (
@@ -368,6 +388,35 @@ export function KlasgroepRooster({
                                                 />
                                             </button>
                                             <div className={styles.roosterBlokTime}>
+                                                {/* S/M staat bewust in de uurregel en niet als
+                                                    tweede hoekknop: op een gesplitst blok zouden
+                                                    twee hoekknoppen samen breder zijn dan het blok
+                                                    zelf. Hier schuift het gewoon mee in de tekst. */}
+                                                {periodeType === 'module' && (
+                                                    <button
+                                                        type="button"
+                                                        className={`${styles.roosterBlokSemesterBtn} ${
+                                                            semestervak ? styles.roosterBlokSemesterBtnAan : ''
+                                                        }`}
+                                                        title={
+                                                            semestervak
+                                                                ? `${b.olodNaam} is een semestervak: het loopt over beide modules, bij elke klasgroep. Klik om er weer een modulevak van te maken.`
+                                                                : `${b.olodNaam} is een modulevak. Klik om het als semestervak te markeren: het loopt dan over beide modules, bij elke klasgroep.`
+                                                        }
+                                                        aria-label={
+                                                            semestervak
+                                                                ? `${b.olodNaam} is een semestervak — klik om er een modulevak van te maken`
+                                                                : `${b.olodNaam} is een modulevak — klik om het als semestervak te markeren`
+                                                        }
+                                                        aria-pressed={semestervak}
+                                                        onClick={ev => {
+                                                            ev.stopPropagation();
+                                                            onToggleSemesterOlod(b.olodNaam);
+                                                        }}
+                                                    >
+                                                        {semestervak ? 'S' : 'M'}
+                                                    </button>
+                                                )}
                                                 <LesblokIcon type={b.type} size={11} className={styles.roosterBlokIcon} />
                                                 {formatTime(b.start)}
                                             </div>

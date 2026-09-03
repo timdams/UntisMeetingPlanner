@@ -4,17 +4,21 @@ import { Login } from "./components/Login";
 import { AppChoice } from "./components/AppChoice";
 import { PlannerDashboard } from "./components/Planner/PlannerDashboard";
 import { TrajectPlanner } from "./components/Traject/TrajectPlanner";
+import { ExamenOverzicht } from "./components/Examen/ExamenOverzicht";
 import { applyTrajectSettingsPreset, runTrajectMigrations } from "./components/Traject/hooks";
 import { clearTrajectPresetFromUrl, readTrajectPresetFromUrl } from "./components/Traject/trajectShare";
+import { clearExamenShareFromUrl, readExamenShareFromUrl } from "./components/Examen/examenShare";
+import { EXAMEN_ENABLED } from "./components/Examen/featureFlag";
 import { untisService } from "./services/UntisService";
 
-type View = 'choice' | 'meeting' | 'traject';
+type View = 'choice' | 'meeting' | 'traject' | 'examen';
 
 const VIEW_KEY = 'untis_current_view';
 
 function readStoredView(): View {
   try {
     const v = sessionStorage.getItem(VIEW_KEY);
+    if (v === 'examen') return EXAMEN_ENABLED ? v : 'choice';
     if (v === 'meeting' || v === 'traject' || v === 'choice') return v;
   } catch { /* ignore */ }
   return 'choice';
@@ -35,10 +39,20 @@ if (INITIAL_PRESET) {
   clearTrajectPresetFromUrl();
 }
 
+// Een deel-link van het examenoverzicht wordt hier enkel gelezen; de module
+// zelf vraagt eerst bevestiging vóór de opleiding overgenomen wordt, zodat een
+// link nooit stilzwijgend iemands eigen opleidingen overschrijft.
+const INITIAL_EXAMEN_SHARE = EXAMEN_ENABLED ? readExamenShareFromUrl() : null;
+if (INITIAL_EXAMEN_SHARE) {
+  clearExamenShareFromUrl();
+}
+
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isRestoring, setIsRestoring] = useState(true);
-  const [view, setView] = useState<View>(() => (INITIAL_PRESET ? 'traject' : readStoredView()));
+  const [view, setView] = useState<View>(() =>
+    INITIAL_PRESET ? 'traject' : INITIAL_EXAMEN_SHARE ? 'examen' : readStoredView()
+  );
   // null = nog aan het controleren, true/false = resultaat van de rechtencheck.
   const [meetingAvailable, setMeetingAvailable] = useState<boolean | null>(null);
 
@@ -103,6 +117,9 @@ function App() {
       {view === 'meeting' && meetingAvailable !== false && <PlannerDashboard onBack={() => setView('choice')} />}
       {view === 'traject' && (
         <TrajectPlanner onBack={() => setView('choice')} presetApplied={INITIAL_PRESET !== null} />
+      )}
+      {view === 'examen' && (
+        <ExamenOverzicht onBack={() => setView('choice')} pendingShare={INITIAL_EXAMEN_SHARE} />
       )}
     </div>
   );

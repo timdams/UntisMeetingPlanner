@@ -1030,6 +1030,22 @@
     color: #fff;
 }
 
+/* Semestervak: loopt in modulemodus tóch over beide modules. Bewust indigo —
+   los van het rood van de actieve periode en het oranje van een waarschuwing,
+   zodat de badge in één oogopslag een derde ding zegt. */
+.olodListPeriodeSemester {
+    background-color: #EEF2FF;
+    border-color: #6366F1;
+    color: #3730A3;
+    gap: 3px;
+}
+
+.olodListPeriodeSemester.olodListPeriodeActief {
+    background-color: #4F46E5;
+    border-color: #4F46E5;
+    color: #fff;
+}
+
 /* Selectie zonder lessen in haar periode: duidelijk als waarschuwing gemarkeerd. */
 .olodListItemWaarschuwing {
     border-color: #F59E0B;
@@ -1153,6 +1169,65 @@
 .olodPeriodeOptie:disabled {
     opacity: 0.55;
     cursor: default;
+}
+
+/* Schakelaar bovenaan de periode-kiezer: "dit vak loopt over beide modules".
+   Staat op een eigen regel boven de periode-opties, want ze bepaalt welke van
+   die opties nog te kiezen zijn. */
+.semesterVakToggle {
+    flex-basis: 100%;
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.25rem 0.4rem;
+    border: 1px dashed #6366F1;
+    border-radius: 6px;
+    background-color: #EEF2FF;
+    color: #3730A3;
+    font-family: inherit;
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-align: left;
+    cursor: pointer;
+}
+
+.semesterVakToggle:hover {
+    border-style: solid;
+}
+
+.semesterVakToggle:focus-visible {
+    outline: 2px solid #4F46E5;
+    outline-offset: 1px;
+}
+
+.semesterVakToggle svg {
+    flex-shrink: 0;
+}
+
+.semesterVakToggleTekst {
+    flex: 1;
+    min-width: 0;
+}
+
+.semesterVakToggleStand {
+    flex-shrink: 0;
+    padding: 0 0.35rem;
+    border-radius: 999px;
+    background-color: rgba(99, 102, 241, 0.18);
+    font-size: 0.62rem;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+
+.semesterVakToggleAan {
+    border-style: solid;
+    background-color: #4F46E5;
+    border-color: #4F46E5;
+    color: #fff;
+}
+
+.semesterVakToggleAan .semesterVakToggleStand {
+    background-color: rgba(255, 255, 255, 0.25);
 }
 
 /* Aantal lessen naast een klasgroep-optie. */
@@ -1701,6 +1776,55 @@
 
 .roosterBlokBtnChevron {
     opacity: 0.75;
+}
+
+/*
+ * Semestervak-schakelaar op elk lesblok (enkel in modulemodus). Ze is meteen de
+ * indicator: "S" met indigo vulling = loopt over beide modules, "M" op wit =
+ * gewoon een modulevak — zo lees je in het rooster zelf af wat wat is.
+ *
+ * Bewust in de uurregel en niet als tweede hoekknop: een gesplitst blok
+ * (twee lessen naast elkaar) is smaller dan twee hoekknoppen samen, en dan zou
+ * er van het blok zelf niets meer te zien zijn. In de flow schuift ze gewoon
+ * mee en wijkt de tekst.
+ */
+.roosterBlokSemesterBtn {
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 15px;
+    height: 14px;
+    padding: 0 2px;
+    border: 1px solid rgba(15, 23, 42, 0.2);
+    border-radius: 4px;
+    background-color: rgba(255, 255, 255, 0.92);
+    color: #1e293b;
+    font-family: inherit;
+    font-size: 0.62rem;
+    font-weight: 700;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.roosterBlokSemesterBtn:hover,
+.roosterBlokSemesterBtn:focus-visible {
+    border-color: #312E81;
+    background-color: #ffffff;
+}
+
+/* Aan: indigo, met een witte ring zodat de pil op elke blokkleur loskomt. */
+.roosterBlokSemesterBtnAan {
+    background-color: #4F46E5;
+    border-color: #312E81;
+    color: #ffffff;
+    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.85);
+}
+
+.roosterBlokSemesterBtnAan:hover,
+.roosterBlokSemesterBtnAan:focus-visible {
+    background-color: #4338CA;
+    color: #ffffff;
 }
 
 /* ===== Klasgroep-kiezer (dialoog achter het knopje op een lesblok) ===== */

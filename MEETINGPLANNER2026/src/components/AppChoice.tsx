@@ -1,15 +1,17 @@
-import { CalendarDays, Route, LogOut, ExternalLink } from 'lucide-react';
+import { CalendarDays, Route, LogOut, ExternalLink, ClipboardList } from 'lucide-react';
 import styles from './AppChoice.module.css';
+import { EXAMEN_ENABLED } from './Examen/featureFlag';
 
 interface AppChoiceProps {
     // null = beschikbaarheid wordt nog gecontroleerd; false = geen toegang (bv. student).
     meetingAvailable: boolean | null;
-    onSelect: (choice: 'meeting' | 'traject') => void;
+    onSelect: (choice: 'meeting' | 'traject' | 'examen') => void;
     onLogout: () => void;
 }
 
 export function AppChoice({ meetingAvailable, onSelect, onLogout }: AppChoiceProps) {
     const meetingDisabled = meetingAvailable === false;
+    const examenDisabled = !EXAMEN_ENABLED;
     return (
         <div className={styles.container}>
             <div className={styles.card}>
@@ -51,6 +53,23 @@ export function AppChoice({ meetingAvailable, onSelect, onLogout }: AppChoicePro
                         <div className={styles.optionTitle}>Traject Planner</div>
                         <div className={styles.optionDesc}>
                             Stel een individueel studentrooster samen uit OLODs van verschillende klasgroepen.
+                        </div>
+                    </button>
+
+                    <button
+                        type="button"
+                        className={`${styles.option} ${examenDisabled ? styles.optionDisabled : ''}`}
+                        onClick={() => onSelect('examen')}
+                        disabled={examenDisabled}
+                        aria-disabled={examenDisabled}
+                    >
+                        {examenDisabled && <div className={styles.badge}>Binnenkort</div>}
+                        <ClipboardList size={40} className={styles.icon} />
+                        <div className={styles.optionTitle}>Examenoverzicht (in ontwikkeling)</div>
+                        <div className={styles.optionDesc}>
+                            {examenDisabled
+                                ? 'Nog in ontwikkeling — deze module is binnenkort beschikbaar.'
+                                : 'Vat een examenweek van een opleiding samen in zo weinig mogelijk roosters, klaar om te printen of te plakken.'}
                         </div>
                     </button>
                 </div>

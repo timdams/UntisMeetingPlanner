@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
     Printer,
     RotateCcw,
@@ -38,6 +38,7 @@ import { StudentOverzicht } from './StudentOverzicht';
 import { PeriodeSwitcher } from './PeriodeSwitcher';
 import { TrajectPrintView, buildTrajectClipboardText } from './TrajectPrintView';
 import { defaultRoosterWeek, periodesVoor } from './academicYear';
+import { isSemesterOlod, semesterBereikVoor } from './semesterOlods';
 import { selectieStatussen, useTrajectBlokken, type KlasgroepPreview } from './useTrajectBlokken';
 import { backupFilename, buildBackup, downloadBackup, parseBackup, type TrajectBackup } from './trajectBackup';
 
@@ -126,6 +127,7 @@ export function TrajectPlanner({ onBack, presetApplied = false }: Props) {
         setSemesterPeriode,
         setPeriodeType,
         setPeriodeGrenzen,
+        setSemesterOlod,
         replaceSettings,
         setKlasgroepen,
     } = useTrajectSettings();
@@ -138,6 +140,7 @@ export function TrajectPlanner({ onBack, presetApplied = false }: Props) {
         toggleActief,
         setActiefBulk,
         setPeriode,
+        verbreedOlodNaarSemester,
         setKlasgroep,
         setKlasgroepBulk,
         reset,
@@ -374,6 +377,41 @@ export function TrajectPlanner({ onBack, presetApplied = false }: Props) {
         [settings.semesterStart, settings.semesterEind]
     );
 
+    // De periode waaraan een klik in het rooster dít vak toevoegt. Normaal is
+    // dat gewoon de actieve periode; een semestervak loopt over beide modules
+    // en krijgt daarom altijd het volledige semester waar die periode in valt.
+    // Dezelfde functie voedt `selectieVoor`, zodat het rooster precies de
+    // blokken als gekozen toont die een klik ook weer zou weghalen.
+    const bereikVoorOlod = useCallback(
+        (olodNaam: string) =>
+            settings.periodeType === 'module' && isSemesterOlod(olodNaam, settings.semesterOlods)
+                ? semesterBereikVoor(actiefBereik.van, actiefBereik.tot, settings.periodeGrenzen)
+                : actiefBereik,
+        [settings.periodeType, settings.semesterOlods, settings.periodeGrenzen, actiefBereik]
+    );
+
+    // Een vak als semestervak markeren (of de markering weghalen). Bij het
+    // markeren verbreden alle bestaande keuzes van dat vak meteen naar hun
+    // semester; tag en traject vormen samen één herstelpunt, zodat "ongedaan
+    // maken" niet halverwege blijft steken. Keuzes bij verschillende
+    // klasgroepen in hetzelfde semester blijven allebei staan — paneel ③ wijst
+    // die botsing aan.
+    const handleToggleSemesterOlod = (olodNaam: string) => {
+        const wordtSemester = !isSemesterOlod(olodNaam, settings.semesterOlods);
+        const snapshot = traject;
+        setSemesterOlod(olodNaam, wordtSemester);
+        if (wordtSemester) verbreedOlodNaarSemester(olodNaam, settings.periodeGrenzen);
+        meldUndo(
+            wordtSemester
+                ? `${olodNaam} is nu een semestervak (loopt over beide modules)`
+                : `${olodNaam} is weer een modulevak`,
+            () => {
+                setSemesterOlod(olodNaam, !wordtSemester);
+                if (wordtSemester) replaceTraject(snapshot);
+            }
+        );
+    };
+
     // Open het rooster op de huidige week als die binnen de actieve periode
     // valt, anders op de eerste lesweek van die periode (niet op een week uit
     // het vorige jaar, wat 404's op de roosterdata gaf). Verandert mee wanneer
@@ -596,6 +634,8 @@ export function TrajectPlanner({ onBack, presetApplied = false }: Props) {
                         actiefBereik={actiefBereik}
                         periodeType={settings.periodeType}
                         periodeGrenzen={settings.periodeGrenzen}
+                        semesterOlods={settings.semesterOlods}
+                        onToggleSemesterOlod={handleToggleSemesterOlod}
                     />
                     <Splitter orientation="left" onDelta={adjustPanelA} />
                     <KlasgroepRooster
@@ -604,10 +644,13 @@ export function TrajectPlanner({ onBack, presetApplied = false }: Props) {
                         mijnOpleidingKlasgroepen={settings.mijnOpleidingKlasgroepen}
                         actiefBereik={actiefBereik}
                         periodeGrenzen={settings.periodeGrenzen}
-                        selectieVoor={(k, o, d) => selectieVoor(k, o, d, actiefBereik)}
+                        periodeType={settings.periodeType}
+                        semesterOlods={settings.semesterOlods}
+                        onToggleSemesterOlod={handleToggleSemesterOlod}
+                        selectieVoor={(k, o, d) => selectieVoor(k, o, d, bereikVoorOlod(o))}
                         colorOf={colorOf}
                         ensureColor={ensureColor}
-                        onToggleBlok={b => toggleBlok(b, actiefBereik)}
+                        onToggleBlok={b => toggleBlok(b, bereikVoorOlod(b.olodNaam))}
                     />
                     <Splitter orientation="right" onDelta={adjustPanelC} />
                     <StudentOverzicht
