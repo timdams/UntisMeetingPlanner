@@ -24,6 +24,25 @@
     background-color: var(--bg-color);
 }
 
+/* De topbalk staat in twee rijen. Rij 1 (.appbar) draagt navigatie en de
+   zelden gebruikte of gevaarlijke acties; rij 2 (.contextbar) draagt de
+   toestand waarin het werkblad staat: profiel, periode en dossier. Zo staan
+   commando's en context niet langer door elkaar op een rij. */
+.appbar {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.6rem;
+    padding: 0.55rem 1rem;
+    border-bottom: 1px solid var(--border-color);
+    background-color: var(--secondary);
+    flex-shrink: 0;
+}
+
+/* Enkele-rij topbalk. De trajectplanner gebruikt die niet meer (zie .appbar
+   hierboven), maar de examenoverzicht-module importeert dit stylesheet en
+   bouwt er haar eigen topbalk mee — daarom blijft de regel staan. Niet
+   verwijderen zonder die module mee na te kijken. */
 .topbar {
     display: flex;
     align-items: center;
@@ -33,6 +52,69 @@
     border-bottom: 1px solid var(--border-color);
     background-color: var(--secondary);
     flex-shrink: 0;
+}
+
+.contextbar {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    padding: 0.4rem 1rem;
+    border-bottom: 1px solid var(--border-color);
+    background-color: var(--bg-color);
+    flex-shrink: 0;
+}
+
+.ctxGroep {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    min-width: 0;
+}
+
+/* Uitgeschreven label voor elke contextgroep: zonder dat leest "S1 S2" als een
+   raadsel voor wie de tool een paar keer per jaar gebruikt. */
+.ctxLabel {
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: #64748b;
+    white-space: nowrap;
+}
+
+.ctxScheiding {
+    width: 1px;
+    align-self: stretch;
+    min-height: 22px;
+    margin: 0 0.3rem;
+    background-color: var(--border-color);
+}
+
+/* Bewaar-knop in de contextbalk. Ze staat er alleen wanneer er werk openstaat,
+   dus mag ze opvallen in dezelfde oranje toon als de stip op de dossiernaam. */
+.ctxBewaarBtn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.3rem 0.6rem;
+    border: 1px solid #F59E0B;
+    border-radius: var(--border-radius);
+    background-color: var(--bg-color);
+    color: #B45309;
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.ctxBewaarBtn:hover:not(:disabled) {
+    background-color: #FEF3C7;
+}
+
+.ctxBewaarBtn:disabled {
+    opacity: 0.45;
+    cursor: default;
 }
 
 .topbarTitle {
@@ -45,7 +127,8 @@
     flex: 1;
 }
 
-/* Naam van het bewaarde traject waar het werkblad aan werkt. */
+/* Naam-chip. Idem: enkel nog in gebruik in de examenoverzicht-module, die dit
+   stylesheet meeleest. In de trajectplanner is ze opgegaan in .dossierBtn. */
 .trajectNaamChip {
     display: inline-flex;
     align-items: center;
@@ -63,10 +146,25 @@
     color: var(--text-color);
 }
 
-.trajectNaamChipLeeg {
+/* Knop met de naam van het geopende dossier; opent het dossiermenu. */
+.dossierBtn {
+    max-width: 240px;
+    padding: 0.3rem 0.55rem;
+    font-size: 0.85rem;
+    font-weight: 600;
+}
+
+/* Nog geen bewaard dossier: de naam is een plaatsaanduiding, geen eigennaam. */
+.dossierBtnLeeg {
     font-weight: 400;
     font-style: italic;
     color: #64748b;
+}
+
+.dossierNaam {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 /* Stip = er staat werk open dat nog niet bewaard is. */
@@ -126,6 +224,27 @@
     font-family: inherit;
     line-height: normal;
     white-space: nowrap;
+}
+
+/* Icoonknop in de appbalk: vierkant, zonder tekst. Handleiding en het
+   overloopmenu dragen hun betekenis in hun tooltip en aria-label. */
+.iconBtn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    background-color: var(--bg-color);
+    color: var(--text-color);
+    cursor: pointer;
+}
+
+.iconBtn:hover {
+    border-color: var(--primary);
 }
 
 .toolbarBtnDanger {
@@ -1479,26 +1598,9 @@
     text-align: center;
 }
 
-/* ===== Bewaarde trajecten: "Laad traject"-knop + uitklapmenu (topbar) ===== */
-/* ===== Topbar-menu's (Laad traject / Exporteren / meer acties) ===== */
+/* ===== Topbar-menu's (dossiermenu in de contextbalk, overloopmenu ===== */
 .menuWrap {
     position: relative;
-}
-
-.laadBadge {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    min-width: 18px;
-    height: 18px;
-    padding: 0 5px;
-    border-radius: 999px;
-    background-color: var(--secondary);
-    border: 1px solid var(--border-color);
-    color: #64748b;
-    font-size: 0.7rem;
-    font-weight: 600;
-    line-height: 1;
 }
 
 .menuPaneel {
@@ -1554,6 +1656,22 @@
 
 .menuItemDanger:hover:not(:disabled) {
     background-color: var(--selected-bg);
+}
+
+/* Scheidt groepen binnen een menu, bv. de bewaaracties van de lijst dossiers,
+   of de exportacties van de destructieve reset. */
+.menuScheiding {
+    height: 1px;
+    margin: 0.3rem 0.2rem;
+    background-color: var(--border-color);
+}
+
+/* Rechts uitgelijnde sneltoets bij een menu-item. */
+.menuKbd {
+    margin-left: auto;
+    padding-left: 1rem;
+    font-size: 0.72rem;
+    color: #94a3b8;
 }
 
 /* De lijst met bewaarde trajecten heeft een bredere kolom nodig dan een

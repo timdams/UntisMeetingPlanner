@@ -10,7 +10,6 @@ import {
     Info,
     X,
     Save,
-    Share2,
     MoreHorizontal,
     BookOpen,
 } from 'lucide-react';
@@ -27,7 +26,7 @@ import {
     type BewaardTraject,
 } from './hooks';
 import { isActief, type OLODSelectie } from './types';
-import { LaadTrajectKnop } from './BewaardeTrajecten';
+import { DossierMenu } from './BewaardeTrajecten';
 import { TopbarMenu, TopbarMenuItem } from './TopbarMenu';
 import { BevestigDialog, BewaarDialog, type DialogItem } from './TrajectDialogs';
 import { UndoToast, useUndo } from './Toast';
@@ -261,6 +260,32 @@ export function TrajectPlanner({ onBack, presetApplied = false }: Props) {
         window.setTimeout(() => setBewaardFeedback(false), 1500);
     };
 
+    // Bewaren zonder omweg: is er een dossier open, dan gaat het werk er
+    // meteen in; zo niet, dan vraagt de dialoog eerst een naam. Hangt aan de
+    // Bewaar-knop in de contextbalk, aan het dossiermenu en aan Ctrl+S.
+    const doeSnelBewaar = () => {
+        if (traject.length === 0) return;
+        if (actiefTraject) doeBewaar(actiefTraject.naam, actiefTraject.id);
+        else setDialoog({ soort: 'bewaar' });
+    };
+
+    // Ctrl+S / Cmd+S bewaart het dossier in plaats van de pagina op te slaan.
+    // De handler leeft in een ref zodat de listener maar een keer aangehaakt
+    // wordt en toch altijd met de verse state werkt.
+    const snelBewaarRef = useRef(doeSnelBewaar);
+    useEffect(() => {
+        snelBewaarRef.current = doeSnelBewaar;
+    });
+    useEffect(() => {
+        const onKey = (e: KeyboardEvent) => {
+            if (!(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== 's') return;
+            e.preventDefault();
+            snelBewaarRef.current();
+        };
+        document.addEventListener('keydown', onKey);
+        return () => document.removeEventListener('keydown', onKey);
+    }, []);
+
     // Vervangt het huidige traject én de instellingen door die van een
     // bewaard traject (zoals een back-up-import, maar zonder kleurmap).
     const doeLaad = (item: BewaardTraject) => {
@@ -439,7 +464,11 @@ export function TrajectPlanner({ onBack, presetApplied = false }: Props) {
       <>
         <div className={styles.screenRoot}>
         <div className={styles.page}>
-            <div className={styles.topbar}>
+            {/* Rij 1 — appbalk: waar ben ik, waar kan ik heen, en de acties die
+                zelden nodig zijn of gevaarlijk zijn (overloopmenu). Bewust
+                gescheiden van rij 2: die draagt de *toestand* waarin het
+                werkblad staat, niet de commando's. */}
+            <div className={styles.appbar}>
                 <button
                     className={styles.toolbarBtn}
                     onClick={onBack}
@@ -448,23 +477,8 @@ export function TrajectPlanner({ onBack, presetApplied = false }: Props) {
                     <ArrowLeft size={14} /> Menu
                 </button>
                 <div className={styles.topbarTitle}>Trajectplanner</div>
-                {(actiefTraject || traject.length > 0) && (
-                    <span
-                        className={`${styles.trajectNaamChip} ${
-                            actiefTraject ? '' : styles.trajectNaamChipLeeg
-                        }`}
-                        title={
-                            actiefTraject
-                                ? nietBewaard
-                                    ? `Je werkt aan "${actiefTraject.naam}" — er zijn wijzigingen die nog niet bewaard zijn.`
-                                    : `Je werkt aan "${actiefTraject.naam}" — alles is bewaard.`
-                                : 'Dit traject hoort nog bij geen enkel bewaard traject. Gebruik "Bewaar traject" om het een naam te geven.'
-                        }
-                    >
-                        {actiefTraject ? actiefTraject.naam : 'niet bewaard'}
-                        {actiefTraject && nietBewaard && <span className={styles.trajectNaamStip} />}
-                    </span>
-                )}
+
+                <div className={styles.topbarSpacer} />
 
                 <div className={styles.tabs}>
                     <button
@@ -481,47 +495,22 @@ export function TrajectPlanner({ onBack, presetApplied = false }: Props) {
                     </button>
                 </div>
 
-                <PeriodeSwitcher
-                    compact
-                    periodes={periodes}
-                    actieveStart={settings.semesterStart}
-                    actieveEind={settings.semesterEind}
-                    onKies={p => setSemesterPeriode(p.start, p.eind)}
-                />
-
-                <div className={styles.topbarSpacer} />
-
                 <a
-                    className={`${styles.toolbarBtn} ${styles.toolbarLink}`}
+                    className={`${styles.iconBtn} ${styles.toolbarLink}`}
                     href={handleidingUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    title="Open de handleiding van de trajectplanner (PDF) in een nieuw tabblad"
+                    title="Handleiding van de trajectplanner (PDF) openen in een nieuw tabblad"
+                    aria-label="Handleiding"
                 >
-                    <BookOpen size={14} /> Handleiding
+                    <BookOpen size={15} />
                 </a>
-                <button
-                    className={styles.toolbarBtn}
-                    onClick={() => setDialoog({ soort: 'bewaar' })}
-                    disabled={traject.length === 0}
-                    title="Bewaar het huidige traject onder een naam in deze browser, om het later opnieuw te laden"
-                >
-                    {bewaardFeedback ? <Check size={14} /> : <Save size={14} />}
-                    {bewaardFeedback ? 'Bewaard!' : 'Bewaar traject'}
-                </button>
-                <LaadTrajectKnop
-                    items={bewaardeTrajecten}
-                    onLaad={handleLaad}
-                    onVerwijder={item => setDialoog({ soort: 'verwijderBewaard', item })}
-                />
                 <TopbarMenu
-                    label={
-                        <>
-                            {copied ? <Check size={14} /> : <Share2 size={14} />}
-                            {copied ? 'Gekopieerd!' : 'Exporteren'}
-                        </>
-                    }
-                    title="Het studenttraject afdrukken of naar het klembord kopiëren"
+                    label={copied ? <Check size={15} /> : <MoreHorizontal size={15} />}
+                    chevron={false}
+                    btnClass={styles.iconBtn}
+                    title="Afdrukken, kopiëren en het traject wissen"
+                    ariaLabel="Meer acties"
                 >
                     {close => (
                         <>
@@ -543,33 +532,93 @@ export function TrajectPlanner({ onBack, presetApplied = false }: Props) {
                                     handleCopy();
                                 }}
                             >
-                                Kopieer naar klembord
+                                {copied ? 'Gekopieerd!' : 'Kopieer naar klembord'}
+                            </TopbarMenuItem>
+
+                            <div className={styles.menuScheiding} />
+
+                            <TopbarMenuItem
+                                icon={<RotateCcw size={14} />}
+                                danger
+                                disabled={traject.length === 0}
+                                title="Wist alle gekozen OLODs; je instellingen en bewaarde dossiers blijven staan"
+                                onClick={() => {
+                                    close();
+                                    setDialoog({ soort: 'reset' });
+                                }}
+                            >
+                                Reset traject
                             </TopbarMenuItem>
                         </>
                     )}
                 </TopbarMenu>
-                <TopbarMenu
-                    label={<MoreHorizontal size={14} />}
-                    chevron={false}
-                    title="Meer acties"
-                    ariaLabel="Meer acties"
-                >
-                    {close => (
-                        <TopbarMenuItem
-                            icon={<RotateCcw size={14} />}
-                            danger
-                            disabled={traject.length === 0}
-                            title="Wist alle gekozen OLODs; je instellingen en bewaarde trajecten blijven staan"
-                            onClick={() => {
-                                close();
-                                setDialoog({ soort: 'reset' });
-                            }}
-                        >
-                            Reset traject
-                        </TopbarMenuItem>
-                    )}
-                </TopbarMenu>
             </div>
+
+            {/* Rij 2 — contextbalk: waarvoor plan ik, in welke periode, en aan
+                welk dossier werk ik. Alleen in het werkblad, want dit stuurt
+                paneel B en C; het instellingenscherm heeft zijn eigen kopbalk.
+                Elke groep draagt een uitgeschreven label — "S1 S2" alleen is
+                voor wie de tool een paar keer per jaar gebruikt een raadsel. */}
+            {tab === 'werkblad' && (
+                <div className={styles.contextbar}>
+                    {/* TODO (profielen): hier komt de eerste groep,
+                        "Profiel: [Flextraject ▾]" — de switcher tussen
+                        instellingssets. Zolang die functionaliteit er niet is
+                        blijft de groep weg in plaats van als dode knop te
+                        staan; de balk is er al op gebouwd. Let op het
+                        onderscheid met het dossier hiernaast: een *profiel*
+                        draagt alleen instellingen (klasgroepen, periode-
+                        indeling, semestervakken) en is herbruikbaar over
+                        studenten heen, een *dossier* is één student
+                        (traject + zijn instellingen). */}
+
+                    <div className={styles.ctxGroep}>
+                        <span className={styles.ctxLabel}>Periode</span>
+                        <PeriodeSwitcher
+                            compact
+                            periodes={periodes}
+                            actieveStart={settings.semesterStart}
+                            actieveEind={settings.semesterEind}
+                            onKies={p => setSemesterPeriode(p.start, p.eind)}
+                        />
+                    </div>
+
+                    <div className={styles.ctxScheiding} />
+
+                    <div className={styles.ctxGroep}>
+                        <span className={styles.ctxLabel}>Dossier</span>
+                        <DossierMenu
+                            items={bewaardeTrajecten}
+                            actieveNaam={actiefTraject?.naam ?? null}
+                            nietBewaard={nietBewaard}
+                            kanBewaren={traject.length > 0}
+                            onBewaar={doeSnelBewaar}
+                            onBewaarAls={() => setDialoog({ soort: 'bewaar' })}
+                            onLaad={handleLaad}
+                            onVerwijder={item => setDialoog({ soort: 'verwijderBewaard', item })}
+                        />
+                        {/* Verschijnt pas zodra er werk openstaat: zolang alles
+                            bewaard is, is de knop overbodig en staat ze er niet.
+                            Na het bewaren blijft ze nog even staan om
+                            "Bewaard!" te kunnen tonen. */}
+                        {(nietBewaard || bewaardFeedback) && (
+                            <button
+                                className={styles.ctxBewaarBtn}
+                                onClick={doeSnelBewaar}
+                                disabled={traject.length === 0}
+                                title={
+                                    actiefTraject
+                                        ? `Wijzigingen bewaren in "${actiefTraject.naam}" (Ctrl+S)`
+                                        : 'Dit dossier een naam geven en bewaren in deze browser (Ctrl+S)'
+                                }
+                            >
+                                {bewaardFeedback ? <Check size={13} /> : <Save size={13} />}
+                                {bewaardFeedback ? 'Bewaard!' : 'Bewaar'}
+                            </button>
+                        )}
+                    </div>
+                </div>
+            )}
 
             {presetApplied && !bannerDismissed && (
                 <div className={styles.presetBanner}>

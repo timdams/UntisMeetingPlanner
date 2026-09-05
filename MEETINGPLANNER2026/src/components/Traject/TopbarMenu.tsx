@@ -12,6 +12,9 @@ interface Props {
     align?: 'left' | 'right';
     // Chevron tonen; uit voor een knop die al als icoon leest (bv. "⋯").
     chevron?: boolean;
+    // Extra klasse op de knop, naast `toolbarBtn`: laat een oproeper de knop
+    // als icoonknop of als dossierknop tonen zonder het menu te dupliceren.
+    btnClass?: string;
     // De menu-inhoud. Krijgt een `close` mee zodat een item het menu kan
     // sluiten nadat het zijn actie heeft uitgevoerd.
     children: (close: () => void) => ReactNode;
@@ -29,6 +32,7 @@ export function TopbarMenu({
     disabled = false,
     align = 'right',
     chevron = true,
+    btnClass,
     children,
 }: Props) {
     const [open, setOpen] = useState(false);
@@ -59,7 +63,7 @@ export function TopbarMenu({
         <div className={styles.menuWrap} ref={wrapRef}>
             <button
                 type="button"
-                className={styles.toolbarBtn}
+                className={`${styles.toolbarBtn} ${btnClass ?? ''}`}
                 onClick={() => setOpen(o => !o)}
                 disabled={disabled}
                 title={title}
@@ -89,11 +93,13 @@ interface ItemProps {
     disabled?: boolean;
     // Rode weergave voor een destructieve actie (bv. "Reset traject").
     danger?: boolean;
+    // Rechts uitgelijnde toelichting, bv. de sneltoets "Ctrl+S".
+    hint?: ReactNode;
     children: ReactNode;
 }
 
 /** Eén regel in een `TopbarMenu`. */
-export function TopbarMenuItem({ onClick, icon, title, disabled, danger, children }: ItemProps) {
+export function TopbarMenuItem({ onClick, icon, title, disabled, danger, hint, children }: ItemProps) {
     return (
         <button
             type="button"
@@ -105,6 +111,7 @@ export function TopbarMenuItem({ onClick, icon, title, disabled, danger, childre
         >
             {icon}
             <span>{children}</span>
+            {hint && <span className={styles.menuKbd}>{hint}</span>}
         </button>
     );
 }
