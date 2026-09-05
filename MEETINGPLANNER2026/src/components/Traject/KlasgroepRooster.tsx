@@ -208,6 +208,12 @@ export function KlasgroepRooster({
 
     const weekLabel = `${formatDateBE(weekMonday)} – ${formatDateBE(addDays(weekMonday, 4))}`;
 
+    // De week waarop dit rooster opent voor de actieve periode. Staan we daar
+    // al, dan zou de knop bij OUTSIDE_YEAR_MSG niets doen; die tonen we dan
+    // niet (zie hieronder).
+    const openingsWeek = useMemo(() => mondayOf(initialWeek), [initialWeek.getTime()]);
+    const kanNaarOpeningsWeek = openingsWeek.getTime() !== weekMonday.getTime();
+
     // De periode waaraan een klik het vak toevoegt. Een handmatig ingesteld
     // bereik heeft geen naam (S1, M2, …); dan noemen we enkel de datums, in
     // plaats van ze twee keer achter elkaar te zetten.
@@ -300,13 +306,13 @@ export function KlasgroepRooster({
             ) : error ? (
                 <div className={styles.emptyState}>
                     {error}
-                    {error === OUTSIDE_YEAR_MSG && (
+                    {error === OUTSIDE_YEAR_MSG && kanNaarOpeningsWeek && (
                         <button
                             className={styles.toolbarBtn}
                             style={{ marginTop: '0.75rem' }}
-                            onClick={() => setWeekMonday(mondayOf(initialWeek))}
+                            onClick={() => setWeekMonday(openingsWeek)}
                         >
-                            <CalendarClock size={14} /> Ga naar {formatDateBE(mondayOf(initialWeek))}
+                            <CalendarClock size={14} /> Ga naar {formatDateBE(openingsWeek)}
                         </button>
                     )}
                 </div>

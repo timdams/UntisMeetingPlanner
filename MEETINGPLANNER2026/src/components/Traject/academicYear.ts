@@ -290,6 +290,19 @@ export function periodeLabelVoor(
     return { kort: datums, label: `Periode ${datums}` };
 }
 
+// Een roosterweek loopt van maandag tot vrijdag, en de weergave leidt die week
+// af met mondayOf() — die springt terug naar de maandag óp of vóór een datum.
+// Een startdatum in het weekend zou zo een week opleveren die volledig vóór de
+// periode ligt: leeg, met de waarschuwing "deze week valt buiten de actieve
+// periode", en bij Untis zelfs een 404 wanneer die week nog in het vorige
+// academiejaar valt. Vandaar: een zaterdag of zondag hoort bij de week erná.
+function naarLesdag(d: Date): Date {
+    const dag = d.getDay(); // 0 = zondag, 6 = zaterdag
+    if (dag === 0) return addDays(d, 1);
+    if (dag === 6) return addDays(d, 2);
+    return d;
+}
+
 // De week waarop de rooster-weergave standaard opent voor een periode. Valt
 // vandaag binnen de periode en ná de effectieve lesstart (zie
 // ACADEMIEJAAR.effectieveLesStart), dan tonen we gewoon de huidige week.
@@ -298,7 +311,9 @@ export function periodeLabelVoor(
 // start officieel op 1 september, maar de lessen pas midden september) — zo
 // moet een gebruiker niet elke keer een paar lege weken doorklikken. Ligt die
 // lesstart buiten de periode (bv. bij een handmatig verschoven semester), dan
-// telt ze niet mee.
+// telt ze niet mee. Valt die eerste dag in het weekend (een semesterstart op
+// zondag 20/09, of de standaard lesstart op zaterdag 19/09), dan openen we op
+// de maandag erná — zie naarLesdag.
 export function defaultRoosterWeek(
     today: Date = new Date(),
     periodeStart: string = ACADEMIEJAAR.semesters[0].start,
@@ -310,7 +325,7 @@ export function defaultRoosterWeek(
     pEind.setHours(23, 59, 59, 999);
     const lesStartBinnen =
         lesStart.getTime() > pStart.getTime() && lesStart.getTime() <= pEind.getTime();
-    const eersteLesweek = lesStartBinnen ? lesStart : pStart;
+    const eersteLesweek = naarLesdag(lesStartBinnen ? lesStart : pStart);
     const binnenPeriode = today.getTime() >= pStart.getTime() && today.getTime() <= pEind.getTime();
     if (!binnenPeriode) return eersteLesweek;
     return today.getTime() < eersteLesweek.getTime() ? eersteLesweek : today;

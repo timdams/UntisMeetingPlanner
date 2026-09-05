@@ -10,7 +10,6 @@ import {
     Info,
     X,
     Save,
-    MoreHorizontal,
     BookOpen,
 } from 'lucide-react';
 import styles from './Traject.module.css';
@@ -31,7 +30,6 @@ import {
 import { isActief, type OLODSelectie } from './types';
 import { DossierMenu } from './BewaardeTrajecten';
 import { ProfielMenu } from './ProfielMenu';
-import { TopbarMenu, TopbarMenuItem } from './TopbarMenu';
 import { BevestigDialog, BewaarDialog, ProfielDialog, type DialogItem } from './TrajectDialogs';
 import { UndoToast, useUndo } from './Toast';
 import { TrajectSettingsView } from './TrajectSettings';
@@ -641,53 +639,6 @@ export function TrajectPlanner({ onBack, presetApplied = false }: Props) {
                 >
                     <BookOpen size={15} />
                 </a>
-                <TopbarMenu
-                    label={copied ? <Check size={15} /> : <MoreHorizontal size={15} />}
-                    chevron={false}
-                    btnClass={styles.iconBtn}
-                    title="Afdrukken, kopiëren en het traject wissen"
-                    ariaLabel="Meer acties"
-                >
-                    {close => (
-                        <>
-                            <TopbarMenuItem
-                                icon={<Printer size={14} />}
-                                onClick={() => {
-                                    close();
-                                    handlePrint();
-                                }}
-                            >
-                                Print / PDF
-                            </TopbarMenuItem>
-                            <TopbarMenuItem
-                                icon={<Copy size={14} />}
-                                disabled={traject.length === 0}
-                                title="Kopieer het studenttraject (zoals het wordt afgedrukt) naar het klembord"
-                                onClick={() => {
-                                    close();
-                                    handleCopy();
-                                }}
-                            >
-                                {copied ? 'Gekopieerd!' : 'Kopieer naar klembord'}
-                            </TopbarMenuItem>
-
-                            <div className={styles.menuScheiding} />
-
-                            <TopbarMenuItem
-                                icon={<RotateCcw size={14} />}
-                                danger
-                                disabled={traject.length === 0}
-                                title="Wist alle gekozen OLODs; je instellingen en bewaarde dossiers blijven staan"
-                                onClick={() => {
-                                    close();
-                                    setDialoog({ soort: 'reset' });
-                                }}
-                            >
-                                Reset traject
-                            </TopbarMenuItem>
-                        </>
-                    )}
-                </TopbarMenu>
             </div>
 
             {/* Rij 2 — contextbalk: waarvoor plan ik, in welke periode, en aan
@@ -744,26 +695,67 @@ export function TrajectPlanner({ onBack, presetApplied = false }: Props) {
                             onLaad={handleLaad}
                             onVerwijder={item => setDialoog({ soort: 'verwijderBewaard', item })}
                         />
-                        {/* Verschijnt pas zodra er werk openstaat: zolang alles
-                            bewaard is, is de knop overbodig en staat ze er niet.
-                            Na het bewaren blijft ze nog even staan om
-                            "Bewaard!" te kunnen tonen. */}
-                        {(nietBewaard || bewaardFeedback) && (
-                            <button
-                                className={styles.ctxBewaarBtn}
-                                onClick={doeSnelBewaar}
-                                disabled={traject.length === 0}
-                                title={
-                                    actiefTraject
+                        {/* Staat er altijd, ook wanneer alles bewaard is: zo
+                            springen de knoppen ernaast niet heen en weer bij
+                            elke wijziging. De oranje rand komt er pas bij zodra
+                            er werk openstaat. */}
+                        <button
+                            className={`${styles.ctxBewaarBtn} ${
+                                nietBewaard ? styles.ctxBewaarBtnOpen : ''
+                            }`}
+                            onClick={doeSnelBewaar}
+                            disabled={traject.length === 0 || (!nietBewaard && !bewaardFeedback)}
+                            title={
+                                traject.length === 0
+                                    ? 'Er zijn nog geen vakken gekozen om te bewaren'
+                                    : !nietBewaard
+                                      ? 'Alles is bewaard'
+                                      : actiefTraject
                                         ? `Wijzigingen bewaren in "${actiefTraject.naam}" (Ctrl+S)`
                                         : 'Dit dossier een naam geven en bewaren in deze browser (Ctrl+S)'
-                                }
-                            >
-                                {bewaardFeedback ? <Check size={13} /> : <Save size={13} />}
-                                {bewaardFeedback ? 'Bewaard!' : 'Bewaar'}
-                            </button>
-                        )}
+                            }
+                        >
+                            {bewaardFeedback ? <Check size={13} /> : <Save size={13} />}
+                            {bewaardFeedback ? 'Bewaard!' : 'Bewaar'}
+                        </button>
+
+                        {/* Afdrukken en kopiëren zaten in het overloopmenu van de
+                            appbalk, maar ze horen bij het samenstellen zelf: zo
+                            levert de trajectbegeleider het dossier af.
+                            Icoonknoppen, want beide iconen lezen zonder tekst. */}
+                        <button
+                            className={styles.ctxIconBtn}
+                            onClick={handlePrint}
+                            title="Het studenttraject afdrukken of als PDF bewaren"
+                            aria-label="Print / PDF"
+                        >
+                            <Printer size={15} />
+                        </button>
+                        <button
+                            className={styles.ctxIconBtn}
+                            onClick={handleCopy}
+                            disabled={traject.length === 0}
+                            title="Kopieer het studenttraject (zoals het wordt afgedrukt) naar het klembord"
+                            aria-label="Kopieer naar klembord"
+                        >
+                            {copied ? <Check size={15} /> : <Copy size={15} />}
+                        </button>
                     </div>
+
+                    <div className={styles.topbarSpacer} />
+
+                    {/* Reset hoort in het zicht — scenario's uitproberen is deel
+                        van het werk — maar niet naast de opbouwende knoppen.
+                        Vandaar het uiteinde van de balk, en met tekst erbij: het
+                        pijltje-icoon alleen leest als "ongedaan maken". */}
+                    <button
+                        className={styles.ctxResetBtn}
+                        onClick={() => setDialoog({ soort: 'reset' })}
+                        disabled={traject.length === 0}
+                        title="Wist alle gekozen OLODs; je instellingen, profielen en bewaarde dossiers blijven staan"
+                    >
+                        <RotateCcw size={14} /> Reset
+                    </button>
                 </div>
             )}
 

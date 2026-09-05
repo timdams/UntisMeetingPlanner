@@ -93,15 +93,18 @@
 
 /* Bewaar-knop in de contextbalk. Ze staat er alleen wanneer er werk openstaat,
    dus mag ze opvallen in dezelfde oranje toon als de stip op de dossiernaam. */
+/* Bewaar-knop in de contextbalk. Ze staat er altijd — zo verschuiven de
+   knoppen ernaast niet bij elke wijziging — maar trekt pas aandacht zodra er
+   werk openstaat (.ctxBewaarBtnOpen). */
 .ctxBewaarBtn {
     display: inline-flex;
     align-items: center;
     gap: 0.35rem;
     padding: 0.3rem 0.6rem;
-    border: 1px solid #F59E0B;
+    border: 1px solid var(--border-color);
     border-radius: var(--border-radius);
     background-color: var(--bg-color);
-    color: #B45309;
+    color: var(--text-color);
     font-size: 0.85rem;
     font-weight: 600;
     cursor: pointer;
@@ -109,11 +112,76 @@
 }
 
 .ctxBewaarBtn:hover:not(:disabled) {
-    background-color: #FEF3C7;
+    border-color: var(--primary);
 }
 
 .ctxBewaarBtn:disabled {
     opacity: 0.45;
+    cursor: default;
+}
+
+/* Zelfde oranje als de stip op de dossiernaam: er staat werk open. */
+.ctxBewaarBtnOpen {
+    border-color: #F59E0B;
+    color: #B45309;
+}
+
+.ctxBewaarBtnOpen:hover:not(:disabled) {
+    border-color: #F59E0B;
+    background-color: #FEF3C7;
+}
+
+/* Icoonknop in de contextbalk (afdrukken, kopiëren): een maatje kleiner dan
+   die in de appbalk, zodat ze de labels en de dossiernaam niet overstemmen. */
+.ctxIconBtn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    background-color: var(--bg-color);
+    color: var(--text-color);
+    cursor: pointer;
+}
+
+.ctxIconBtn:hover:not(:disabled) {
+    border-color: var(--primary);
+}
+
+.ctxIconBtn:disabled {
+    opacity: 0.45;
+    cursor: default;
+}
+
+/* Reset staat aan het uiteinde van de contextbalk: in het zicht, maar met een
+   armlengte afstand van de opbouwende knoppen. Rood en met tekst, want het
+   icoon alleen leest als "ongedaan maken". */
+.ctxResetBtn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.3rem 0.6rem;
+    border: 1px solid transparent;
+    border-radius: var(--border-radius);
+    background-color: transparent;
+    color: var(--primary);
+    font-size: 0.85rem;
+    font-weight: 500;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.ctxResetBtn:hover:not(:disabled) {
+    border-color: rgba(255, 0, 0, 0.3);
+    background-color: var(--selected-bg);
+}
+
+.ctxResetBtn:disabled {
+    opacity: 0.4;
     cursor: default;
 }
 
