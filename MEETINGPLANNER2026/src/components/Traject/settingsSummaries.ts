@@ -3,7 +3,7 @@
 // zodat dit los van de UI te testen is.
 
 import { TrajectSettings } from './types';
-import { effectieveGrenzen } from './academicYear';
+import { effectieveGrenzen, periodeLabelVoor } from './academicYear';
 import { formatDateBE, formatDateTime, parseIsoDate } from './dateUtils';
 
 export type SummaryTone = 'normal' | 'warn';
@@ -42,6 +42,42 @@ export function periodeSummary(
     return grenzenOngeldig
         ? { text: `${basis} · grens ongeldig`, tone: 'warn' }
         : { text: basis, tone: 'normal' };
+}
+
+// "7 klasgroepen · modules · M1" — de typering van één instellingenset. Gedeeld
+// door het profielmenu in de contextbalk, de profielkaart in de instellingen en
+// de bewaardialoog, zodat een profiel overal hetzelfde leest.
+export function profielSamenvatting(settings: TrajectSettings): string {
+    const n = settings.mijnOpleidingKlasgroepen.length;
+    const periode = periodeLabelVoor(
+        settings.semesterStart,
+        settings.semesterEind,
+        settings.periodeGrenzen
+    );
+    return [
+        `${n} ${n === 1 ? 'klasgroep' : 'klasgroepen'}`,
+        settings.periodeType === 'module' ? 'modules' : 'semesters',
+        periode.kort,
+    ].join(' · ');
+}
+
+// Kopregel van de profielkaart: hoeveel sets er bewaard zijn en in welke je
+// werkt. Zonder profielen is dat geen waarschuwing — het is een gemak, geen
+// verplichting.
+export function profielenSummary(
+    aantal: number,
+    actieveNaam: string | null,
+    gewijzigd: boolean
+): CardSummary {
+    if (aantal === 0) {
+        return { text: 'Nog geen profielen — bewaar deze instellingen om snel te wisselen', tone: 'normal' };
+    }
+    const basis = `${aantal} ${aantal === 1 ? 'profiel' : 'profielen'}`;
+    if (!actieveNaam) return { text: `${basis} · geen actief`, tone: 'normal' };
+    return {
+        text: `${basis} · actief: ${actieveNaam}${gewijzigd ? ' (gewijzigd)' : ''}`,
+        tone: 'normal',
+    };
 }
 
 export function deelSummary(aantalKlasgroepen: number): CardSummary {

@@ -22,6 +22,8 @@ const KEY_MIGRATION = 'traject_migration_version';
 const KEY_LAST_BACKUP = 'traject_last_backup';
 const KEY_BEWAARD = 'traject_bewaard';
 const KEY_ACTIEF = 'traject_actief';
+const KEY_PROFIELEN = 'traject_profielen';
+const KEY_PROFIEL_ACTIEF = 'traject_profiel_actief';
 
 // Verhoog dit nummer bij een breaking change in opgeslagen data. runTrajectMigrations()
 // draait dan eenmalig de bijhorende opkuis voor bestaande gebruikers.
@@ -378,16 +380,19 @@ function normalizeBewaardeTrajecten(raw: unknown): BewaardTraject[] {
     return out;
 }
 
-function nieuwBewaardId(): string {
+// Id voor alles wat de gebruiker onder een naam bewaart: een dossier of een
+// profiel.
+function nieuwId(): string {
     if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
         return crypto.randomUUID();
     }
     return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
-// Namen van bewaarde trajecten vergelijken we hoofdletter- en accentongevoelig,
-// zodat "Traject A" en "traject a" hetzelfde item overschrijven.
-export function zelfdeTrajectNaam(a: string, b: string): boolean {
+// Namen van bewaarde dossiers en profielen vergelijken we hoofdletter- en
+// accentongevoelig, zodat "Traject A" en "traject a" hetzelfde item
+// overschrijven.
+export function zelfdeNaam(a: string, b: string): boolean {
     return a.trim().localeCompare(b.trim(), 'nl', { sensitivity: 'base' }) === 0;
 }
 
@@ -409,7 +414,7 @@ export function useBewaardeTrajecten() {
     const bewaar = useCallback(
         (naam: string, settings: TrajectSettings, traject: StudentTraject, overschrijfId?: string): string => {
         const item: BewaardTraject = {
-            id: overschrijfId ?? nieuwBewaardId(),
+            id: overschrijfId ?? nieuwId(),
             naam: naam.trim(),
             bewaardOp: new Date().toISOString(),
             settings: normalizeSettings(settings),
@@ -515,7 +520,147 @@ export function useActiefTraject() {
 
     const wis = useCallback(() => setActief(null), []);
 
-    return { actief, markeer, wis };
+    // Zet het geopende dossier letterlijk terug zoals het was — enkel voor
+    // "ongedaan maken" na een actie die het dossier losliet (profielwissel).
+    const herstel = useCallback((vorig: ActiefTraject | null) => setActief(vorig), []);
+
+    return { actief, markeer, wis, herstel };
+}
+
+// ===== Profielen (bewaarde instellingssets) =====
+
+/**
+ * Een onder een naam bewaarde set instellingen: klasgroep-shortlist,
+ * periode-indeling met haar grensdatums, semestervakken en de periode waarop
+ * het werkblad opent. Een trajectbegeleider heeft er meestal een paar naast
+ * elkaar ("Flextraject — avondgroepen", "Bissers module 1") en wisselt ertussen
+ * in plaats van telkens een back-up te importeren.
+ *
+ * Onderscheid met {@link BewaardTraject}: een profiel draagt *alleen*
+ * instellingen en is herbruikbaar over studenten heen; een dossier is één
+ * student — zijn OLOD-keuzes plus de instellingen waarin die keuzes gemaakt
+ * zijn.
+ */
+export interface Profiel {
+    id: string;
+    naam: string;
+    bewaardOp: string; // ISO-tijdstip
+    settings: TrajectSettings;
+}
+
+function normalizeProfielen(raw: unknown): Profiel[] {
+    if (!Array.isArray(raw)) return [];
+    const out: Profiel[] = [];
+    for (const item of raw) {
+        const it = (item && typeof item === 'object' ? item : null) as Record<string, unknown> | null;
+        if (!it || typeof it.id !== 'string' || typeof it.naam !== 'string') continue;
+        out.push({
+            id: it.id,
+            naam: it.naam,
+            bewaardOp: typeof it.bewaardOp === 'string' ? it.bewaardOp : new Date(0).toISOString(),
+            settings: normalizeSettings(it.settings),
+        });
+    }
+    return out;
+}
+
+/**
+ * Wat een profiel vastlegt, als vergelijkbare string. De **actieve periode**
+ * (`semesterStart`/`semesterEind`) zit er bewust niet in: die wordt wél mee
+ * bewaard en mee teruggezet, maar binnen een profiel van S1 naar S2 springen is
+ * navigatie in het werkblad, geen wijziging aan de instellingenset. Zo krijgt
+ * de gebruiker niet bij elke periodeklik een "gewijzigd"-stip te zien.
+ */
+export function profielVingerafdruk(settings: TrajectSettings): string {
+    const s = normalizeSettings(settings);
+    return [
+        [...s.mijnOpleidingKlasgroepen].sort().join(','),
+        s.periodeType,
+        s.periodeGrenzen.s1Start,
+        s.periodeGrenzen.s1Eind,
+        s.periodeGrenzen.s2Start,
+        s.periodeGrenzen.s2Eind,
+        s.periodeGrenzen.m2Start,
+        s.periodeGrenzen.m4Start,
+        [...s.semesterOlods].sort().join(','),
+    ].join('|');
+}
+
+/**
+ * De bewaarde profielen (localStorage) plus welk profiel er actief is. Het
+ * actieve profiel is enkel een **id**: naam en inhoud komen uit de lijst zelf,
+ * zodat een hernoemd of bijgewerkt profiel nooit uit de pas kan lopen met wat
+ * de contextbalk toont. Verdwijnt het id uit de lijst, dan werkt de gebruiker
+ * gewoon zonder profiel verder.
+ *
+ * Reset, back-up-import en het wisselen van dossier raken deze lijst niet.
+ */
+export function useProfielen() {
+    const [profielen, setProfielen] = useState<Profiel[]>(() =>
+        normalizeProfielen(loadJSON<unknown>(KEY_PROFIELEN, null))
+    );
+    const [actiefId, setActiefId] = useState<string | null>(() => {
+        const raw = loadJSON<unknown>(KEY_PROFIEL_ACTIEF, null);
+        return typeof raw === 'string' ? raw : null;
+    });
+
+    useEffect(() => {
+        persist(KEY_PROFIELEN, profielen);
+    }, [profielen]);
+
+    useEffect(() => {
+        if (actiefId) persist(KEY_PROFIEL_ACTIEF, actiefId);
+        else localStorage.removeItem(KEY_PROFIEL_ACTIEF);
+    }, [actiefId]);
+
+    const actiefProfiel = profielen.find(p => p.id === actiefId) ?? null;
+
+    // Bewaart de meegegeven instellingen onder een naam. Met `overschrijfId`
+    // wordt een bestaand profiel bijgewerkt in plaats van er een tweede naast
+    // te zetten. Geeft het id terug zodat de aanroeper het meteen als actief
+    // profiel kan markeren.
+    const bewaarProfiel = useCallback(
+        (naam: string, settings: TrajectSettings, overschrijfId?: string): string => {
+            const item: Profiel = {
+                id: overschrijfId ?? nieuwId(),
+                naam: naam.trim(),
+                bewaardOp: new Date().toISOString(),
+                settings: normalizeSettings(settings),
+            };
+            setProfielen(lijst =>
+                overschrijfId && lijst.some(x => x.id === overschrijfId)
+                    ? lijst.map(x => (x.id === overschrijfId ? item : x))
+                    : [...lijst, item]
+            );
+            return item.id;
+        },
+        []
+    );
+
+    const verwijderProfiel = useCallback((id: string) => {
+        setProfielen(lijst => lijst.filter(x => x.id !== id));
+        // Het actieve profiel bestaat niet meer; de instellingen blijven staan,
+        // maar horen nu bij geen enkel profiel.
+        setActiefId(cur => (cur === id ? null : cur));
+    }, []);
+
+    const zetActiefProfiel = useCallback((id: string | null) => setActiefId(id), []);
+
+    // Vervangt de volledige lijst — enkel voor de back-up-import, die de
+    // browser terugzet zoals ze was. Een back-up zonder profielen (van vóór
+    // deze functie) laat de bestaande lijst met rust; dat beslist de aanroeper.
+    const replaceProfielen = useCallback((next: Profiel[]) => {
+        setProfielen(normalizeProfielen(next));
+    }, []);
+
+    return {
+        profielen,
+        actiefProfiel,
+        bewaarProfiel,
+        verwijderProfiel,
+        zetActiefProfiel,
+        replaceProfielen,
+    };
 }
 
 // Unieke sleutel van een selectie (alle vier velden) — voor React-keys en

@@ -154,11 +154,27 @@
     font-weight: 600;
 }
 
-/* Nog geen bewaard dossier: de naam is een plaatsaanduiding, geen eigennaam. */
+/* Nog geen bewaard dossier (of geen actief profiel): de naam is een
+   plaatsaanduiding, geen eigennaam. */
 .dossierBtnLeeg {
     font-weight: 400;
     font-style: italic;
     color: #64748b;
+}
+
+/* Het schuifjes-icoon voor de profielnaam: zonder dat lijken de knop van het
+   profiel en die van het dossier op elkaar, terwijl ze heel andere dingen doen. */
+.profielBtnIcoon {
+    flex-shrink: 0;
+    color: #64748b;
+}
+
+/* Vinkje voor het actieve profiel in de profielenlijst van het menu. */
+.profielVink {
+    display: inline;
+    vertical-align: -1px;
+    margin-right: 0.25rem;
+    color: var(--primary);
 }
 
 .dossierNaam {
@@ -413,6 +429,81 @@
     flex-wrap: wrap;
     gap: 0.5rem;
     margin-top: 0.25rem;
+}
+
+/* ===== Profielkaart in de instellingen ===== */
+/* Blok bovenaan de kaart: in welke set werk je nu, en wat kan je ermee. */
+.profielHuidig {
+    margin: 0.6rem 0;
+    padding: 0.6rem 0.75rem;
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    background-color: var(--secondary);
+}
+
+.profielHuidigTekst {
+    font-size: 0.88rem;
+    line-height: 1.45;
+    color: var(--text-color);
+    margin-bottom: 0.5rem;
+}
+
+.profielLijst {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    margin-top: 0.5rem;
+}
+
+.profielRij {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 0.6rem;
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    background-color: var(--bg-color);
+}
+
+/* Het actieve profiel krijgt hetzelfde accent als een geselecteerde knop
+   elders in de tool, zodat "hier zit ik" overal dezelfde kleur heeft. */
+.profielRijActief {
+    border-color: var(--primary);
+    background-color: var(--selected-bg);
+}
+
+.profielRijInfo {
+    flex: 1;
+    min-width: 0;
+}
+
+.profielRijNaam {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-weight: 600;
+    font-size: 0.9rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.profielRijBadge {
+    flex-shrink: 0;
+    padding: 0.05rem 0.35rem;
+    border-radius: 999px;
+    background-color: var(--primary);
+    color: #fff;
+    font-size: 0.68rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.profielRijMeta {
+    font-size: 0.76rem;
+    color: #64748b;
+    margin-top: 2px;
 }
 
 .importMsgOk,
@@ -1725,6 +1816,17 @@
 
 .laadMenuLaad:hover {
     background-color: var(--item-hover);
+}
+
+/* De rij van het actieve profiel: uitgeschakeld (er valt niets te wisselen),
+   maar wel volledig leesbaar — ze zegt in welke set je werkt. */
+.laadMenuLaadActief {
+    cursor: default;
+    background-color: var(--secondary);
+}
+
+.laadMenuLaadActief:hover {
+    background-color: var(--secondary);
 }
 
 .laadMenuNaam {

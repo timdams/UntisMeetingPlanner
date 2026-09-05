@@ -4,7 +4,7 @@ import {
     RotateCcw,
     Settings as SettingsIcon,
     LayoutGrid,
-    ArrowLeft,
+    Home,
     Copy,
     Check,
     Info,
@@ -15,20 +15,24 @@ import {
 } from 'lucide-react';
 import styles from './Traject.module.css';
 import {
+    profielVingerafdruk,
     selectieKey,
     trajectVingerafdruk,
     useActiefTraject,
     useBewaardeTrajecten,
     useKleurMap,
     useLastBackup,
+    useProfielen,
     useStudentTraject,
     useTrajectSettings,
     type BewaardTraject,
+    type Profiel,
 } from './hooks';
 import { isActief, type OLODSelectie } from './types';
 import { DossierMenu } from './BewaardeTrajecten';
+import { ProfielMenu } from './ProfielMenu';
 import { TopbarMenu, TopbarMenuItem } from './TopbarMenu';
-import { BevestigDialog, BewaarDialog, type DialogItem } from './TrajectDialogs';
+import { BevestigDialog, BewaarDialog, ProfielDialog, type DialogItem } from './TrajectDialogs';
 import { UndoToast, useUndo } from './Toast';
 import { TrajectSettingsView } from './TrajectSettings';
 import { KlasgroepSelector } from './KlasgroepSelector';
@@ -38,6 +42,7 @@ import { PeriodeSwitcher } from './PeriodeSwitcher';
 import { TrajectPrintView, buildTrajectClipboardText } from './TrajectPrintView';
 import { defaultRoosterWeek, periodesVoor } from './academicYear';
 import { isSemesterOlod, semesterBereikVoor } from './semesterOlods';
+import { profielSamenvatting } from './settingsSummaries';
 import { selectieStatussen, useTrajectBlokken, type KlasgroepPreview } from './useTrajectBlokken';
 import { backupFilename, buildBackup, downloadBackup, parseBackup, type TrajectBackup } from './trajectBackup';
 
@@ -54,6 +59,11 @@ type Dialoog =
     | { soort: 'reset' }
     | { soort: 'laad'; item: BewaardTraject }
     | { soort: 'verwijderBewaard'; item: BewaardTraject }
+    // Profielen (instellingssets): bewaren onder een naam, overschakelen naar
+    // een ander profiel (wist het traject) en er een weggooien.
+    | { soort: 'profielBewaar' }
+    | { soort: 'profielWissel'; profiel: Profiel }
+    | { soort: 'profielVerwijder'; profiel: Profiel }
     // De import wacht op het antwoord van de gebruiker: `resolve` sluit de
     // Promise die TrajectSettingsView aan de bestandskiezer hangt.
     | { soort: 'import'; backup: TrajectBackup; resolve: (ok: boolean) => void };
@@ -148,7 +158,20 @@ export function TrajectPlanner({ onBack, presetApplied = false }: Props) {
     const { map: kleurmap, ensureColor, colorOf, replaceMap, resetColors } = useKleurMap();
     const { lastBackup, markBackup } = useLastBackup();
     const { bewaard: bewaardeTrajecten, bewaar: bewaarTraject, verwijder: verwijderBewaard } = useBewaardeTrajecten();
-    const { actief: actiefTraject, markeer: markeerActief, wis: wisActief } = useActiefTraject();
+    const {
+        actief: actiefTraject,
+        markeer: markeerActief,
+        wis: wisActief,
+        herstel: herstelActiefTraject,
+    } = useActiefTraject();
+    const {
+        profielen,
+        actiefProfiel,
+        bewaarProfiel,
+        verwijderProfiel,
+        zetActiefProfiel,
+        replaceProfielen,
+    } = useProfielen();
     const { melding: undoMelding, meld: meldUndo, sluit: sluitUndo, herstel: herstelUndo } = useUndo();
 
     const [tab, setTab] = useState<Tab>(
@@ -312,6 +335,94 @@ export function TrajectPlanner({ onBack, presetApplied = false }: Props) {
         setDialoog(null);
     };
 
+    // ===== Profielen (bewaarde instellingssets) =====
+
+    // Wijken de huidige instellingen af van het actieve profiel? De actieve
+    // periode telt daarin niet mee (zie profielVingerafdruk): van S1 naar S2
+    // springen is navigatie, geen wijziging aan de set.
+    const profielGewijzigd = useMemo(
+        () =>
+            actiefProfiel
+                ? profielVingerafdruk(actiefProfiel.settings) !== profielVingerafdruk(settings)
+                : false,
+        [actiefProfiel, settings]
+    );
+
+    // De huidige instellingen staan in geen enkel profiel: er is er geen
+    // actief, of het wijkt af van wat er op het scherm staat. Een wissel gooit
+    // ze dan weg, dus dat verdient een vraag vooraf.
+    const profielNietBewaard =
+        profielGewijzigd || (!actiefProfiel && settings.mijnOpleidingKlasgroepen.length > 0);
+
+    // Bewaart de huidige instellingen als profiel en maakt dat meteen het
+    // actieve profiel — het traject blijft ongemoeid, een profiel draagt er
+    // geen.
+    const doeBewaarProfiel = (naam: string, overschrijfId?: string) => {
+        const id = bewaarProfiel(naam, settings, overschrijfId);
+        zetActiefProfiel(id);
+        setDialoog(null);
+    };
+
+    const doeBijwerkenProfiel = () => {
+        if (!actiefProfiel) return;
+        doeBewaarProfiel(actiefProfiel.naam, actiefProfiel.id);
+    };
+
+    /**
+     * Schakelt over naar een ander profiel: de instellingen van dat profiel
+     * vervangen de huidige, en het studenttraject wordt gewist. Dat wissen is
+     * geen bijwerking maar de kern — de OLOD-keuzes verwijzen naar klasgroepen
+     * en periodes van de vórige set, en zouden daar als lege of foute selecties
+     * blijven staan. Om dezelfde reden laat het werkblad het geopende dossier
+     * los: met een leeg traject mag Ctrl+S dat dossier niet overschrijven.
+     *
+     * Alles samen vormt één herstelpunt (instellingen + traject + dossier +
+     * profiel), zodat een verkeerde klik met "Ongedaan maken" volledig terug te
+     * draaien is.
+     */
+    const doeWisselProfiel = (p: Profiel) => {
+        const vorigeSettings = settings;
+        const vorigTraject = traject;
+        const vorigDossier = actiefTraject;
+        const vorigProfielId = actiefProfiel?.id ?? null;
+        const aantal = traject.length;
+
+        replaceSettings(p.settings);
+        reset();
+        wisActief();
+        zetActiefProfiel(p.id);
+        setDialoog(null);
+        // Bewust géén sprong naar het werkblad: wie vanuit de instellingen
+        // wisselt, wil daar meestal meteen verder kijken of bijstellen.
+
+        meldUndo(
+            aantal > 0
+                ? `Profiel "${p.naam}" actief — ${aantal} ${aantal === 1 ? 'OLOD' : 'OLODs'} gewist`
+                : `Profiel "${p.naam}" actief`,
+            () => {
+                replaceSettings(vorigeSettings);
+                replaceTraject(vorigTraject);
+                herstelActiefTraject(vorigDossier);
+                zetActiefProfiel(vorigProfielId);
+            }
+        );
+    };
+
+    // Vraagt eerst om bevestiging zodra er iets te verliezen valt: gekozen
+    // OLODs, of instellingen die nergens bewaard staan. Valt er niets te
+    // verliezen, dan is een dialoog enkel een extra klik.
+    const handleKiesProfiel = (p: Profiel) => {
+        if (p.id === actiefProfiel?.id) return;
+        const heeftWerk = traject.length > 0 || profielNietBewaard;
+        if (heeftWerk) setDialoog({ soort: 'profielWissel', profiel: p });
+        else doeWisselProfiel(p);
+    };
+
+    const doeVerwijderProfiel = (p: Profiel) => {
+        verwijderProfiel(p.id);
+        setDialoog(null);
+    };
+
     const handlePrint = () => {
         window.print();
     };
@@ -338,7 +449,7 @@ export function TrajectPlanner({ onBack, presetApplied = false }: Props) {
     };
 
     const handleExport = () => {
-        const backup = buildBackup(settings, traject, kleurmap);
+        const backup = buildBackup(settings, traject, kleurmap, profielen);
         downloadBackup(backupFilename(), backup);
         markBackup(backup.exportedAt);
     };
@@ -356,11 +467,33 @@ export function TrajectPlanner({ onBack, presetApplied = false }: Props) {
         replaceSettings(backup.settings);
         replaceTraject(backup.traject);
         replaceMap(backup.kleurmap);
+        // Bevat de back-up profielen, dan zet ze de lijst terug zoals ze in de
+        // geëxporteerde browser stond, en volgt het actieve profiel de
+        // geïmporteerde instellingen. Een oudere back-up (geen `profielen`)
+        // laat de bestaande profielen met rust.
+        if (backup.profielen) {
+            replaceProfielen(backup.profielen);
+            const geimporteerd = profielVingerafdruk(backup.settings);
+            const match = backup.profielen.find(
+                p => profielVingerafdruk(p.settings) === geimporteerd
+            );
+            zetActiefProfiel(match?.id ?? null);
+        }
         // Een geïmporteerde back-up is een ander dossier dan het bewaarde
         // traject waar we aan werkten.
         wisActief();
         setDialoog(null);
         resolve(true);
+    };
+
+    // Wat de import met de bewaarde profielen doet. Alleen zinvol bij een
+    // back-up die het veld heeft: een oudere laat de profielen ongemoeid en
+    // krijgt dus ook geen zin hierover.
+    const profielImportTekst = (uitBackup: number): string => {
+        const n = (k: number) => `${k} ${k === 1 ? 'profiel' : 'profielen'}`;
+        if (profielen.length === 0) return `De back-up brengt ${n(uitBackup)} mee.`;
+        if (uitBackup === 0) return `Je ${n(profielen.length)} in deze browser worden daarbij gewist.`;
+        return `Je ${n(profielen.length)} in deze browser worden vervangen door ${n(uitBackup)} uit de back-up.`;
     };
 
     const annuleerDialoog = () => {
@@ -469,12 +602,15 @@ export function TrajectPlanner({ onBack, presetApplied = false }: Props) {
                 gescheiden van rij 2: die draagt de *toestand* waarin het
                 werkblad staat, niet de commando's. */}
             <div className={styles.appbar}>
+                {/* Terug naar de modulekeuze is zelden nodig; een huisje met
+                    tooltip volstaat en scheelt de balk een tekstknop. */}
                 <button
-                    className={styles.toolbarBtn}
+                    className={styles.iconBtn}
                     onClick={onBack}
                     title="Terug naar het hoofdmenu — kies een andere tool"
+                    aria-label="Terug naar het hoofdmenu"
                 >
-                    <ArrowLeft size={14} /> Menu
+                    <Home size={15} />
                 </button>
                 <div className={styles.topbarTitle}>Trajectplanner</div>
 
@@ -561,16 +697,27 @@ export function TrajectPlanner({ onBack, presetApplied = false }: Props) {
                 voor wie de tool een paar keer per jaar gebruikt een raadsel. */}
             {tab === 'werkblad' && (
                 <div className={styles.contextbar}>
-                    {/* TODO (profielen): hier komt de eerste groep,
-                        "Profiel: [Flextraject ▾]" — de switcher tussen
-                        instellingssets. Zolang die functionaliteit er niet is
-                        blijft de groep weg in plaats van als dode knop te
-                        staan; de balk is er al op gebouwd. Let op het
-                        onderscheid met het dossier hiernaast: een *profiel*
-                        draagt alleen instellingen (klasgroepen, periode-
-                        indeling, semestervakken) en is herbruikbaar over
-                        studenten heen, een *dossier* is één student
-                        (traject + zijn instellingen). */}
+                    {/* Eerste groep: de instellingenset waarin gewerkt wordt.
+                        Let op het onderscheid met het dossier verderop in deze
+                        balk: een *profiel* draagt alleen instellingen
+                        (klasgroepen, periode-indeling, grensdatums,
+                        semestervakken) en is herbruikbaar over studenten heen,
+                        een *dossier* is één student (traject + zijn
+                        instellingen). */}
+                    <div className={styles.ctxGroep}>
+                        <span className={styles.ctxLabel}>Profiel</span>
+                        <ProfielMenu
+                            profielen={profielen}
+                            actief={actiefProfiel}
+                            gewijzigd={profielGewijzigd}
+                            onKies={handleKiesProfiel}
+                            onBewaarAls={() => setDialoog({ soort: 'profielBewaar' })}
+                            onBijwerken={doeBijwerkenProfiel}
+                            onVerwijder={p => setDialoog({ soort: 'profielVerwijder', profiel: p })}
+                        />
+                    </div>
+
+                    <div className={styles.ctxScheiding} />
 
                     <div className={styles.ctxGroep}>
                         <span className={styles.ctxLabel}>Periode</span>
@@ -641,6 +788,13 @@ export function TrajectPlanner({ onBack, presetApplied = false }: Props) {
             {tab === 'instellingen' ? (
                 <TrajectSettingsView
                     settings={settings}
+                    profielen={profielen}
+                    actiefProfiel={actiefProfiel}
+                    profielGewijzigd={profielGewijzigd}
+                    onKiesProfiel={handleKiesProfiel}
+                    onBewaarProfiel={() => setDialoog({ soort: 'profielBewaar' })}
+                    onBijwerkenProfiel={doeBijwerkenProfiel}
+                    onVerwijderProfiel={p => setDialoog({ soort: 'profielVerwijder', profiel: p })}
                     onToggleKlasgroep={toggleKlasgroep}
                     onSetKlasgroepen={setKlasgroepen}
                     onSemesterStartChange={setSemesterStart}
@@ -785,24 +939,101 @@ export function TrajectPlanner({ onBack, presetApplied = false }: Props) {
             />
         )}
 
+        {dialoog?.soort === 'profielBewaar' && (
+            <ProfielDialog
+                voorstel={actiefProfiel?.naam ?? `Profiel ${profielen.length + 1}`}
+                profielen={profielen}
+                samenvatting={profielSamenvatting(settings)}
+                onBewaar={doeBewaarProfiel}
+                onAnnuleer={annuleerDialoog}
+            />
+        )}
+
+        {dialoog?.soort === 'profielWissel' && (
+            <BevestigDialog
+                titel={`Overschakelen naar "${dialoog.profiel.naam}"?`}
+                bericht={
+                    <>
+                        Je klasgroepen, periode-indeling en grensdatums worden vervangen door die
+                        van <strong>{dialoog.profiel.naam}</strong> ({profielSamenvatting(dialoog.profiel.settings)}).
+                        {traject.length > 0 ? (
+                            <>
+                                {' '}
+                                {traject.length === 1
+                                    ? 'Het gekozen OLOD wordt'
+                                    : `De ${traject.length} gekozen OLODs worden`}{' '}
+                                daarbij <strong>gewist</strong> — die keuzes horen bij de
+                                klasgroepen en periodes van je huidige set.
+                                {nietBewaard &&
+                                    ' Je huidige werk is niet bewaard in een dossier.'}
+                            </>
+                        ) : (
+                            ' Je studenttraject is leeg, dus daar gaat niets verloren.'
+                        )}
+                        {profielNietBewaard && (
+                            <>
+                                {' '}
+                                {actiefProfiel
+                                    ? `De wijzigingen aan "${actiefProfiel.naam}" zijn niet bewaard.`
+                                    : 'Je huidige instellingen staan in geen enkel profiel.'}
+                            </>
+                        )}{' '}
+                        Bewaarde dossiers en profielen blijven staan.
+                    </>
+                }
+                itemsKop={traject.length > 0 ? 'Wordt gewist' : undefined}
+                items={traject.length > 0 ? resetItems : undefined}
+                bevestigLabel="Overschakelen"
+                danger={traject.length > 0}
+                onBevestig={() => doeWisselProfiel(dialoog.profiel)}
+                onAnnuleer={annuleerDialoog}
+            />
+        )}
+
+        {dialoog?.soort === 'profielVerwijder' && (
+            <BevestigDialog
+                titel="Profiel verwijderen?"
+                bericht={
+                    <>
+                        <strong>{dialoog.profiel.naam}</strong> (
+                        {profielSamenvatting(dialoog.profiel.settings)}) wordt uit deze browser
+                        verwijderd. Dit kan niet ongedaan gemaakt worden. Je huidige instellingen en
+                        je traject veranderen niet.
+                    </>
+                }
+                bevestigLabel="Verwijderen"
+                danger
+                onBevestig={() => doeVerwijderProfiel(dialoog.profiel)}
+                onAnnuleer={annuleerDialoog}
+            />
+        )}
+
         {dialoog?.soort === 'import' && (
             <BevestigDialog
                 titel="Back-up importeren?"
                 bericht={
-                    traject.length > 0 || settings.mijnOpleidingKlasgroepen.length > 0 ? (
-                        <>
-                            De back-up bevat {dialoog.backup.traject.length}{' '}
-                            {dialoog.backup.traject.length === 1 ? 'OLOD' : 'OLODs'} en overschrijft je
-                            huidige instellingen, traject ({traject.length}{' '}
-                            {traject.length === 1 ? 'OLOD' : 'OLODs'}) en kleuren.
-                        </>
-                    ) : (
-                        <>
-                            De back-up bevat {dialoog.backup.traject.length}{' '}
-                            {dialoog.backup.traject.length === 1 ? 'OLOD' : 'OLODs'} en wordt in dit
-                            werkblad geladen.
-                        </>
-                    )
+                    <>
+                        {traject.length > 0 || settings.mijnOpleidingKlasgroepen.length > 0 ? (
+                            <>
+                                De back-up bevat {dialoog.backup.traject.length}{' '}
+                                {dialoog.backup.traject.length === 1 ? 'OLOD' : 'OLODs'} en overschrijft je
+                                huidige instellingen, traject ({traject.length}{' '}
+                                {traject.length === 1 ? 'OLOD' : 'OLODs'}) en kleuren.
+                            </>
+                        ) : (
+                            <>
+                                De back-up bevat {dialoog.backup.traject.length}{' '}
+                                {dialoog.backup.traject.length === 1 ? 'OLOD' : 'OLODs'} en wordt in dit
+                                werkblad geladen.
+                            </>
+                        )}
+                        {/* Enkel bij een back-up van na de profielen: die zet ook
+                            de profielenlijst terug, en dat is niet te zien aan de
+                            OLOD-telling hierboven. */}
+                        {dialoog.backup.profielen && (
+                            <> {profielImportTekst(dialoog.backup.profielen.length)}</>
+                        )}
+                    </>
                 }
                 bevestigLabel="Importeren"
                 danger={traject.length > 0}

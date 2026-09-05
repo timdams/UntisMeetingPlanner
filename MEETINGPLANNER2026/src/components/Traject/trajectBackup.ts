@@ -1,5 +1,5 @@
 import { TrajectSettings, StudentTraject, KleurMap } from './types';
-import { normalizeSettings, normalizeTraject } from './hooks';
+import { normalizeSettings, normalizeTraject, type Profiel } from './hooks';
 
 export interface TrajectBackup {
     version: 1;
@@ -7,12 +7,17 @@ export interface TrajectBackup {
     settings: TrajectSettings;
     traject: StudentTraject;
     kleurmap: KleurMap;
+    // De bewaarde instellingssets. Optioneel: back-ups van vóór de profielen
+    // hebben dit veld niet, en dan blijven de profielen van de importerende
+    // browser gewoon staan.
+    profielen?: Profiel[];
 }
 
 export function buildBackup(
     settings: TrajectSettings,
     traject: StudentTraject,
-    kleurmap: KleurMap
+    kleurmap: KleurMap,
+    profielen: Profiel[] = []
 ): TrajectBackup {
     return {
         version: 1,
@@ -20,6 +25,7 @@ export function buildBackup(
         settings,
         traject,
         kleurmap,
+        profielen,
     };
 }
 
@@ -85,12 +91,32 @@ export function parseBackup(raw: string): TrajectBackup {
         }
     }
 
+    // Profielen zijn optioneel (zie TrajectBackup). Een item zonder id of naam
+    // slaan we over in plaats van het hele bestand af te keuren: de instellingen
+    // en het traject zijn belangrijker dan een stukgelopen profiel.
+    const profielen = Array.isArray(d.profielen)
+        ? d.profielen
+              .filter(
+                  (x): x is Record<string, unknown> =>
+                      !!x && typeof x === 'object' && typeof (x as Record<string, unknown>).id === 'string' &&
+                      typeof (x as Record<string, unknown>).naam === 'string'
+              )
+              .map(x => ({
+                  id: x.id as string,
+                  naam: x.naam as string,
+                  bewaardOp:
+                      typeof x.bewaardOp === 'string' ? x.bewaardOp : new Date(0).toISOString(),
+                  settings: normalizeSettings(x.settings),
+              }))
+        : undefined;
+
     return {
         version: 1,
         exportedAt: typeof d.exportedAt === 'string' ? d.exportedAt : new Date().toISOString(),
         settings: normalizeSettings(s),
         traject: normalizeTraject(d.traject),
         kleurmap: km as KleurMap,
+        profielen,
     };
 }
 

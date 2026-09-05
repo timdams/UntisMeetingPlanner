@@ -12,7 +12,7 @@ import {
     type PeriodeGrenzen,
     type PeriodeType,
 } from './academicYear';
-import { formatDateBE, parseIsoDate } from './dateUtils';
+import { formatDateBE, formatDateTime, parseIsoDate } from './dateUtils';
 import { PeriodeSwitcher } from './PeriodeSwitcher';
 import { SettingsCard, Uitleg } from './SettingsCard';
 import {
@@ -21,7 +21,10 @@ import {
     groepeerKlasgroepen,
     klasgroepenSummary,
     periodeSummary,
+    profielSamenvatting,
+    profielenSummary,
 } from './settingsSummaries';
+import type { Profiel } from './hooks';
 import { trajectUntisService } from './trajectService';
 import { untisService } from '../../services/UntisService';
 import { buildShareUrl, copyToClipboard } from './trajectShare';
@@ -39,7 +42,9 @@ import {
     Palette,
     QrCode,
     RotateCcw,
+    Save,
     Share2,
+    SlidersHorizontal,
     Upload,
     X,
 } from 'lucide-react';
@@ -47,6 +52,18 @@ import { QRCodeCanvas } from 'qrcode.react';
 
 interface Props {
     settings: TrajectSettings;
+    // ===== Profielen (instellingssets) =====
+    // Beheer staat hier — dit is het scherm waar een set wordt opgebouwd — de
+    // snelle wissel zelf zit in de contextbalk van het werkblad. Alle acties
+    // lopen via de ouder, zodat het wisselen (dat het traject wist) overal
+    // dezelfde bevestigingsdialoog krijgt.
+    profielen: Profiel[];
+    actiefProfiel: Profiel | null;
+    profielGewijzigd: boolean;
+    onKiesProfiel: (p: Profiel) => void;
+    onBewaarProfiel: () => void;
+    onBijwerkenProfiel: () => void;
+    onVerwijderProfiel: (p: Profiel) => void;
     onToggleKlasgroep: (k: string) => void;
     onSetKlasgroepen: (list: string[]) => void;
     onSemesterStartChange: (iso: string) => void;
@@ -69,10 +86,17 @@ interface Props {
     onDone: () => void;
 }
 
-type CardId = 'opleiding' | 'periode' | 'delen' | 'backup';
+type CardId = 'profielen' | 'opleiding' | 'periode' | 'delen' | 'backup';
 
 export function TrajectSettingsView({
     settings,
+    profielen,
+    actiefProfiel,
+    profielGewijzigd,
+    onKiesProfiel,
+    onBewaarProfiel,
+    onBijwerkenProfiel,
+    onVerwijderProfiel,
     onToggleKlasgroep,
     onSetKlasgroepen,
     onSemesterStartChange,
@@ -103,6 +127,7 @@ export function TrajectSettingsView({
     // wat een nieuwe gebruiker moet doen; de rest leest als samenvatting.
     // Bewust niet gepersisteerd — bij elke terugkeer opnieuw het overzicht.
     const [open, setOpen] = useState<Record<CardId, boolean>>({
+        profielen: false,
         opleiding: true,
         periode: false,
         delen: false,
@@ -235,7 +260,11 @@ export function TrajectSettingsView({
     const dag = (iso: string) => formatDateBE(parseIsoDate(iso));
 
     const heeftData = heeftTraject || !noKlasgroepen;
+    const profielenGesorteerd = profielen
+        .slice()
+        .sort((a, b) => a.naam.localeCompare(b.naam, 'nl', { sensitivity: 'base' }));
     const samenvatting = {
+        profielen: profielenSummary(profielen.length, actiefProfiel?.naam ?? null, profielGewijzigd),
         opleiding: klasgroepenSummary(geselecteerdGesorteerd),
         periode: periodeSummary(settings, grenzenOngeldig),
         delen: deelSummary(settings.mijnOpleidingKlasgroepen.length),
@@ -264,6 +293,131 @@ export function TrajectSettingsView({
             </div>
 
             <div className={styles.settingsInner}>
+                <SettingsCard
+                    id="profielen"
+                    icon={<SlidersHorizontal size={18} />}
+                    title="Profielen"
+                    summary={samenvatting.profielen}
+                    open={open.profielen}
+                    onToggle={() => toggle('profielen')}
+                >
+                    <div className={styles.settingsHint}>
+                        Een <strong>profiel</strong> bewaart alles op dit scherm — je klasgroepen, de
+                        semester- of module-indeling en de grensdatums — onder één naam. Zo hoef je
+                        voor een tweede opleiding of doelgroep geen back-up meer te importeren: je
+                        wisselt vanuit het werkblad met één klik. Het studenttraject zit er niet in;
+                        dat bewaar je als <strong>dossier</strong> per student.
+                    </div>
+
+                    <div className={styles.profielHuidig}>
+                        <div className={styles.profielHuidigTekst}>
+                            {actiefProfiel ? (
+                                <>
+                                    <strong>{actiefProfiel.naam}</strong> is actief
+                                    {profielGewijzigd
+                                        ? ' — de instellingen hieronder wijken ervan af.'
+                                        : ' en gelijk aan de instellingen hieronder.'}
+                                </>
+                            ) : (
+                                <>
+                                    Deze instellingen ({profielSamenvatting(settings)}) horen bij geen
+                                    enkel profiel.
+                                </>
+                            )}
+                        </div>
+                        <div className={styles.backupRow}>
+                            <button className={styles.toolbarBtn} onClick={onBewaarProfiel}>
+                                <Save size={14} /> Bewaar als profiel...
+                            </button>
+                            {actiefProfiel && (
+                                <button
+                                    className={styles.toolbarBtn}
+                                    onClick={onBijwerkenProfiel}
+                                    disabled={!profielGewijzigd}
+                                    title={
+                                        profielGewijzigd
+                                            ? `De huidige instellingen bewaren in "${actiefProfiel.naam}"`
+                                            : `"${actiefProfiel.naam}" is al gelijk aan de huidige instellingen`
+                                    }
+                                >
+                                    <Check size={14} /> "{actiefProfiel.naam}" bijwerken
+                                </button>
+                            )}
+                        </div>
+                    </div>
+
+                    {profielenGesorteerd.length === 0 ? (
+                        <div className={styles.settingsHint}>
+                            Nog geen profielen bewaard.
+                        </div>
+                    ) : (
+                        <div className={styles.profielLijst}>
+                            {profielenGesorteerd.map(p => {
+                                const isActief = p.id === actiefProfiel?.id;
+                                return (
+                                    <div
+                                        key={p.id}
+                                        className={`${styles.profielRij} ${isActief ? styles.profielRijActief : ''}`}
+                                    >
+                                        <div className={styles.profielRijInfo}>
+                                            <div className={styles.profielRijNaam}>
+                                                {p.naam}
+                                                {isActief && (
+                                                    <span className={styles.profielRijBadge}>actief</span>
+                                                )}
+                                            </div>
+                                            <div className={styles.profielRijMeta}>
+                                                {profielSamenvatting(p.settings)} · bewaard op{' '}
+                                                {formatDateTime(new Date(p.bewaardOp))}
+                                            </div>
+                                        </div>
+                                        <button
+                                            className={styles.toolbarBtn}
+                                            onClick={() => onKiesProfiel(p)}
+                                            disabled={isActief}
+                                            title={
+                                                isActief
+                                                    ? `"${p.naam}" is het actieve profiel`
+                                                    : `Overschakelen naar "${p.naam}" — de gekozen OLODs worden gewist`
+                                            }
+                                        >
+                                            Activeren
+                                        </button>
+                                        <button
+                                            type="button"
+                                            className={styles.olodListRemove}
+                                            onClick={() => onVerwijderProfiel(p)}
+                                            title={`"${p.naam}" verwijderen uit de bewaarde profielen`}
+                                            aria-label={`${p.naam} verwijderen`}
+                                        >
+                                            <X size={14} />
+                                        </button>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    )}
+
+                    <Uitleg>
+                        <p>
+                            Bij het activeren van een ander profiel wordt het studenttraject{' '}
+                            <strong>gewist</strong> (na bevestiging, en met "ongedaan maken" in de
+                            melding erna). Dat moet ook: de gekozen OLODs horen bij de klasgroepen en
+                            periodes van het profiel waarin ze gekozen zijn.
+                        </p>
+                        <p>
+                            Wil je het werk van een student bewaren, doe dat dan eerst als dossier
+                            (Ctrl+S in het werkblad). Een dossier bewaart het traject <em>samen met</em>{' '}
+                            de instellingen, dus het openen ervan zet je meteen weer in de juiste set —
+                            los van welk profiel er actief is.
+                        </p>
+                        <p>
+                            Profielen worden, net als je dossiers, enkel in deze browser bewaard. Ze
+                            zitten mee in de back-up hieronder.
+                        </p>
+                    </Uitleg>
+                </SettingsCard>
+
                 <SettingsCard
                     id="opleiding"
                     icon={<GraduationCap size={18} />}

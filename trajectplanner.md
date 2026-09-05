@@ -16,7 +16,8 @@ De module gebruikt de Untis-data van de parent-tool via een dunne adapter rond `
 6. Een **live overzicht** toont het opgebouwde studentrooster, week per week, voor de actieve periode, met conflictdetectie.
 7. **Reset**-knop wist het volledige studenttraject (met bevestiging).
 8. **Print/PDF-export** van het studenttraject als **eenvoudige lijst** (OLOD-naam + klasgroep), gegroepeerd per klasgroep — géén visuele weergave.
-9. **Back-up & herstel**: instellingen + traject + kleurmap exporteren naar JSON en importeren vanuit JSON.
+9. **Back-up & herstel**: instellingen + traject + kleurmap + profielen exporteren naar JSON en importeren vanuit JSON.
+10. **Profielen**: een volledige set instellingen (klasgroep-shortlist, semester/module-indeling, grensdatums, semestervakken en de actieve periode) onder een naam bewaren, en er vanuit het werkblad met één klik tussen wisselen. Bedoeld voor de trajectbegeleider die meerdere doelgroepen naast elkaar heeft ("flextraject — enkel avondgroepen", "bissers module 1 in modulesysteem") en daarvoor vroeger telkens een back-up moest importeren. Een wissel **wist het studenttraject** (na bevestiging, met undo).
 
 Expliciet **niet** in MVP: favorieten/templates, alternatievensuggesties, conflict-solver, meerdere studentdossiers parallel.
 
@@ -90,9 +91,31 @@ LocalStorage-sleutels:
 - `traject_student` — `StudentTraject`
 - `traject_kleurmap` — `KleurMap`
 - `traject_bewaard` — `BewaardTraject[]` (bewaarde trajecten: naam + `TrajectSettings` + `StudentTraject`; zie hieronder)
-- `traject_actief` — `ActiefTraject` (`{ id, naam, baseline }`): welk bewaard traject er "open" staat. `baseline` is de vingerafdruk van traject + instellingen op het moment van bewaren of laden (`trajectVingerafdruk` in [hooks.ts](MEETINGPLANNER2026/src/components/Traject/hooks.ts), normaliseert beide kanten); wijkt de huidige toestand daarvan af, dan staat er werk open dat niet bewaard is. Wordt gewist bij een back-up-import en wanneer het bewaarde traject verwijderd wordt.
+- `traject_actief` — `ActiefTraject` (`{ id, naam, baseline }`): welk bewaard traject er "open" staat. `baseline` is de vingerafdruk van traject + instellingen op het moment van bewaren of laden (`trajectVingerafdruk` in [hooks.ts](MEETINGPLANNER2026/src/components/Traject/hooks.ts), normaliseert beide kanten); wijkt de huidige toestand daarvan af, dan staat er werk open dat niet bewaard is. Wordt gewist bij een back-up-import, bij een profielwissel en wanneer het bewaarde traject verwijderd wordt.
+- `traject_profielen` — `Profiel[]` (bewaarde instellingssets: naam + `TrajectSettings`; zie hieronder)
+- `traject_profiel_actief` — het **id** van het actieve profiel (of afwezig). Bewust enkel het id: naam en inhoud komen uit `traject_profielen` zelf, zodat een bijgewerkt of hernoemd profiel nooit uit de pas kan lopen met wat de contextbalk toont. Staat er een id dat niet meer bestaat, dan wordt er gewoon zonder profiel gewerkt.
 
-De reset-knop wist enkel `traject_student`. Instellingen en kleurmap blijven staan.
+De reset-knop wist enkel `traject_student`. Instellingen, kleurmap en profielen blijven staan.
+
+### Profielen (instellingssets)
+Een **profiel** is een `TrajectSettings` onder een naam (`Profiel` + `useProfielen` in [hooks.ts](MEETINGPLANNER2026/src/components/Traject/hooks.ts)):
+
+```typescript
+interface Profiel {
+    id: string;
+    naam: string;
+    bewaardOp: string;      // ISO-tijdstip
+    settings: TrajectSettings;
+}
+```
+
+Het bestaat omdat een trajectbegeleider vaak meerdere doelgroepen naast elkaar heeft (avondgroepen versus dagklassen, bissers in modulesysteem versus de rest in semesters). Vóór de profielen betekende switchen: een back-upbestand importeren — te omslachtig om "on the fly" te doen.
+
+**Gewijzigd of niet.** `profielVingerafdruk(settings)` vergelijkt de huidige instellingen met het actieve profiel; wijkt het af, dan draagt de profielknop een oranje stip (zelfde codering als het niet-bewaarde dossier ernaast). De **actieve periode** (`semesterStart`/`semesterEind`) telt daar bewust *niet* in mee: ze wordt wél mee bewaard en mee teruggezet, maar binnen een profiel van S1 naar S2 springen is navigatie in het werkblad, geen wijziging aan de set — anders stond de stip er na elke periodeklik.
+
+**Een wissel wist het traject.** Dat is geen bijwerking maar de kern: de OLOD-keuzes verwijzen naar klasgroepen en periodes van de vórige set en zouden in de nieuwe als lege of foute selecties blijven staan. Om dezelfde reden laat het werkblad het **geopende dossier** los (`traject_actief`): met een leeg traject mag `Ctrl+S` dat dossier niet overschrijven. Instellingen, traject, dossier én profielkeuze vormen samen **één herstelpunt** in de undo-toast, zodat een verkeerde klik volledig terug te draaien is.
+
+Bevestiging wordt gevraagd zodra er iets te verliezen valt: gekozen OLODs, of instellingen die in geen enkel profiel bewaard staan (`profielNietBewaard` in [TrajectPlanner.tsx](MEETINGPLANNER2026/src/components/Traject/TrajectPlanner.tsx)). Valt er niets te verliezen, dan wisselt een klik meteen — een dialoog is dan enkel een extra klik.
 
 ## Aannames over de Untis-interface
 De module bevat een eigen interface en een adapter rond de parent-`untisService`:
@@ -115,7 +138,8 @@ Een aparte stub-implementatie is niet nodig: er is al een echte Untis-backend.
 ## Schermen en interactieflows
 
 ### Scherm 1 — Instellingen ([TrajectSettings.tsx](MEETINGPLANNER2026/src/components/Traject/TrajectSettings.tsx))
-Gecentreerde kolom (max. 960px) met een sticky bovenbalk (*Klaar — terug naar werkblad*, titel, academiejaar-badge) en vier **inklapbare kaarten** ([SettingsCard.tsx](MEETINGPLANNER2026/src/components/Traject/SettingsCard.tsx)). Elke kaartkop toont een live één-regel-samenvatting ([settingsSummaries.ts](MEETINGPLANNER2026/src/components/Traject/settingsSummaries.ts)), zodat het scherm dichtgeklapt als overzicht leest; enkel *Mijn opleiding* staat standaard open. Lange uitleg zit per kaart achter een *Meer uitleg*-disclosure (native `<details>`).
+Gecentreerde kolom (max. 960px) met een sticky bovenbalk (*Klaar — terug naar werkblad*, titel, academiejaar-badge) en vijf **inklapbare kaarten** ([SettingsCard.tsx](MEETINGPLANNER2026/src/components/Traject/SettingsCard.tsx)). Elke kaartkop toont een live één-regel-samenvatting ([settingsSummaries.ts](MEETINGPLANNER2026/src/components/Traject/settingsSummaries.ts)), zodat het scherm dichtgeklapt als overzicht leest; enkel *Mijn opleiding* staat standaard open. Lange uitleg zit per kaart achter een *Meer uitleg*-disclosure (native `<details>`).
+- **Profielen** (bovenaan, want alles eronder hoort bij het actieve profiel): welke set actief is en of ze afwijkt van wat er bewaard staat, *Bewaar als profiel…* en *"X" bijwerken*, en daaronder de lijst profielen met per rij *Activeren* en een verwijderknopje. Het beheer staat hier omdat dit het scherm is waar een set wordt opgebouwd; de snelle wissel zelf zit in de contextbalk van het werkblad. Beide lopen langs dezelfde handlers in [TrajectPlanner.tsx](MEETINGPLANNER2026/src/components/Traject/TrajectPlanner.tsx), zodat activeren overal dezelfde bevestiging en undo krijgt. Een profielwissel springt bewust **niet** naar het werkblad: wie hier wisselt, wil meestal meteen verder kijken of bijstellen.
 - **Mijn opleiding**: geselecteerde klasgroepen als chips (met *Wis selectie*), zoekveld, *Selecteer alle/geen* (op de zichtbare lijst) en een checkbox-raster gegroepeerd per jaar (1e/2e/3e jaar, *Overige*).
 - **Periode**: **indeling** als segmented control (Semesters / Modules, 2 per semester); datepickers voor de **semestergrenzen** (start en einde van semester 1 en 2) met een knop *Standaarddatums* die alles terugzet op `ACADEMIEJAAR`; in modulemodus daarnaast datepickers voor de **modulegrenzen** (start module 2 en 4, begrensd door hun semester) en een strip met de vier moduleperiodes. Een onbruikbare grens geeft een waarschuwing die de standaard vermeldt die zolang geldt. De snelkeuze van de **actieve periode** ([PeriodeSwitcher.tsx](MEETINGPLANNER2026/src/components/Traject/PeriodeSwitcher.tsx)) en de handmatige start/einde-datepickers zitten onder *Geavanceerd: actieve periode handmatig* — dat bereik is enkel wat het werkblad nú toont en verandert de grenzen niet.
 - **Deel met student**: student-link genereren/kopiëren en QR tonen/downloaden (zie [trajectShare.ts](MEETINGPLANNER2026/src/components/Traject/trajectShare.ts); de link draagt ook de semestervak-tags mee, want die horen bij de opleiding); een gegenereerde link verdwijnt zodra klasgroepen of periode wijzigen.
@@ -163,7 +187,7 @@ Drie panelen naast elkaar (grid: `200px 1fr 460px`). De panelkoppen dragen een *
 ### Topbalk: appbalk + contextbalk ([TrajectPlanner.tsx](MEETINGPLANNER2026/src/components/Traject/TrajectPlanner.tsx))
 De balk staat in **twee rijen**, omdat één rij vier soorten dingen door elkaar droeg: navigatie, context, acties en hulp. De scheidslijn is *commando versus toestand*.
 
-**Rij 1 — appbalk** (`.appbar`, altijd zichtbaar): links `← Menu` + de titel *Trajectplanner*, rechts de tab-switcher **Werkblad / Instellingen**, een icoonknop **Handleiding** (PDF, opent in een nieuw tabblad) en het overloopmenu **⋯**.
+**Rij 1 — appbalk** (`.appbar`, altijd zichtbaar): links een **huisje-icoonknop** terug naar de modulekeuze + de titel *Trajectplanner*, rechts de tab-switcher **Werkblad / Instellingen**, een icoonknop **Handleiding** (PDF, opent in een nieuw tabblad) en het overloopmenu **⋯**. Het huisje draagt geen tekst: terug naar de modulekeuze is zelden nodig, en de tooltip plus `aria-label` benoemen het.
 - **⋯** bevat wat zelden nodig is of gevaarlijk is: *Print / PDF* (`window.print()`), *Kopieer naar klembord*, en na een scheidingslijn **Reset traject** (rood) — dialoog met de vakken die verdwijnen, wist daarna enkel `StudentTraject`. Na een geslaagde kopie draagt de ⋯-knop zelf even een vinkje; het menu is dan al dicht.
 
 **Rij 2 — contextbalk** (`.contextbar`, **enkel in het werkblad**): de toestand waarin het werkblad staat, elke groep met een uitgeschreven label en gescheiden door een verticale lijn. Niet in het instellingenscherm — dat heeft zijn eigen sticky kopbalk, en drie balken boven elkaar is er één te veel.
@@ -173,9 +197,14 @@ De balk staat in **twee rijen**, omdat één rij vier soorten dingen door elkaar
   - **Bewaren** (`doeSnelBewaar`) gaat rechtstreeks naar het geopende dossier; is er geen, dan opent de dialoog met naamveld (voorgevuld met de actieve naam), de lijst bestaande dossiers om aan te klikken en te overschrijven, en een waarschuwing zodra de naam een bestaand item raakt. *Bewaar als…* opent die dialoog altijd. Bewaard wordt het `StudentTraject` **samen met de `TrajectSettings`** (klasgroep-shortlist, actieve periode, semester/module-indeling, grensdatums) in `traject_bewaard` (`useBewaardeTrajecten`); het item wordt gemarkeerd als het geopende dossier. Kleurmap wordt niet meebewaard.
   - **`Ctrl+S` / `Cmd+S`** roept hetzelfde aan, ook vanuit het instellingenscherm. De handler hangt in een ref zodat de listener één keer aangehaakt wordt en toch met verse state werkt; hij doet niets zolang er een dialoog openstaat of het traject leeg is.
   - Naast de knop verschijnt een expliciete **Bewaar**-knop, maar **enkel zolang er werk openstaat** (`nietBewaard`) — zolang alles bewaard is, is ze overbodig. Ze blijft nog even staan na het bewaren om *Bewaard!* te kunnen tonen.
-- **Profiel** — nog niet aanwezig; de eerste groep van de contextbalk is ervoor vrijgehouden (zie de `TODO (profielen)` in [TrajectPlanner.tsx](MEETINGPLANNER2026/src/components/Traject/TrajectPlanner.tsx)). Hier komt de switcher tussen **instellingssets** ("Flextraject", "Sem 2 starters", …). Zolang die functionaliteit er niet is staat er geen dode knop.
+- **Profiel** — de eerste groep: het **profielmenu** ([ProfielMenu.tsx](MEETINGPLANNER2026/src/components/Traject/ProfielMenu.tsx)), de switcher tussen **instellingssets** ("Flextraject — avondgroepen", "Bissers module 1", …). De knop draagt de naam van het actieve profiel (met schuifjes-icoon, zodat ze niet te verwarren is met de dossierknop verderop) en een oranje stip zodra de instellingen ervan afwijken; zonder actief profiel staat er een gedempt *geen profiel*.
+  - Menu-inhoud: **Bewaar instellingen als profiel…** en, met een actief profiel, **"X" bijwerken** (uitgeschakeld zolang er niets gewijzigd is); daaronder de lijst **Profielen** met per rij de naam, een samenvatting (`profielSamenvatting`: aantal klasgroepen · semesters/modules · periode) en de bewaardatum, plus een prullenbakje. De actieve rij is uitgeschakeld en draagt een vinkje.
+  - Een klik op een andere rij **wisselt** van set: instellingen vervangen, studenttraject gewist, dossier losgelaten — zie *Profielen (instellingssets)* hierboven voor het waarom en voor wanneer er eerst bevestiging gevraagd wordt.
+  - Openen/sluiten van het menu komt uit dezelfde [TopbarMenu.tsx](MEETINGPLANNER2026/src/components/Traject/TopbarMenu.tsx) als het dossiermenu en het overloopmenu.
 
-**Dossier versus profiel.** Twee woorden die uit elkaar moeten blijven, want ze overlappen in wat ze bewaren: een **dossier** is één student (traject + zijn instellingen), een **profiel** draagt alleen instellingen (klasgroep-shortlist, periode-indeling, grensdatums, semestervakken) en is herbruikbaar over studenten heen. Vandaar ook de hernoeming in de UI van "traject" naar "dossier" waar het over het bewaarde geheel gaat; *traject* blijft de term voor de vakkenlijst zelf (`StudentTraject`, *Reset traject*).
+**Dossier versus profiel.** Twee woorden die uit elkaar moeten blijven, want ze overlappen in wat ze bewaren: een **dossier** is één student (traject + zijn instellingen), een **profiel** draagt alleen instellingen (klasgroep-shortlist, periode-indeling, grensdatums, semestervakken, actieve periode) en is herbruikbaar over studenten heen. Vandaar ook de hernoeming in de UI van "traject" naar "dossier" waar het over het bewaarde geheel gaat; *traject* blijft de term voor de vakkenlijst zelf (`StudentTraject`, *Reset traject*).
+
+Ze staan naast elkaar in de contextbalk en gedragen zich tegengesteld, wat het onderscheid ook zichtbaar maakt: een **dossier openen** brengt een traject mee (en de instellingen waarin het gekozen is), een **profiel wisselen** wist er net één. Wie het werk van een student wil houden, bewaart dus eerst zijn dossier — dat zet later ook meteen de juiste instellingen terug, los van welk profiel er dan actief is.
 
 **Dialogen en undo.** Alle bevestigingen lopen via `BevestigDialog` / `BewaarDialog` ([TrajectDialogs.tsx](MEETINGPLANNER2026/src/components/Traject/TrajectDialogs.tsx)) in plaats van `window.confirm` / `window.prompt` — dat laat toe de betrokken vakken bij naam en kleur te tonen (reset, bulkwissel, bulk verwijderen). Bij een destructieve dialoog start de focus op *Annuleren*. Ingrijpende mutaties bieden daarna een **undo-toast** ([Toast.tsx](MEETINGPLANNER2026/src/components/Traject/Toast.tsx), ±8 s): reset, één OLOD verwijderen, bulk verwijderen en bulk verzetten. Het herstelpunt is telkens een **snapshot van het volledige traject** dat via `replaceTraject` teruggezet wordt — bewust geen inverse per actie, omdat `setKlasgroepBulk` selecties kan laten samensmelten en dat niet omkeerbaar is door de wissel te herhalen. De toast rendert in `document.body` en wordt in `@media print` verborgen.
 
@@ -206,8 +235,9 @@ De afdruk bevat:
 Geen kleurenlegende, geen conflictlijst, geen mini-kalender in de afdruk.
 
 ## Back-up & herstel
-- **Export**: JSON-bestand met `{ settings, traject, kleurmap, exportedAt, version }`. Bestandsnaam bevat de exportdatum.
+- **Export**: JSON-bestand met `{ settings, traject, kleurmap, profielen, exportedAt, version }`. Bestandsnaam bevat de exportdatum.
 - **Import**: bestand inlezen, valideren, na confirm `replaceSettings` / `replaceTraject` / `replaceMap` aanroepen (zie [hooks.ts](MEETINGPLANNER2026/src/components/Traject/hooks.ts)).
+- **Profielen** zitten mee in de back-up (anders is een browserwissel of gewiste cache het einde van elke bewaarde set). Het veld is optioneel: een back-up van vóór de profielen laat de lijst van de importerende browser ongemoeid; bevat ze het veld wél, dan **vervangt** ze de lijst — de back-up zet de browser terug zoals ze was — en dat staat ook in de bevestigingsdialoog. Na de import wordt het profiel dat overeenkomt met de geïmporteerde instellingen (zelfde `profielVingerafdruk`) meteen als actief gemarkeerd. Een profielitem zonder id of naam wordt overgeslagen in plaats van het hele bestand af te keuren.
 - Feedback in de Instellingen-sectie met success/error-melding.
 
 ## Bestandsstructuur
@@ -217,16 +247,18 @@ MEETINGPLANNER2026/src/components/Traject/
 ├── academicYear.ts          # Academiejaar, instelbare grensdatums (PeriodeGrenzen), periodes (periodesVoor), defaultRoosterWeek
 ├── semesterOlods.ts         # Semestervakken: tag per OLOD-naam, semesterbereik, verbreden van keuzes, botsingen
 ├── trajectService.ts        # Adapter rond untisService met range-aware cache
-├── hooks.ts                 # useTrajectSettings, useStudentTraject, useKleurMap, useBewaardeTrajecten, useActiefTraject (+ normalize/replace-functies voor import)
+├── hooks.ts                 # useTrajectSettings, useStudentTraject, useKleurMap, useBewaardeTrajecten, useActiefTraject, useProfielen (+ normalize/replace-functies voor import)
 ├── useTrajectBlokken.ts     # Jaarrooster per klasgroep in het traject + selectieStatussen (geen lessen / niet beschikbaar) + useKlasgroepAlternatieven (klasgroep-kiezer) + useBulkAlternatieven (bulk-kiezer met dekking/conflictscore)
 ├── conflicts.ts             # Gedeelde scenariologica: effectieveBlokken, wegBlokkenVoor, ghostBlokkenVoor, scenarioBlokken, detectConflicts
 ├── dateUtils.ts             # mondayOf, weeksBetween, isoWeekNumber, periodeBereik, formatters
 ├── PeriodeSwitcher.tsx      # Snelkeuze-knoppen actieve periode (contextbalk compact + instellingen)
-├── TrajectPlanner.tsx       # Shell + appbalk/contextbalk + tabs + periode-switcher + dialoog-/undo-state + bewaar/laad dossier (Ctrl+S) + print + export/import wiring
+├── TrajectPlanner.tsx       # Shell + appbalk/contextbalk + tabs + periode-switcher + dialoog-/undo-state + bewaar/laad dossier (Ctrl+S) + profielwissel + print + export/import wiring
 ├── TopbarMenu.tsx           # Herbruikbare topbalk-dropdown (buiten-klik + Esc) + menu-item (icoon, danger, sneltoets-hint)
-├── TrajectDialogs.tsx       # BevestigDialog + BewaarDialog (vervangen window.confirm/prompt)
+├── TrajectDialogs.tsx       # BevestigDialog + BewaarDialog + ProfielDialog (vervangen window.confirm/prompt)
 ├── Toast.tsx                # useUndo + UndoToast ("… — Ongedaan maken")
 ├── BewaardeTrajecten.tsx    # Dossiermenu in de contextbalk: bewaren + lijst bewaarde dossiers (openen / verwijderen)
+├── ProfielMenu.tsx          # Profielmenu in de contextbalk: instellingsset bewaren/bijwerken + lijst profielen (activeren / verwijderen)
+├── settingsSummaries.ts     # Pure kaartsamenvattingen + profielSamenvatting + groepering klasgroepen
 ├── TrajectSettings.tsx      # Scherm 1
 ├── KlasgroepSelector.tsx    # Paneel A
 ├── KlasgroepRooster.tsx     # Paneel B

@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
-import { AlertTriangle, Save } from 'lucide-react';
-import type { BewaardTraject } from './hooks';
-import { zelfdeTrajectNaam } from './hooks';
+import { AlertTriangle, Save, SlidersHorizontal } from 'lucide-react';
+import type { BewaardTraject, Profiel } from './hooks';
+import { zelfdeNaam } from './hooks';
 import { formatDateTime } from './dateUtils';
 import styles from './Traject.module.css';
 
@@ -171,7 +171,7 @@ export function BewaarDialog({ voorstel, bewaarde, aantalOlods, onBewaar, onAnnu
 
     const schoon = naam.trim();
     const bestaand = useMemo(
-        () => (schoon ? gesorteerd.find(x => zelfdeTrajectNaam(x.naam, schoon)) ?? null : null),
+        () => (schoon ? gesorteerd.find(x => zelfdeNaam(x.naam, schoon)) ?? null : null),
         [gesorteerd, schoon]
     );
 
@@ -256,6 +256,134 @@ export function BewaarDialog({ voorstel, bewaarde, aantalOlods, onBewaar, onAnnu
                     disabled={!schoon}
                 >
                     {bestaand ? 'Overschrijven' : 'Bewaren'}
+                </button>
+            </div>
+        </DialogSchil>
+    );
+}
+
+interface ProfielProps {
+    voorstel: string;
+    profielen: Profiel[];
+    // Eén regel die zegt wát er bewaard wordt ("7 klasgroepen · modules · M1"),
+    // zodat de gebruiker niet moet raden welke instellingen in het profiel gaan.
+    samenvatting: string;
+    // `overschrijfId` is gezet wanneer de naam een bestaand profiel raakt.
+    onBewaar: (naam: string, overschrijfId?: string) => void;
+    onAnnuleer: () => void;
+}
+
+/**
+ * Dialoog achter "Bewaar instellingen als profiel": naam invullen, of een
+ * bestaand profiel aanklikken om bij te werken. Zelfde vorm als
+ * {@link BewaarDialog}, maar bewust een eigen component: die gaat over één
+ * student (OLODs), deze over een herbruikbare instellingenset.
+ */
+export function ProfielDialog({
+    voorstel,
+    profielen,
+    samenvatting,
+    onBewaar,
+    onAnnuleer,
+}: ProfielProps) {
+    const [naam, setNaam] = useState(voorstel);
+    const inputRef = useRef<HTMLInputElement | null>(null);
+
+    useEffect(() => {
+        inputRef.current?.focus();
+        inputRef.current?.select();
+    }, []);
+
+    const gesorteerd = useMemo(
+        () => profielen.slice().sort((a, b) => a.naam.localeCompare(b.naam, 'nl', { sensitivity: 'base' })),
+        [profielen]
+    );
+
+    const schoon = naam.trim();
+    const bestaand = useMemo(
+        () => (schoon ? gesorteerd.find(x => zelfdeNaam(x.naam, schoon)) ?? null : null),
+        [gesorteerd, schoon]
+    );
+
+    const bewaren = () => {
+        if (!schoon) return;
+        onBewaar(schoon, bestaand?.id);
+    };
+
+    return (
+        <DialogSchil label="Profiel bewaren" onSluit={onAnnuleer}>
+            <div className={styles.dialoogKop}>
+                <SlidersHorizontal size={16} />
+                <span>Instellingen bewaren als profiel</span>
+            </div>
+            <div className={styles.dialoogBody}>
+                <div className={styles.dialoogTekst}>
+                    Je huidige instellingen ({samenvatting}) worden onder deze naam bewaard. Vanuit
+                    het werkblad wissel je er dan met één klik naartoe. Het studenttraject zit er
+                    niet in — een profiel is herbruikbaar over studenten heen.
+                </div>
+                <label className={styles.dialoogVeld}>
+                    <span>Naam</span>
+                    <input
+                        ref={inputRef}
+                        type="text"
+                        value={naam}
+                        onChange={e => setNaam(e.target.value)}
+                        onKeyDown={e => {
+                            if (e.key === 'Enter') {
+                                e.preventDefault();
+                                bewaren();
+                            }
+                        }}
+                        placeholder="bv. Flextraject avondgroepen"
+                    />
+                </label>
+
+                {bestaand && (
+                    <div className={styles.dialoogWaarschuwing} role="status">
+                        <AlertTriangle size={13} />
+                        <span>
+                            Werkt <strong>{bestaand.naam}</strong> bij (bewaard op{' '}
+                            {formatDateTime(new Date(bestaand.bewaardOp))}).
+                        </span>
+                    </div>
+                )}
+
+                {gesorteerd.length > 0 && (
+                    <>
+                        <div className={styles.dialoogSubkop}>Of werk een bestaand profiel bij</div>
+                        <div className={styles.dialoogKeuzeLijst}>
+                            {gesorteerd.map(item => (
+                                <button
+                                    key={item.id}
+                                    type="button"
+                                    className={`${styles.dialoogKeuze} ${
+                                        bestaand?.id === item.id ? styles.dialoogKeuzeActief : ''
+                                    }`}
+                                    onClick={() => setNaam(item.naam)}
+                                    title={`De naam "${item.naam}" overnemen om dat profiel bij te werken`}
+                                >
+                                    <span className={styles.dialoogKeuzeNaam}>{item.naam}</span>
+                                    <span className={styles.dialoogKeuzeMeta}>
+                                        {formatDateTime(new Date(item.bewaardOp))}
+                                    </span>
+                                </button>
+                            ))}
+                        </div>
+                    </>
+                )}
+            </div>
+            <div className={styles.dialoogVoet}>
+                <button type="button" className={styles.toolbarBtn} onClick={onAnnuleer}>
+                    Annuleren
+                </button>
+                <button
+                    type="button"
+                    className={`${styles.toolbarBtn} ${styles.dialoogKnopPrimair}`}
+                    onClick={bewaren}
+                    disabled={!schoon}
+                >
+                    {bestaand ? 'Bijwerken' : 'Bewaren'}
                 </button>
             </div>
         </DialogSchil>
