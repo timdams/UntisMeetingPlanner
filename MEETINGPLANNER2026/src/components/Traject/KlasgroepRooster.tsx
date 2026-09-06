@@ -1,5 +1,4 @@
 import { useEffect, useState, useMemo, useRef } from 'react';
-import { createPortal } from 'react-dom';
 import { isActief, Lesblok, OLODSelectie } from './types';
 import { trajectUntisService } from './trajectService';
 import { actievePeriode, allePeriodes, type PeriodeGrenzen, type PeriodeType } from './academicYear';
@@ -26,13 +25,12 @@ import {
     ChevronDown,
     CalendarClock,
     Users,
-    X,
-    Check,
     AlertTriangle,
     MousePointerClick,
 } from 'lucide-react';
 import { LesblokIcon } from './LesblokIcon';
 import { layoutDay } from './layout';
+import { OlodKlasgroepDialoog, type KiezerKandidaat } from './OlodKlasgroepDialoog';
 
 // Untis geeft 404 op roosterdata van een week buiten het geselecteerde
 // academiejaar. We vangen die specifiek op met een begrijpelijke melding.
@@ -188,6 +186,47 @@ export function KlasgroepRooster({
     useEffect(() => {
         setDialogOlod(null);
     }, [klasgroep, weekMonday.getTime()]);
+
+    // De klasgroepen die dit vak deze week geven — de eigen klasgroep voorop,
+    // de rest alfabetisch. Voedt de kiezer achter het knopje op een lesblok.
+    const kiezerKandidaten = useMemo<KiezerKandidaat[]>(() => {
+        if (!dialogOlod || !klasgroep) return [];
+        const maak = (kg: string, all: Lesblok[], huidig: boolean): KiezerKandidaat | null => {
+            const match = all
+                .filter(b => b.olodNaam === dialogOlod)
+                .sort((a, b) => a.start.getTime() - b.start.getTime());
+            if (match.length === 0) return null;
+            const gekozen = selectieVoor(kg, dialogOlod, match[0].start) !== null;
+            return {
+                klasgroep: kg,
+                huidig,
+                allBlokken: all,
+                matchBlokken: match,
+                gekozen,
+                actie: gekozen
+                    ? 'Klik om uit je traject te halen'
+                    : 'Klik om deze klasgroep te kiezen',
+            };
+        };
+        const out: KiezerKandidaat[] = [];
+        const eigen = maak(klasgroep, blokken, true);
+        if (eigen) out.push(eigen);
+        Object.keys(otherBlokkenPerKlas)
+            .sort((a, b) => a.localeCompare(b))
+            .forEach(k => {
+                const kandidaat = maak(k, otherBlokkenPerKlas[k] ?? [], false);
+                if (kandidaat) out.push(kandidaat);
+            });
+        return out;
+    }, [dialogOlod, klasgroep, blokken, otherBlokkenPerKlas, selectieVoor]);
+
+    // Kiezen voegt het vak toe bij deze klasgroep en sluit af; een tweede klik
+    // op een al gekozen kaart haalt het weer weg en houdt de kiezer open, zodat
+    // je meteen een andere klasgroep kan aanduiden.
+    const kiesKlasgroep = (kandidaat: KiezerKandidaat) => {
+        onToggleBlok(kandidaat.matchBlokken[0]);
+        if (!kandidaat.gekozen) setDialogOlod(null);
+    };
 
     const dagen = useMemo(
         () => Array.from({ length: 5 }, (_, i) => addDays(weekMonday, i)),
@@ -437,283 +476,18 @@ export function KlasgroepRooster({
             )}
 
             {dialogOlod && klasgroep && (
-                <KlasgroepKiezer
+                <OlodKlasgroepDialoog
                     olodNaam={dialogOlod}
-                    huidigeKlasgroep={klasgroep}
                     weekMonday={weekMonday}
-                    eigenBlokken={blokken}
-                    otherBlokkenPerKlas={otherBlokkenPerKlas}
-                    otherLoading={otherLoading}
+                    kandidaten={kiezerKandidaten}
+                    loading={otherLoading}
                     aantalShortlist={mijnOpleidingKlasgroepen.length}
+                    hint="Klik op de klasgroep waarbij je dit vak wil volgen — het vak komt dan bij die klasgroep in je traject."
                     colorOf={colorOf}
-                    selectieVoor={selectieVoor}
-                    onToggleBlok={onToggleBlok}
+                    onKies={kiesKlasgroep}
                     onClose={() => setDialogOlod(null)}
                 />
             )}
-        </div>
-    );
-}
-
-interface Kandidaat {
-    klasgroep: string;
-    huidig: boolean;
-    allBlokken: Lesblok[];
-    matchBlokken: Lesblok[];
-}
-
-interface KiezerProps {
-    olodNaam: string;
-    huidigeKlasgroep: string;
-    weekMonday: Date;
-    // Het rooster van de klasgroep die het werkblad toont, deze week.
-    eigenBlokken: Lesblok[];
-    otherBlokkenPerKlas: Record<string, Lesblok[]>;
-    otherLoading: boolean;
-    // Aantal klasgroepen in de shortlist (de huidige meegeteld) — enkel voor
-    // de toelichting onderaan.
-    aantalShortlist: number;
-    colorOf: (olodNaam: string) => string;
-    selectieVoor: (klasgroep: string, olodNaam: string, datum: Date) => OLODSelectie | null;
-    onToggleBlok: (blok: Lesblok) => void;
-    onClose: () => void;
-}
-
-/**
- * Modale kiezer achter het knopje op een lesblok: toont per klasgroep uit de
- * shortlist het weekrooster met dit vak erin gemarkeerd. Een klik op een kaart
- * zet het vak in het traject bij díe klasgroep (of haalt het er weer uit).
- * De lijst scrollt zelf, zodat ook een lange shortlist bereikbaar blijft.
- */
-function KlasgroepKiezer({
-    olodNaam,
-    huidigeKlasgroep,
-    weekMonday,
-    eigenBlokken,
-    otherBlokkenPerKlas,
-    otherLoading,
-    aantalShortlist,
-    colorOf,
-    selectieVoor,
-    onToggleBlok,
-    onClose,
-}: KiezerProps) {
-    const closeRef = useRef<HTMLButtonElement | null>(null);
-
-    useEffect(() => {
-        closeRef.current?.focus();
-        const onKey = (e: KeyboardEvent) => {
-            if (e.key === 'Escape') onClose();
-        };
-        window.addEventListener('keydown', onKey);
-        return () => window.removeEventListener('keydown', onKey);
-    }, [onClose]);
-
-    const kandidaten = useMemo<Kandidaat[]>(() => {
-        const maak = (kg: string, all: Lesblok[], huidig: boolean): Kandidaat | null => {
-            const match = all
-                .filter(b => b.olodNaam === olodNaam)
-                .sort((a, b) => a.start.getTime() - b.start.getTime());
-            return match.length > 0
-                ? { klasgroep: kg, huidig, allBlokken: all, matchBlokken: match }
-                : null;
-        };
-        const out: Kandidaat[] = [];
-        const eigen = maak(huidigeKlasgroep, eigenBlokken, true);
-        if (eigen) out.push(eigen);
-        Object.keys(otherBlokkenPerKlas)
-            .sort((a, b) => a.localeCompare(b))
-            .forEach(k => {
-                const kandidaat = maak(k, otherBlokkenPerKlas[k] ?? [], false);
-                if (kandidaat) out.push(kandidaat);
-            });
-        return out;
-    }, [olodNaam, huidigeKlasgroep, eigenBlokken, otherBlokkenPerKlas]);
-
-    // Kiezen voegt het vak toe bij deze klasgroep en sluit af; een tweede klik
-    // op een al gekozen kaart haalt het weer weg en houdt de kiezer open, zodat
-    // je meteen een andere klasgroep kan aanduiden.
-    const kies = (kandidaat: Kandidaat, gekozen: boolean) => {
-        onToggleBlok(kandidaat.matchBlokken[0]);
-        if (!gekozen) onClose();
-    };
-
-    return createPortal(
-        <div className={styles.zoomBackdrop} onClick={onClose}>
-            <div
-                className={styles.kiesDialog}
-                role="dialog"
-                aria-modal="true"
-                aria-label={`${olodNaam} — kies een klasgroep`}
-                onClick={e => e.stopPropagation()}
-            >
-                <div className={styles.zoomHeaderBar}>
-                    <span
-                        className={styles.legendSwatch}
-                        style={{ backgroundColor: colorOf(olodNaam) }}
-                    />
-                    <span className={styles.zoomTitle}>{olodNaam}</span>
-                    <span className={styles.zoomSubtitle}>
-                        week {formatDateBE(weekMonday)} – {formatDateBE(addDays(weekMonday, 4))}
-                    </span>
-                    <button
-                        ref={closeRef}
-                        type="button"
-                        className={styles.zoomClose}
-                        onClick={onClose}
-                        title="Sluiten (Esc)"
-                        aria-label="Sluiten"
-                    >
-                        <X size={18} />
-                    </button>
-                </div>
-
-                <div className={styles.kiesHint}>
-                    Klik op de klasgroep waarbij je dit vak wil volgen — het vak komt dan bij
-                    die klasgroep in je traject.
-                </div>
-
-                <div className={styles.kiesBody}>
-                    {kandidaten.length === 0 ? (
-                        <div className={styles.kiesEmpty}>
-                            {otherLoading ? (
-                                <>
-                                    <Loader2 size={14} className="animate-spin" /> Klasgroepen laden…
-                                </>
-                            ) : aantalShortlist > 1 ? (
-                                'Dit vak komt deze week in geen enkele klasgroep uit je shortlist voor.'
-                            ) : (
-                                'Je shortlist bevat maar één klasgroep. Voeg er in de instellingen meer toe om te kunnen vergelijken.'
-                            )}
-                        </div>
-                    ) : (
-                        <>
-                            <div className={styles.kiesGrid}>
-                                {kandidaten.map(kandidaat => {
-                                    const gekozen =
-                                        selectieVoor(
-                                            kandidaat.klasgroep,
-                                            olodNaam,
-                                            kandidaat.matchBlokken[0].start
-                                        ) !== null;
-                                    return (
-                                        <button
-                                            key={kandidaat.klasgroep}
-                                            type="button"
-                                            aria-pressed={gekozen}
-                                            className={`${styles.kiesKaart} ${gekozen ? styles.kiesKaartActief : ''}`}
-                                            onClick={() => kies(kandidaat, gekozen)}
-                                        >
-                                            <div className={styles.kiesKaartKop}>
-                                                <span className={styles.kiesKaartNaam}>
-                                                    {kandidaat.klasgroep}
-                                                </span>
-                                                {kandidaat.huidig && (
-                                                    <span className={styles.kiesKaartBadge}>huidig</span>
-                                                )}
-                                                {gekozen && (
-                                                    <span className={styles.kiesKaartGekozen}>
-                                                        <Check size={12} strokeWidth={3} /> in traject
-                                                    </span>
-                                                )}
-                                            </div>
-                                            <MiniWeek
-                                                weekMonday={weekMonday}
-                                                allBlokken={kandidaat.allBlokken}
-                                                highlightOlod={olodNaam}
-                                                colorOf={colorOf}
-                                            />
-                                            <div className={styles.kiesMiniDetails}>
-                                                {kandidaat.matchBlokken.map((b, i) => {
-                                                    const dayIdx = (b.start.getDay() + 6) % 7;
-                                                    return (
-                                                        <div key={i}>
-                                                            <strong>{DAG_HEADERS[dayIdx] ?? ''}</strong>{' '}
-                                                            {formatTime(b.start)}–{formatTime(b.eind)}
-                                                            {b.type ? ` · ${b.type}` : ''}
-                                                        </div>
-                                                    );
-                                                })}
-                                            </div>
-                                            <div className={styles.kiesKaartActie}>
-                                                {gekozen
-                                                    ? 'Klik om uit je traject te halen'
-                                                    : 'Klik om deze klasgroep te kiezen'}
-                                            </div>
-                                        </button>
-                                    );
-                                })}
-                            </div>
-                            {otherLoading ? (
-                                <div className={styles.kiesEmpty}>
-                                    <Loader2 size={14} className="animate-spin" /> Overige klasgroepen laden…
-                                </div>
-                            ) : (
-                                <div className={styles.kiesVoet}>
-                                    {aantalShortlist > 1
-                                        ? `${kandidaten.length} van je ${aantalShortlist} klasgroepen geven dit vak in deze week.`
-                                        : 'Je shortlist bevat maar één klasgroep. Voeg er in de instellingen meer toe om te kunnen vergelijken.'}
-                                </div>
-                            )}
-                        </>
-                    )}
-                </div>
-            </div>
-        </div>,
-        document.body
-    );
-}
-
-interface MiniWeekProps {
-    weekMonday: Date;
-    allBlokken: Lesblok[];
-    highlightOlod: string;
-    colorOf: (olodNaam: string) => string;
-}
-
-function MiniWeek({ weekMonday, allBlokken, highlightOlod, colorOf }: MiniWeekProps) {
-    const dagen = useMemo(
-        () => Array.from({ length: 5 }, (_, i) => addDays(weekMonday, i)),
-        [weekMonday]
-    );
-
-    const totalMin = useMemo(
-        () => (gridEndHour(allBlokken) - DAY_START_HOUR) * 60,
-        [allBlokken]
-    );
-
-    return (
-        <div className={styles.kiesMiniWeek}>
-            {dagen.map((d, di) => {
-                const dayBlokken = allBlokken.filter(b => sameDay(b.start, d));
-                const laidOut = layoutDay(dayBlokken);
-                return (
-                    <div key={di} className={styles.miniDay}>
-                        <div className={styles.miniDayHeader}>{DAG_HEADERS[di]}</div>
-                        <div className={styles.miniDayBody}>
-                            {laidOut.map(({ blok: b, col, cols }, bi) => {
-                                const isMatch = b.olodNaam === highlightOlod;
-                                const widthPct = 100 / cols;
-                                const leftPct = col * widthPct;
-                                return (
-                                    <div
-                                        key={bi}
-                                        className={`${styles.kiesMiniBlok} ${isMatch ? styles.kiesMiniBlokMatch : styles.kiesMiniBlokDim}`}
-                                        style={{
-                                            top: `${topPct(b.start, totalMin)}%`,
-                                            height: `${heightPct(b.start, b.eind, totalMin)}%`,
-                                            left: `calc(${leftPct}% + 1px)`,
-                                            width: `calc(${widthPct}% - 2px)`,
-                                            backgroundColor: isMatch ? colorOf(b.olodNaam) : undefined,
-                                        }}
-                                        title={`${b.olodNaam}${b.type ? ` (${b.type})` : ''}\n${formatTime(b.start)}–${formatTime(b.eind)}`}
-                                    />
-                                );
-                            })}
-                        </div>
-                    </div>
-                );
-            })}
         </div>
     );
 }

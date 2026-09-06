@@ -9,7 +9,7 @@ import {
     scenarioBlokken,
     wegBlokkenVoor,
 } from './conflicts';
-import { DAG_HEADERS, datumInBereik, formatTime, periodeBereik } from './dateUtils';
+import { DAG_HEADERS, datumInBereik, formatTime, fridayEndOf, periodeBereik } from './dateUtils';
 import { selectieKey } from './hooks';
 
 /**
@@ -213,6 +213,61 @@ export function useKlasgroepAlternatieven(
     }, [volledigeKey]);
 
     return result && result.key === volledigeKey ? result.items : null;
+}
+
+// Stabiele lege kaart: zolang er niets opgehaald is mag de identiteit van het
+// resultaat niet wijzigen, anders herrekent elke consument bij elke render.
+const GEEN_ROOSTERS: Record<string, Lesblok[]> = {};
+
+/**
+ * De weekroosters van een reeks klasgroepen, lui opgehaald zodra `weekMonday`
+ * gezet wordt (null = niets ophalen). Voedt de klasgroep-kiezer die vanuit een
+ * blokje in het studentoverzicht opengaat: die vergelijkt één week, terwijl
+ * {@link useTrajectBlokken} het hele jaar dekt.
+ *
+ * De range-cache van de adapter is het geheugen: een klasgroep die al in het
+ * traject zit komt er meteen uit, en een week die eerder bekeken werd ook. Een
+ * klasgroep waarvan het rooster niet opgehaald raakt levert een lege week op —
+ * ze valt dan gewoon uit de kandidatenlijst.
+ */
+export function useWeekRoosters(
+    klasgroepen: string[],
+    weekMonday: Date | null
+): { perKlas: Record<string, Lesblok[]>; loading: boolean } {
+    const [result, setResult] = useState<{ key: string; perKlas: Record<string, Lesblok[]> } | null>(
+        null
+    );
+
+    const key = weekMonday ? `${weekMonday.getTime()}|${klasgroepen.join('|')}` : null;
+
+    useEffect(() => {
+        if (!weekMonday || !key) return;
+        let cancelled = false;
+        const van = new Date(weekMonday);
+        const tot = fridayEndOf(weekMonday);
+        Promise.all(
+            klasgroepen.map(k =>
+                trajectUntisService
+                    .getLesblokken(k, van, tot)
+                    .then(bs => [k, bs] as const)
+                    .catch(() => [k, [] as Lesblok[]] as const)
+            )
+        ).then(results => {
+            if (cancelled) return;
+            const perKlas: Record<string, Lesblok[]> = {};
+            results.forEach(([k, bs]) => {
+                perKlas[k] = bs;
+            });
+            setResult({ key, perKlas });
+        });
+        return () => {
+            cancelled = true;
+        };
+    }, [key]);
+
+    return result && result.key === key
+        ? { perKlas: result.perKlas, loading: false }
+        : { perKlas: GEEN_ROOSTERS, loading: key !== null };
 }
 
 // Eén kandidaat-klasgroep voor een bulkwissel: hoeveel van de aangevinkte

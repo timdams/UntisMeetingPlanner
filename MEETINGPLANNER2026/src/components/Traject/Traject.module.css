@@ -2262,6 +2262,27 @@
     opacity: 0.55;
 }
 
+/* Les van het vak die bij deze klasgroep zou botsen met de rest van het
+   traject — dezelfde rode streepjesrand als een conflict in paneel C. */
+.kiesMiniBlokBotst {
+    outline: 2px dashed #DC2626;
+    outline-offset: -1px;
+    z-index: 3;
+}
+
+.kiesKaartBotsing {
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: #15803d;
+}
+
+.kiesKaartBotsingRaakt {
+    color: #B91C1C;
+}
+
 .kiesMiniDetails {
     font-size: 0.72rem;
     color: var(--text-color);
@@ -2390,6 +2411,8 @@
     right: 0;
 }
 
+/* Een blokje is een knop: klikken opent de klasgroep-kiezer voor dat vak.
+   Vandaar de reset van de knop-defaults; de kleur komt inline mee. */
 .miniBlok {
     position: absolute;
     border-radius: 2px;
@@ -2398,6 +2421,29 @@
     align-items: center;
     justify-content: center;
     overflow: hidden;
+    padding: 0;
+    margin: 0;
+    border: 0;
+    font: inherit;
+    color: inherit;
+    cursor: default;
+    -webkit-appearance: none;
+    appearance: none;
+}
+
+.miniBlokKlikbaar {
+    cursor: pointer;
+}
+
+.miniBlokKlikbaar:hover {
+    box-shadow: 0 0 0 2px var(--primary);
+    z-index: 3;
+}
+
+.miniBlok:focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 1px;
+    z-index: 3;
 }
 
 .miniBlokIcon {

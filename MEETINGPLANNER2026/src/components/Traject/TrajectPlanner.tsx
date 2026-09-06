@@ -262,6 +262,15 @@ export function TrajectPlanner({ onBack, presetApplied = false }: Props) {
         metUndo(`${vakken(sels.length)} verzet naar ${klasgroep}`, () => setKlasgroepBulk(sels, klasgroep));
     };
 
+    // Verhuizen vanuit een blokje in het studentoverzicht: altijd één vak,
+    // maar soms twee selecties (een semester- naast een modulekeuze bij
+    // dezelfde klasgroep), die samen moeten meegaan. Vandaar setKlasgroepBulk
+    // in plaats van setKlasgroep, met een melding die het vak benoemt.
+    const handleVerhuisOlod = (sels: OLODSelectie[], klasgroep: string) => {
+        if (sels.length === 0) return;
+        metUndo(`${sels[0].olodNaam} verzet naar ${klasgroep}`, () => setKlasgroepBulk(sels, klasgroep));
+    };
+
     // ===== Globale acties (elk via een dialoog) =====
 
     const doeReset = () => {
@@ -856,7 +865,9 @@ export function TrajectPlanner({ onBack, presetApplied = false }: Props) {
                         actiefBereik={actiefBereik}
                         periodeType={settings.periodeType}
                         periodeGrenzen={settings.periodeGrenzen}
+                        shortlist={settings.mijnOpleidingKlasgroepen}
                         colorOf={colorOf}
+                        onVerhuis={handleVerhuisOlod}
                         preview={klasgroepPreview}
                     />
                 </div>

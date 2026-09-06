@@ -1,10 +1,11 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { isActief, Lesblok, StudentTraject } from './types';
+import { isActief, Lesblok, OLODSelectie, StudentTraject } from './types';
 import {
     detectConflicts,
     effectieveBlokken as berekenEffectieveBlokken,
     ghostBlokkenVoor,
+    overlapt,
     scenarioBlokken as berekenScenarioBlokken,
     wegBlokkenVoor,
 } from './conflicts';
@@ -12,6 +13,7 @@ import {
     addDays,
     bereikOverlapt,
     DAG_HEADERS,
+    datumInBereik,
     DAY_START_HOUR,
     formatDateBE,
     formatDateTime,
@@ -19,19 +21,28 @@ import {
     fridayEndOf,
     gridEndHour,
     isoWeekNumber,
+    mondayOf,
     parseIsoDate,
     periodeBereik,
     sameDay,
     toIsoDate,
     weeksBetween,
 } from './dateUtils';
-import { academiejaarBereik, periodeMarkeringen, type PeriodeGrenzen, type PeriodeType } from './academicYear';
-import type { KlasgroepPreview } from './useTrajectBlokken';
+import {
+    academiejaarBereik,
+    actievePeriode,
+    allePeriodes,
+    periodeMarkeringen,
+    type PeriodeGrenzen,
+    type PeriodeType,
+} from './academicYear';
+import { useWeekRoosters, type KlasgroepPreview } from './useTrajectBlokken';
 import styles from './Traject.module.css';
 import { AlertTriangle, CheckCircle2, ChevronDown, ChevronRight, Eye, Loader2, ZoomIn } from 'lucide-react';
 import { LesblokIcon } from './LesblokIcon';
 import { layoutDay } from './layout';
 import { WeekZoom } from './WeekZoom';
+import { OlodKlasgroepDialoog, type KiezerKandidaat } from './OlodKlasgroepDialoog';
 
 interface Props {
     traject: StudentTraject;
@@ -48,7 +59,13 @@ interface Props {
     // Alle grensdatums: bepalen zowel het bestreken academiejaar als de
     // markeringen bij elke semester-/modulestart.
     periodeGrenzen: PeriodeGrenzen;
+    // De klasgroep-shortlist: de kandidaten in de kiezer die vanuit een blokje
+    // opengaat. De klasgroep van het blokje zelf komt er altijd bij.
+    shortlist: string[];
     colorOf: (olodNaam: string) => string;
+    // Verhuist de keuzes achter een blokje naar een andere klasgroep. Krijgt
+    // altijd de selecties van één vak mee (meestal precies één).
+    onVerhuis: (sels: OLODSelectie[], klasgroep: string) => void;
     // Wat-als-preview vanuit de klasgroep-kiezer: de lessen van het vak bij de
     // huidige klasgroep vervagen, die bij de kandidaat-klasgroep verschijnen
     // als gestippelde blokjes; conflicten worden voor dat scenario berekend.
@@ -122,7 +139,9 @@ export function StudentOverzicht({
     actiefBereik,
     periodeType,
     periodeGrenzen,
+    shortlist,
     colorOf,
+    onVerhuis,
     preview = null,
 }: Props) {
     const [conflictsOpen, setConflictsOpen] = useState(true);
@@ -283,6 +302,129 @@ export function StudentOverzicht({
         () => (preview ? Array.from(new Set(preview.sels.map(s => s.olodNaam))) : []),
         [preview]
     );
+
+    // ===== Verhuizen vanuit een blokje in dit overzicht =====
+    // Een klik op een lesblokje opent dezelfde klasgroep-kiezer als het knopje
+    // op een lesblok in paneel B, maar met verhuis-semantiek: de keuze áchter
+    // dat blokje gaat naar de aangeklikte klasgroep, er komt er geen bij.
+    const [verhuisBlok, setVerhuisBlok] = useState<Lesblok | null>(null);
+    const verhuisWeek = useMemo(
+        () => (verhuisBlok ? mondayOf(verhuisBlok.start) : null),
+        [verhuisBlok]
+    );
+
+    // De selecties die dit blokje in het rooster zetten. Normaal precies één;
+    // twee kan (een semesterkeuze naast een modulekeuze bij dezelfde klasgroep)
+    // en dan verhuizen ze samen — anders bleef het blokje gewoon staan.
+    const verhuisSels = useMemo<OLODSelectie[]>(() => {
+        if (!verhuisBlok) return [];
+        return traject.filter(
+            s =>
+                isActief(s) &&
+                s.klasgroep === verhuisBlok.klasgroep &&
+                s.olodNaam === verhuisBlok.olodNaam &&
+                datumInBereik(verhuisBlok.start, s.van, s.tot)
+        );
+    }, [verhuisBlok, traject]);
+
+    // De kandidaten die we bevragen: de shortlist plus de klasgroep waar het
+    // vak nu bij zit — die kan intussen uit de shortlist verdwenen zijn.
+    const verhuisKandidaatKlassen = useMemo(() => {
+        if (!verhuisBlok) return [];
+        const set = new Set(shortlist);
+        set.add(verhuisBlok.klasgroep);
+        return Array.from(set).sort((a, b) => a.localeCompare(b));
+    }, [shortlist.join('|'), verhuisBlok]);
+
+    const { perKlas: verhuisRoosters, loading: verhuisLaadt } = useWeekRoosters(
+        verhuisKandidaatKlassen,
+        verhuisWeek
+    );
+
+    // De lessen die bij de verhuis uit het rooster verdwijnen; de rest van het
+    // traject blijft staan en bepaalt dus waar een kandidaat deze week botst.
+    const verhuisWeg = useMemo(
+        () =>
+            verhuisSels.length > 0
+                ? wegBlokkenVoor(verhuisSels, traject, effectieve)
+                : new Set<Lesblok>(),
+        [verhuisSels, traject, effectieve]
+    );
+
+    const verhuisKandidaten = useMemo<KiezerKandidaat[]>(() => {
+        if (!verhuisBlok || !verhuisWeek) return [];
+        const olodNaam = verhuisBlok.olodNaam;
+        const weekEind = fridayEndOf(verhuisWeek);
+        const restWeek = effectieve.filter(
+            b =>
+                !verhuisWeg.has(b) &&
+                b.start.getTime() >= verhuisWeek.getTime() &&
+                b.start.getTime() <= weekEind.getTime()
+        );
+        const maak = (kg: string): KiezerKandidaat | null => {
+            const all = verhuisRoosters[kg] ?? [];
+            const match = all
+                .filter(b => b.olodNaam === olodNaam)
+                .sort((a, b) => a.start.getTime() - b.start.getTime());
+            if (match.length === 0) return null;
+            const huidig = kg === verhuisBlok.klasgroep;
+            const gekozen = traject.some(
+                s =>
+                    isActief(s) &&
+                    s.klasgroep === kg &&
+                    s.olodNaam === olodNaam &&
+                    datumInBereik(match[0].start, s.van, s.tot)
+            );
+            // Lessen van hetzelfde vak bij deze klasgroep tellen niet als
+            // tegenpartij: dat zijn de lessen die de verhuis hier zou brengen.
+            const anderen = restWeek.filter(b => !(b.klasgroep === kg && b.olodNaam === olodNaam));
+            const botsend = match.filter(mb => anderen.some(ab => overlapt(mb, ab)));
+            return {
+                klasgroep: kg,
+                huidig,
+                allBlokken: all,
+                matchBlokken: match,
+                gekozen,
+                botsend,
+                actie: huidig
+                    ? 'De student volgt dit vak hier — klik om te sluiten'
+                    : gekozen
+                      ? 'Klik om te verhuizen — valt samen met de keuze die hier al staat'
+                      : 'Klik om dit vak hierheen te verhuizen',
+            };
+        };
+        const eigen = maak(verhuisBlok.klasgroep);
+        const rest = verhuisKandidaatKlassen
+            .filter(k => k !== verhuisBlok.klasgroep)
+            .map(maak)
+            .filter((k): k is KiezerKandidaat => k !== null);
+        return eigen ? [eigen, ...rest] : rest;
+    }, [
+        verhuisBlok,
+        verhuisWeek,
+        verhuisRoosters,
+        verhuisKandidaatKlassen,
+        verhuisWeg,
+        effectieve,
+        traject,
+    ]);
+
+    // De periode die mee verhuist. De keuze geldt voor haar hele bereik, niet
+    // enkel voor de week waarin geklikt is — dat moet in de kopbalk staan.
+    const verhuisPeriode = useMemo(() => {
+        if (verhuisSels.length !== 1) return null;
+        const sel = verhuisSels[0];
+        const datums = `${formatDateBE(parseIsoDate(sel.van))} – ${formatDateBE(parseIsoDate(sel.tot))}`;
+        const p = actievePeriode(allePeriodes(periodeGrenzen), sel.van, sel.tot);
+        return p ? `${p.kort} · ${datums}` : datums;
+    }, [verhuisSels, periodeGrenzen]);
+
+    const kiesVerhuis = (kandidaat: KiezerKandidaat) => {
+        if (!kandidaat.huidig && verhuisSels.length > 0) {
+            onVerhuis(verhuisSels, kandidaat.klasgroep);
+        }
+        setVerhuisBlok(null);
+    };
 
     const olodLegend = useMemo(() => {
         const seen = new Set<string>();
@@ -476,13 +618,32 @@ export function StudentOverzicht({
                                                                       )
                                                                       .join('\n')
                                                                 : '';
-                                                            const blokTip = baseTip + conflictTip;
+                                                            // Een ghost-blokje hoort bij nog niets in
+                                                            // het traject: daar valt niets te verhuizen.
+                                                            const verhuisbaar = !ghost;
+                                                            const blokTip =
+                                                                baseTip +
+                                                                conflictTip +
+                                                                (verhuisbaar
+                                                                    ? '\n\n→ Klik om dit vak in een andere klasgroep te volgen'
+                                                                    : '');
                                                             return (
-                                                                <div
+                                                                <button
                                                                     key={bi}
-                                                                    className={`${styles.miniBlok} ${conflict ? styles.miniBlokConflict : ''} ${ghost ? styles.miniBlokGhost : ''} ${weg ? styles.miniBlokWeg : ''}`}
+                                                                    type="button"
+                                                                    className={`${styles.miniBlok} ${verhuisbaar ? styles.miniBlokKlikbaar : ''} ${conflict ? styles.miniBlokConflict : ''} ${ghost ? styles.miniBlokGhost : ''} ${weg ? styles.miniBlokWeg : ''}`}
+                                                                    aria-label={
+                                                                        verhuisbaar
+                                                                            ? `${b.olodNaam} bij ${b.klasgroep} — kies een andere klasgroep`
+                                                                            : `${b.olodNaam} bij ${b.klasgroep}`
+                                                                    }
                                                                     onMouseEnter={e => showTip(e, blokTip)}
                                                                     onMouseLeave={hideTip}
+                                                                    onClick={() => {
+                                                                        if (!verhuisbaar) return;
+                                                                        hideTip();
+                                                                        setVerhuisBlok(b);
+                                                                    }}
                                                                     style={{
                                                                         top: `${topPct(b.start, totalMin)}%`,
                                                                         height: `${heightPct(b.start, b.eind, totalMin)}%`,
@@ -504,7 +665,7 @@ export function StudentOverzicht({
                                                                             className={styles.miniBlokConflictIcon}
                                                                         />
                                                                     )}
-                                                                </div>
+                                                                </button>
                                                             );
                                                         })}
                                                     </div>
@@ -564,6 +725,32 @@ export function StudentOverzicht({
             )}
 
             {tip && <MiniTooltip tip={tip} />}
+
+            {verhuisBlok && verhuisWeek && (
+                <OlodKlasgroepDialoog
+                    olodNaam={verhuisBlok.olodNaam}
+                    weekMonday={verhuisWeek}
+                    kandidaten={verhuisKandidaten}
+                    loading={verhuisLaadt}
+                    aantalShortlist={verhuisKandidaatKlassen.length}
+                    hint={
+                        <>
+                            Klik op de klasgroep waar de student dit vak voortaan volgt — de keuze
+                            verhuist, ze wordt niet gekopieerd.
+                            {verhuisPeriode && (
+                                <>
+                                    {' '}
+                                    De hele periode <strong>{verhuisPeriode}</strong> gaat mee, niet
+                                    alleen deze week.
+                                </>
+                            )}
+                        </>
+                    }
+                    colorOf={colorOf}
+                    onKies={kiesVerhuis}
+                    onClose={() => setVerhuisBlok(null)}
+                />
+            )}
 
             {zoomWeek && actieveSelecties > 0 && (
                 <WeekZoom
