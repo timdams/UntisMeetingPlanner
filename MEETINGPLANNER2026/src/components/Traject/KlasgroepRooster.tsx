@@ -27,6 +27,7 @@ import {
     Users,
     AlertTriangle,
     MousePointerClick,
+    ListPlus,
 } from 'lucide-react';
 import { LesblokIcon } from './LesblokIcon';
 import { layoutDay } from './layout';
@@ -59,6 +60,13 @@ interface Props {
     colorOf: (olodNaam: string) => string;
     ensureColor: (olodNaam: string) => void;
     onToggleBlok: (blok: Lesblok) => void;
+    // Zet alle meegegeven blokken in één keer in het traject (de knop "Alles
+    // toevoegen"): één blok per vak dat deze week nog niet gekozen is.
+    onAddAlleBlokken: (blokken: Lesblok[]) => void;
+}
+
+function vakken(n: number): string {
+    return `${n} ${n === 1 ? 'vak' : 'vakken'}`;
 }
 
 function topPct(d: Date, totalMin: number): number {
@@ -87,6 +95,7 @@ export function KlasgroepRooster({
     colorOf,
     ensureColor,
     onToggleBlok,
+    onAddAlleBlokken,
 }: Props) {
     const [weekMonday, setWeekMonday] = useState<Date>(() => mondayOf(initialWeek));
 
@@ -233,6 +242,24 @@ export function KlasgroepRooster({
         [weekMonday]
     );
 
+    // Wat "Alles toevoegen" zou toevoegen: per vak dat deze week op het rooster
+    // staat en nog niet in het traject zit één blok — het vroegste van de week.
+    // Eén blok volstaat, want een selectie geldt voor het hele vak in de hele
+    // periode; en al gekozen vakken laten we staan, zodat de knop enkel aanvult.
+    const nogToeTeVoegen = useMemo(() => {
+        const perOlod = new Map<string, Lesblok>();
+        for (const b of blokken) {
+            if (selectieVoor(b.klasgroep, b.olodNaam, b.start) !== null) continue;
+            const eerder = perOlod.get(b.olodNaam);
+            if (!eerder || b.start.getTime() < eerder.start.getTime()) perOlod.set(b.olodNaam, b);
+        }
+        return Array.from(perOlod.values()).sort((a, b) => a.olodNaam.localeCompare(b.olodNaam));
+    }, [blokken, selectieVoor]);
+
+    // Alleen nodig om het verschil te benoemen tussen "deze week is leeg" en
+    // "alles van deze week staat er al in".
+    const aantalOlodsInWeek = useMemo(() => new Set(blokken.map(b => b.olodNaam)).size, [blokken]);
+
     // Grid loopt standaard tot 18u; rekt uit tot max 22u zodra deze week een
     // avondschoolblok bevat dat later eindigt.
     const dayEndHour = useMemo(() => gridEndHour(blokken), [blokken]);
@@ -264,6 +291,7 @@ export function KlasgroepRooster({
         parseIsoDate(actiefBereik.tot)
     )}`;
     // "S1 (21/09 – 31/01)" of, zonder naam, alleen het datumbereik.
+    const periodeTekst = periodeNaam ? `${periodeNaam} (${periodeDatums})` : periodeDatums;
     const periodeOmschrijving = periodeNaam ? (
         <>
             <strong>{periodeNaam}</strong> ({periodeDatums})
@@ -337,6 +365,39 @@ export function KlasgroepRooster({
                     title="Ga naar een specifieke week"
                 />
             </div>
+
+            {klasgroep && !error && (
+                <div className={styles.roosterActies}>
+                    <button
+                        type="button"
+                        className={styles.roosterAllesBtn}
+                        disabled={busy || nogToeTeVoegen.length === 0}
+                        title={
+                            nogToeTeVoegen.length > 0
+                                ? `Zet ${vakken(nogToeTeVoegen.length)} van deze week in één keer in het traject, bij ${klasgroep} en voor ${periodeTekst} — net als een klik op elk blok apart: ${nogToeTeVoegen
+                                      .map(b => b.olodNaam)
+                                      .join(', ')}`
+                                : undefined
+                        }
+                        onClick={() => onAddAlleBlokken(nogToeTeVoegen)}
+                    >
+                        <ListPlus size={14} />
+                        Alles toevoegen
+                        {/* Tijdens het laden staan hier nog de blokken van de vorige
+                            week; die teller zou dan liegen. */}
+                        {!busy && nogToeTeVoegen.length > 0 && (
+                            <span className={styles.roosterAllesTeller}>{nogToeTeVoegen.length}</span>
+                        )}
+                    </button>
+                    {!busy && nogToeTeVoegen.length === 0 && (
+                        <span className={styles.roosterActiesHint}>
+                            {aantalOlodsInWeek === 0
+                                ? 'Geen lessen in deze week.'
+                                : 'Alle vakken van deze week staan al in het traject.'}
+                        </span>
+                    )}
+                </div>
+            )}
 
             {!klasgroep ? (
                 <div className={styles.emptyState}>

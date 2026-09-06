@@ -1943,6 +1943,67 @@
     width: auto;
 }
 
+/* Actiebalk onder de weeknavigatie: "Alles toevoegen" zet elk vak van de
+   getoonde week in één keer in het traject. Bewust een eigen regel en niet in
+   .weekNav: paneel B is maar 320px breed en de pijlen, het weeklabel en de
+   datumkiezer vullen die rij al. */
+.roosterActies {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.35rem 0.5rem;
+    border-bottom: 1px solid var(--border-color);
+    background-color: var(--bg-color);
+}
+
+.roosterAllesBtn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    flex-shrink: 0;
+    padding: 0.25rem 0.6rem;
+    font-size: 0.8rem;
+    font-weight: 500;
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    background-color: var(--bg-color);
+    color: var(--text-color);
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.roosterAllesBtn:hover:not(:disabled) {
+    border-color: var(--primary);
+}
+
+.roosterAllesBtn:disabled {
+    opacity: 0.55;
+    cursor: default;
+}
+
+/* Neutrale (niet rode) teller: het getal is een aantal, geen waarschuwing. */
+.roosterAllesTeller {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 1.15rem;
+    height: 1.15rem;
+    padding: 0 0.25rem;
+    border-radius: 999px;
+    background-color: #e2e8f0;
+    color: #475569;
+    font-size: 0.7rem;
+    font-weight: 700;
+    line-height: 1;
+}
+
+.roosterActiesHint {
+    min-width: 0;
+    font-size: 0.72rem;
+    line-height: 1.2;
+    color: #64748b;
+}
+
 .roosterGrid {
     flex: 1;
     min-height: 0;

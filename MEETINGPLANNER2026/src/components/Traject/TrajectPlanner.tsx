@@ -27,7 +27,7 @@ import {
     type BewaardTraject,
     type Profiel,
 } from './hooks';
-import { isActief, type OLODSelectie } from './types';
+import { isActief, type Lesblok, type OLODSelectie } from './types';
 import { DossierMenu } from './BewaardeTrajecten';
 import { ProfielMenu } from './ProfielMenu';
 import { BevestigDialog, BewaarDialog, ProfielDialog, type DialogItem } from './TrajectDialogs';
@@ -141,6 +141,7 @@ export function TrajectPlanner({ onBack, presetApplied = false }: Props) {
     const {
         traject,
         toggleBlok,
+        addBlokken,
         selectieVoor,
         remove,
         removeMany,
@@ -254,6 +255,18 @@ export function TrajectPlanner({ onBack, presetApplied = false }: Props) {
         if (sels.length === 0) return;
         metUndo(`${vakken(sels.length)} ${actief ? 'geactiveerd' : 'gedeactiveerd'}`, () =>
             setActiefBulk(sels, actief)
+        );
+    };
+
+    // "Alles toevoegen" boven het klasgroeprooster: elk vak dat in de getoonde
+    // week op het rooster staat en nog niet gekozen is, komt er in één keer bij
+    // — met dezelfde periode per vak als een gewone klik (`bereikVoorOlod`, dus
+    // een semestervak krijgt zijn hele semester). Een bulkactie die het traject
+    // in één klap kan vullen, dus met undo.
+    const handleAddAlleBlokken = (blokken: Lesblok[]) => {
+        if (blokken.length === 0) return;
+        metUndo(`${vakken(blokken.length)} toegevoegd aan het traject`, () =>
+            addBlokken(blokken, bereikVoorOlod)
         );
     };
 
@@ -855,6 +868,7 @@ export function TrajectPlanner({ onBack, presetApplied = false }: Props) {
                         colorOf={colorOf}
                         ensureColor={ensureColor}
                         onToggleBlok={b => toggleBlok(b, bereikVoorOlod(b.olodNaam))}
+                        onAddAlleBlokken={handleAddAlleBlokken}
                     />
                     <Splitter orientation="right" onDelta={adjustPanelC} />
                     <StudentOverzicht

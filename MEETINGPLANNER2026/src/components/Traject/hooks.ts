@@ -741,6 +741,33 @@ export function useStudentTraject() {
         });
     }, []);
 
+    // Voegt meerdere lesblokken in één keer toe (de knop "Alles toevoegen" boven
+    // het klasgroeprooster). Bewust géén toggle: een blok waarvoor al een
+    // selectie bestaat — ook eentje die in deze zelfde ronde is bijgekomen —
+    // slaan we over, anders zou de knop bestaande keuzes weggooien. `bereikVoor`
+    // levert de periode per vak, zodat een semestervak hier hetzelfde volledige
+    // semester krijgt als bij een gewone klik.
+    const addBlokken = useCallback(
+        (blokken: Lesblok[], bereikVoor: (olodNaam: string) => { van: string; tot: string }) => {
+            if (blokken.length === 0) return;
+            setTraject(t => {
+                const out: StudentTraject = [...t];
+                for (const blok of blokken) {
+                    const bereik = bereikVoor(blok.olodNaam);
+                    if (selectieVoorBlok(out, blok.klasgroep, blok.olodNaam, blok.start, bereik)) continue;
+                    out.push({
+                        klasgroep: blok.klasgroep,
+                        olodNaam: blok.olodNaam,
+                        van: bereik.van,
+                        tot: bereik.tot,
+                    });
+                }
+                return out.length === t.length ? t : out;
+            });
+        },
+        []
+    );
+
     // De selectie die een klik op een lesblok (op de gegeven datum, bij het
     // gegeven actieve bereik) zou weghalen, of null — spiegelt toggleBlok,
     // zodat het rooster precies die blokken als geselecteerd toont.
@@ -844,6 +871,7 @@ export function useStudentTraject() {
     return {
         traject,
         toggleBlok,
+        addBlokken,
         selectieVoor,
         remove,
         removeMany,
