@@ -2064,15 +2064,26 @@
     background-color: #94a3b8;
 }
 
+/*
+ * Gekozen blok: groene streepjesrand. `background-clip: padding-box` houdt de
+ * blokkleur binnen de rand, zodat de streepjes op de witte roosterachtergrond
+ * staan in plaats van op de blokkleur — anders zou de rand net op een groen
+ * vak onzichtbaar worden. Geen buitenring of gloed: verticaal aansluitende
+ * blokken raken elkaar, daar zou die over de buur heen vallen.
+ */
 .roosterBlokSelected {
-    border-color: #111827;
-    box-shadow: 0 0 0 1px white inset;
+    border-width: 3px;
+    border-style: dashed;
+    border-color: #15803D;
+    background-clip: padding-box;
 }
 
 /* Gekozen maar uitgeschakeld: wel herkenbaar in het klasgroeprooster, maar
-   afwezig in het totaalrooster. */
+   afwezig in het totaalrooster. Gestippeld en grijs, zodat het niet met de
+   groene streepjes van een meetellende keuze verward wordt. */
 .roosterBlokUit {
-    border-style: dashed;
+    border-style: dotted;
+    border-color: #64748B;
     opacity: 0.55;
 }
 
@@ -3064,6 +3075,56 @@
     border: 1px solid var(--border-color);
     border-radius: 999px;
     padding: 2px 8px;
+}
+
+/* Duwt de knoppen rechts in .zoomHeaderBar; vangt alle vrije ruimte op, zodat
+   de auto-marge van .zoomClose (nodig in andere dialogen) hier niets doet. */
+.zoomSpacer {
+    flex: 1 1 auto;
+}
+
+/* Knop "kopieer als afbeelding" in de kop van de weekzoom. */
+.zoomActie {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 4px 10px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    font-family: inherit;
+    color: var(--text-color);
+    background-color: var(--bg-color);
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    cursor: pointer;
+    transition: border-color var(--transition), background-color var(--transition);
+}
+
+.zoomActie:hover:not(:disabled) {
+    border-color: var(--primary);
+    background-color: var(--bg-color);
+}
+
+.zoomActie:disabled {
+    opacity: 0.5;
+    cursor: default;
+}
+
+.zoomActieOk {
+    color: #15803d;
+    border-color: #86efac;
+    background-color: #f0fdf4;
+}
+
+.zoomActieOk:hover:not(:disabled) {
+    border-color: #86efac;
+    background-color: #f0fdf4;
+}
+
+.zoomActieFout {
+    color: #b91c1c;
+    border-color: #fca5a5;
+    background-color: #fef2f2;
 }
 
 .zoomClose {

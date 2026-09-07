@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { AlertTriangle, Eye, X } from 'lucide-react';
+import { AlertTriangle, Check, Copy, Download, Eye, X } from 'lucide-react';
 import type { Lesblok } from './types';
 import {
     addDays,
@@ -14,6 +14,11 @@ import {
 } from './dateUtils';
 import { layoutDay } from './layout';
 import { LesblokIcon } from './LesblokIcon';
+import {
+    bewaarCanvasAlsBestand,
+    kopieerCanvasNaarKlembord,
+    tekenWeekRooster,
+} from './roosterImage';
 import styles from './Traject.module.css';
 
 interface Props {
@@ -93,6 +98,72 @@ export function WeekZoom({
             .sort((a, b) => a.olodNaam.localeCompare(b.olodNaam));
     }, [blokken]);
 
+    // Status van de kopieerknop; valt na een paar seconden terug op 'idle'.
+    const [kopie, setKopie] = useState<'idle' | 'ok' | 'bestand' | 'fout'>('idle');
+    const kopieTimer = useRef<number | null>(null);
+
+    useEffect(
+        () => () => {
+            if (kopieTimer.current !== null) window.clearTimeout(kopieTimer.current);
+        },
+        []
+    );
+
+    const meldKopie = useCallback((status: 'ok' | 'bestand' | 'fout') => {
+        setKopie(status);
+        if (kopieTimer.current !== null) window.clearTimeout(kopieTimer.current);
+        kopieTimer.current = window.setTimeout(() => setKopie('idle'), 3000);
+    }, []);
+
+    // Tekent dezelfde week op een canvas en zet die op het klembord. Lukt dat
+    // niet (browser zonder klembord-API, geweigerde toestemming, of een
+    // onbeveiligde verbinding), dan bewaren we de PNG als bestand zodat de
+    // gebruiker het rooster toch heeft.
+    const kopieerAlsAfbeelding = useCallback(async () => {
+        const canvas = tekenWeekRooster({
+            weekMonday,
+            blokken,
+            dayEndHour,
+            conflictSet: new Set(blokken.filter(b => conflictMap.has(b))),
+            ghostSet,
+            wegSet,
+            colorOf,
+            legende,
+        });
+        try {
+            await kopieerCanvasNaarKlembord(canvas);
+            meldKopie('ok');
+        } catch (err) {
+            console.warn('Rooster naar klembord kopiëren mislukt:', err);
+            try {
+                await bewaarCanvasAlsBestand(canvas, `rooster-week-${isoWeekNumber(weekMonday)}.png`);
+                meldKopie('bestand');
+            } catch (err2) {
+                console.error('Rooster als afbeelding bewaren mislukt:', err2);
+                meldKopie('fout');
+            }
+        }
+    }, [
+        weekMonday,
+        blokken,
+        dayEndHour,
+        conflictMap,
+        ghostSet,
+        wegSet,
+        colorOf,
+        legende,
+        meldKopie,
+    ]);
+
+    const kopieLabel =
+        kopie === 'ok'
+            ? 'Gekopieerd'
+            : kopie === 'bestand'
+            ? 'Als bestand bewaard'
+            : kopie === 'fout'
+            ? 'Kopiëren mislukt'
+            : 'Kopieer als afbeelding';
+
     return createPortal(
         <div className={styles.zoomBackdrop} onClick={onClose}>
             <div
@@ -108,6 +179,23 @@ export function WeekZoom({
                         {formatDateBE(weekMonday)} – {formatDateBE(addDays(weekMonday, 4))}
                     </span>
                     <span className={styles.zoomBadge}>Alleen-lezen</span>
+                    <span className={styles.zoomSpacer} />
+                    <button
+                        type="button"
+                        className={`${styles.zoomActie} ${kopie === 'ok' || kopie === 'bestand' ? styles.zoomActieOk : ''} ${kopie === 'fout' ? styles.zoomActieFout : ''}`}
+                        onClick={kopieerAlsAfbeelding}
+                        disabled={blokken.length === 0}
+                        title="Kopieer dit rooster als afbeelding naar het klembord"
+                    >
+                        {kopie === 'ok' ? (
+                            <Check size={15} />
+                        ) : kopie === 'bestand' ? (
+                            <Download size={15} />
+                        ) : (
+                            <Copy size={15} />
+                        )}
+                        {kopieLabel}
+                    </button>
                     <button
                         ref={closeRef}
                         type="button"
