@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, ArrowLeftRight, CalendarRange, ChevronDown, Eye, EyeOff, Info, Loader2, Sparkles, Trash2, X } from 'lucide-react';
+import { AlertTriangle, ArrowLeftRight, CalendarRange, ChevronDown, ChevronRight, Eye, EyeOff, Info, Loader2, Sparkles, Trash2, X } from 'lucide-react';
 import { isActief, Lesblok, OLODSelectie, StudentTraject } from './types';
 import {
     matchtPeriode,
@@ -10,6 +10,7 @@ import {
 } from './academicYear';
 import { bereikOverlapt } from './dateUtils';
 import { selectieKey } from './hooks';
+import { groepeerKlasgroepen } from './settingsSummaries';
 import { botsendeKlasgroepen, isSemesterOlod, semesterBereikVoor } from './semesterOlods';
 import {
     useBulkAlternatieven,
@@ -100,6 +101,22 @@ export function KlasgroepSelector({
     const [bulkOpen, setBulkOpen] = useState(false);
     const [bulkDialoog, setBulkDialoog] = useState<BulkDialoog | null>(null);
     const kiesbaar = periodeType === 'module';
+
+    // De klasgroepenlijst staat per jaar gegroepeerd — het eerste karakter van
+    // de naam, dezelfde indeling als het instellingenscherm — en elk jaar is
+    // inklapbaar, zodat een shortlist over meerdere jaren behapbaar blijft.
+    // Vluchtige UI-state, zoals de rest van dit paneel: standaard staat alles
+    // open en een dichtgeklapt jaar wordt niet bewaard.
+    const jaarGroepen = useMemo(() => groepeerKlasgroepen(klasgroepen), [klasgroepen]);
+    const [dichtgeklapt, setDichtgeklapt] = useState<Set<string>>(new Set());
+    const toggleJaar = (label: string) => {
+        setDichtgeklapt(s => {
+            const next = new Set(s);
+            if (next.has(label)) next.delete(label);
+            else next.add(label);
+            return next;
+        });
+    };
 
     // Geen preview meer zodra een kiezer sluit of wisselt (de chips waar de
     // muis over stond bestaan dan niet meer), en evenmin na unmount.
@@ -289,18 +306,50 @@ export function KlasgroepSelector({
                         Geen klasgroepen gemarkeerd. Stel ze in via Instellingen.
                     </div>
                 ) : (
-                    klasgroepen.map(k => (
-                        <button
-                            key={k}
-                            type="button"
-                            className={`${styles.selectorItem} ${
-                                actief === k ? styles.selectorItemActive : ''
-                            }`}
-                            onClick={() => onSelect(k)}
-                        >
-                            {k}
-                        </button>
-                    ))
+                    jaarGroepen.map(jaar => {
+                        const dicht = dichtgeklapt.has(jaar.label);
+                        const bevatActief = actief !== null && jaar.items.includes(actief);
+                        const bodyId = `klasgroep-jaar-${jaar.label.replace(/[^a-zA-Z0-9]+/g, '-')}`;
+                        return (
+                            <div key={jaar.label} className={styles.selectorJaar}>
+                                <button
+                                    type="button"
+                                    className={`${styles.selectorJaarKop} ${
+                                        bevatActief ? styles.selectorJaarKopActief : ''
+                                    }`}
+                                    onClick={() => toggleJaar(jaar.label)}
+                                    title={
+                                        `${jaar.items.length} ${
+                                            jaar.items.length === 1 ? 'klasgroep' : 'klasgroepen'
+                                        } — klik om ${dicht ? 'open' : 'dicht'} te klappen` +
+                                        (bevatActief && dicht ? `\nHet rooster van ${actief} staat hierin.` : '')
+                                    }
+                                    aria-expanded={!dicht}
+                                    aria-controls={bodyId}
+                                >
+                                    {dicht ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
+                                    <span className={styles.selectorJaarLabel}>{jaar.label}</span>
+                                    <span className={styles.selectorJaarAantal}>{jaar.items.length}</span>
+                                </button>
+                                {!dicht && (
+                                    <div id={bodyId}>
+                                        {jaar.items.map(k => (
+                                            <button
+                                                key={k}
+                                                type="button"
+                                                className={`${styles.selectorItem} ${
+                                                    actief === k ? styles.selectorItemActive : ''
+                                                }`}
+                                                onClick={() => onSelect(k)}
+                                            >
+                                                {k}
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        );
+                    })
                 )}
             </div>
 

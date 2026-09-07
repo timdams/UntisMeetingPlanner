@@ -1287,6 +1287,51 @@
     padding: 0.5rem;
 }
 
+/* Inklapbaar jaar in de klasgroep-selector (paneel A). De kop draagt dezelfde
+   stijl als .klasGroepHeader in de instellingen, maar is hier een knop. */
+.selectorJaar {
+    margin-bottom: 0.35rem;
+}
+
+.selectorJaarKop {
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+    width: 100%;
+    text-align: left;
+    border: none;
+    background: transparent;
+    padding: 0.25rem 0.5rem;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.72rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #64748b;
+}
+
+.selectorJaarKop:hover {
+    background-color: var(--item-hover);
+}
+
+.selectorJaarKopActief {
+    color: var(--primary);
+}
+
+.selectorJaarLabel {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.selectorJaarAantal {
+    font-weight: 500;
+    letter-spacing: 0;
+}
+
 .olodListHeader {
     padding: 0.4rem 0.6rem;
     border-top: 1px solid var(--border-color);
