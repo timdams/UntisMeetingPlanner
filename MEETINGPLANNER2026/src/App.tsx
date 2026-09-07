@@ -116,7 +116,11 @@ function App() {
       )}
       {view === 'meeting' && meetingAvailable !== false && <PlannerDashboard onBack={() => setView('choice')} />}
       {view === 'traject' && (
-        <TrajectPlanner onBack={() => setView('choice')} presetApplied={INITIAL_PRESET !== null} />
+        <TrajectPlanner
+          onBack={() => setView('choice')}
+          presetApplied={INITIAL_PRESET !== null}
+          presetNaam={INITIAL_PRESET?.naam ?? null}
+        />
       )}
       {view === 'examen' && (
         <ExamenOverzicht onBack={() => setView('choice')} pendingShare={INITIAL_EXAMEN_SHARE} />

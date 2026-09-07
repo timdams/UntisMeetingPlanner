@@ -16,6 +16,8 @@ import styles from './Traject.module.css';
 import {
     profielVingerafdruk,
     selectieKey,
+    uniekeProfielNaam,
+    zelfdeNaam,
     trajectVingerafdruk,
     useActiefTraject,
     useBewaardeTrajecten,
@@ -60,6 +62,9 @@ type Dialoog =
     // Profielen (instellingssets): bewaren onder een naam, overschakelen naar
     // een ander profiel (wist het traject) en er een weggooien.
     | { soort: 'profielBewaar' }
+    // Een profiel dat via een deel-link binnenkwam onder een naam bewaren die
+    // hier nog vrij is; enkel nodig wanneer de meegestuurde naam al bezet is.
+    | { soort: 'profielGedeeld'; naam: string }
     | { soort: 'profielWissel'; profiel: Profiel }
     | { soort: 'profielVerwijder'; profiel: Profiel }
     // De import wacht op het antwoord van de gebruiker: `resolve` sluit de
@@ -71,6 +76,10 @@ interface Props {
     // True wanneer de student via een trajectbegeleider-link binnenkwam en de
     // klasgroepen + semesterperiode dus al voor hem zijn klaargezet.
     presetApplied?: boolean;
+    // De naam van het profiel waaruit die link gemaakt is — enkel gezet bij een
+    // link die vanuit de profielenlijst gedeeld werd. Alleen dán kan de
+    // ontvanger de set als profiel op zijn eigen toestel bewaren.
+    presetNaam?: string | null;
 }
 
 const PANEL_A_MIN = 140;
@@ -125,7 +134,7 @@ function Splitter({ orientation, onDelta }: SplitterProps) {
     );
 }
 
-export function TrajectPlanner({ onBack, presetApplied = false }: Props) {
+export function TrajectPlanner({ onBack, presetApplied = false, presetNaam = null }: Props) {
     const {
         settings,
         toggleKlasgroep,
@@ -386,6 +395,31 @@ export function TrajectPlanner({ onBack, presetApplied = false }: Props) {
     const doeBijwerkenProfiel = () => {
         if (!actiefProfiel) return;
         doeBewaarProfiel(actiefProfiel.naam, actiefProfiel.id);
+    };
+
+    // ===== Gedeeld profiel op dit toestel bewaren =====
+    // De instellingen uit de link staan al in `settings` (App verwerkt de preset
+    // vóór React rendert), dus "bewaren" is gewoon: die instellingen vastleggen
+    // onder de meegestuurde naam. Zonder deze knop blijft een gedeelde set
+    // eenmalig — ze zit dan wel in de instellingen, maar in geen enkel profiel.
+    const [gedeeldBewaardAls, setGedeeldBewaardAls] = useState<string | null>(null);
+
+    const doeBewaarGedeeldProfiel = (naam: string, overschrijfId?: string) => {
+        doeBewaarProfiel(naam, overschrijfId);
+        setGedeeldBewaardAls(naam.trim());
+    };
+
+    // Is de naam hier nog vrij, dan bewaren we meteen — dat is wat de gebruiker
+    // vroeg. Bestaat ze al, dan komt de dialoog tussen met een vrije naam als
+    // voorstel: een deel-link mag nooit stilzwijgend een eigen profiel met
+    // dezelfde naam overschrijven.
+    const handleBewaarGedeeldProfiel = () => {
+        if (!presetNaam) return;
+        if (profielen.some(p => zelfdeNaam(p.naam, presetNaam))) {
+            setDialoog({ soort: 'profielGedeeld', naam: presetNaam });
+        } else {
+            doeBewaarGedeeldProfiel(presetNaam);
+        }
     };
 
     /**
@@ -785,10 +819,38 @@ export function TrajectPlanner({ onBack, presetApplied = false }: Props) {
                 <div className={styles.presetBanner}>
                     <Info size={18} />
                     <div className={styles.presetBannerText}>
-                        <strong>Klaargezet door je trajectbegeleider.</strong> De klasgroepen
-                        en periode zijn al ingesteld — kies meteen je vakken in het
-                        werkblad. Je hoeft niets in de instellingen aan te passen.
+                        {gedeeldBewaardAls ? (
+                            <>
+                                <strong>"{gedeeldBewaardAls}" staat nu bij je profielen.</strong> Je
+                                vindt het terug in de balk bovenaan het werkblad en bij
+                                Instellingen → Profielen — ook de volgende keer dat je deze tool
+                                opent, zonder de link.
+                            </>
+                        ) : (
+                            <>
+                                <strong>Klaargezet door je trajectbegeleider.</strong> De klasgroepen
+                                en periode zijn al ingesteld — kies meteen je vakken in het
+                                werkblad. Je hoeft niets in de instellingen aan te passen.
+                                {presetNaam && (
+                                    <>
+                                        {' '}
+                                        Deze instellingen komen uit het profiel{' '}
+                                        <strong>"{presetNaam}"</strong>; bewaar het op dit toestel om
+                                        er later opnieuw naartoe te kunnen wisselen.
+                                    </>
+                                )}
+                            </>
+                        )}
                     </div>
+                    {presetNaam && !gedeeldBewaardAls && (
+                        <button
+                            className={styles.presetBannerBtn}
+                            onClick={handleBewaarGedeeldProfiel}
+                            title={`De instellingen van "${presetNaam}" als profiel in deze browser bewaren`}
+                        >
+                            <Save size={14} /> Bewaar op dit toestel
+                        </button>
+                    )}
                     <button
                         className={styles.presetBannerClose}
                         onClick={() => setBannerDismissed(true)}
@@ -962,6 +1024,25 @@ export function TrajectPlanner({ onBack, presetApplied = false }: Props) {
                 profielen={profielen}
                 samenvatting={profielSamenvatting(settings)}
                 onBewaar={doeBewaarProfiel}
+                onAnnuleer={annuleerDialoog}
+            />
+        )}
+
+        {dialoog?.soort === 'profielGedeeld' && (
+            <ProfielDialog
+                titel="Gedeeld profiel bewaren"
+                voorstel={uniekeProfielNaam(dialoog.naam, profielen)}
+                profielen={profielen}
+                samenvatting={profielSamenvatting(settings)}
+                intro={
+                    <>
+                        Je hebt al een profiel met de naam <strong>"{dialoog.naam}"</strong> in deze
+                        browser. Kies een andere naam om het gedeelde profiel (
+                        {profielSamenvatting(settings)}) ernaast te bewaren, of neem de bestaande
+                        naam over om dat profiel te vervangen.
+                    </>
+                }
+                onBewaar={doeBewaarGedeeldProfiel}
                 onAnnuleer={annuleerDialoog}
             />
         )}

@@ -365,6 +365,29 @@
     flex: 1;
 }
 
+/* "Bewaar op dit toestel" in de banner: dezelfde blauwe familie als de banner
+   zelf, zodat het als aanbod leest en niet als systeemknop. */
+.presetBannerBtn {
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.35rem 0.6rem;
+    background-color: #1D4ED8;
+    border: 1px solid #1D4ED8;
+    border-radius: var(--border-radius);
+    color: #fff;
+    font-size: 0.82rem;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.presetBannerBtn:hover {
+    background-color: #1E40AF;
+    border-color: #1E40AF;
+}
+
 .presetBannerClose {
     flex-shrink: 0;
     background: transparent;
@@ -523,6 +546,13 @@
     margin-top: 0.5rem;
 }
 
+/* Eén profiel: de rij zelf plus, wanneer het gedeeld wordt, het linkpaneel
+   eronder. Zonder die wikkel zou het paneel als vierde kolom in de rij landen. */
+.profielItem {
+    display: flex;
+    flex-direction: column;
+}
+
 .profielRij {
     display: flex;
     align-items: center;
@@ -531,6 +561,71 @@
     border: 1px solid var(--border-color);
     border-radius: var(--border-radius);
     background-color: var(--bg-color);
+}
+
+/* Staat het linkpaneel open, dan sluit de rij er onderaan vlak op aan. */
+.profielRijOpen {
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
+}
+
+/* Deel-icoon in de profielrij. Zelfde maat als het verwijderkruisje ernaast,
+   maar zonder rode hover: delen gooit niets weg. */
+.profielRijDeel {
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    padding: 0;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 4px;
+    color: #64748b;
+    cursor: pointer;
+}
+
+.profielRijDeel:hover {
+    background-color: var(--selected-bg);
+    color: var(--primary);
+    border-color: var(--primary);
+}
+
+/* Openstaand paneel: het icoon blijft ingedrukt zolang de link getoond wordt. */
+.profielRijDeelActief {
+    background-color: var(--selected-bg);
+    color: var(--primary);
+    border-color: var(--primary);
+}
+
+/* Het linkpaneel hangt visueel onder zijn rij (afgeronde onderhoeken, zelfde
+   inspringing) zodat duidelijk blijft over welk profiel de link gaat. */
+.profielDeelBox {
+    margin: 0 0.75rem;
+    padding: 0.6rem 0.75rem 0.7rem;
+    border: 1px solid var(--border-color);
+    border-top: none;
+    border-radius: 0 0 var(--border-radius) var(--border-radius);
+    background-color: var(--secondary);
+}
+
+.profielDeelKop {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.4rem;
+    font-size: 0.8rem;
+    line-height: 1.4;
+    color: #475569;
+}
+
+.profielDeelKop svg {
+    flex-shrink: 0;
+    margin-top: 2px;
+}
+
+.profielDeelBox .qrBox {
+    margin-top: 0.2rem;
 }
 
 /* Het actieve profiel krijgt hetzelfde accent als een geselecteerde knop

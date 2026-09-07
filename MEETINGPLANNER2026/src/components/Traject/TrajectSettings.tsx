@@ -88,6 +88,31 @@ interface Props {
 
 type CardId = 'profielen' | 'opleiding' | 'periode' | 'delen' | 'backup';
 
+// Zet de QR-canvas uit een blok om in een download. Gedeeld door de
+// student-QR en de QR van een profiel-deellink.
+function downloadQrPng(box: HTMLDivElement | null, bestandsnaam: string) {
+    const canvas = box?.querySelector('canvas');
+    if (!canvas) return;
+    const a = document.createElement('a');
+    a.href = canvas.toDataURL('image/png');
+    a.download = bestandsnaam;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+}
+
+// Profielnaam -> bruikbaar stuk bestandsnaam voor de QR-download.
+function bestandsnaamDeel(naam: string): string {
+    return (
+        naam
+            .toLowerCase()
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .replace(/[^a-z0-9]+/g, '-')
+            .replace(/^-+|-+$/g, '') || 'profiel'
+    );
+}
+
 export function TrajectSettingsView({
     settings,
     profielen,
@@ -121,6 +146,12 @@ export function TrajectSettingsView({
     const [shareCopied, setShareCopied] = useState(false);
     const [showQr, setShowQr] = useState(false);
     const qrBoxRef = useRef<HTMLDivElement | null>(null);
+    // Deel-link van één profiel uit de lijst hieronder: welk profiel openstaat,
+    // met de link die bij *dat* profiel hoort (niet bij de huidige instellingen).
+    const [profielDeel, setProfielDeel] = useState<{ id: string; url: string } | null>(null);
+    const [profielDeelCopied, setProfielDeelCopied] = useState(false);
+    const [profielQr, setProfielQr] = useState(false);
+    const profielQrRef = useRef<HTMLDivElement | null>(null);
     const fileInputRef = useRef<HTMLInputElement | null>(null);
 
     // Welke kaarten open staan. Enkel "Mijn opleiding" standaard open: dat is
@@ -211,16 +242,41 @@ export function TrajectSettingsView({
         setShowQr(true);
     };
 
-    const handleDownloadQr = () => {
-        const canvas = qrBoxRef.current?.querySelector('canvas');
-        if (!canvas) return;
-        const a = document.createElement('a');
-        a.href = canvas.toDataURL('image/png');
-        a.download = 'trajectplanner-student-qr.png';
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
+    const handleDownloadQr = () => downloadQrPng(qrBoxRef.current, 'trajectplanner-student-qr.png');
+
+    // ===== Eén profiel delen =====
+    // Zelfde link als "Deel met student", maar gebouwd uit de instellingen van
+    // het aangeklikte profiel en mét zijn naam erin: de ontvanger kan het
+    // daardoor als profiel op zijn eigen toestel bewaren. De link gaat meteen
+    // naar het klembord; het paneel eronder is er voor de QR en voor wie hem
+    // liever zelf selecteert.
+    const flashProfielCopied = () => {
+        setProfielDeelCopied(true);
+        window.setTimeout(() => setProfielDeelCopied(false), 1500);
     };
+
+    const handleDeelProfiel = async (p: Profiel) => {
+        if (profielDeel?.id === p.id) {
+            setProfielDeel(null);
+            setProfielQr(false);
+            return;
+        }
+        const url = buildShareUrl(p.settings, p.naam);
+        setProfielDeel({ id: p.id, url });
+        setProfielQr(false);
+        if (await copyToClipboard(url)) flashProfielCopied();
+    };
+
+    const handleKopieerProfielLink = async () => {
+        if (profielDeel && (await copyToClipboard(profielDeel.url))) flashProfielCopied();
+    };
+
+    // Een profiel bijwerken of weggooien maakt een openstaande link verouderd —
+    // sluit het paneel dan, net zoals de student-link verdwijnt bij wijzigingen.
+    useEffect(() => {
+        setProfielDeel(null);
+        setProfielQr(false);
+    }, [profielen]);
 
     // Een gegenereerde link/QR is een momentopname van de instellingen; verberg ze
     // zodra de klasgroepen, de periode of de indeling wijzigen, zodat de
@@ -354,44 +410,123 @@ export function TrajectSettingsView({
                         <div className={styles.profielLijst}>
                             {profielenGesorteerd.map(p => {
                                 const isActief = p.id === actiefProfiel?.id;
+                                const deelOpen = profielDeel?.id === p.id;
                                 return (
-                                    <div
-                                        key={p.id}
-                                        className={`${styles.profielRij} ${isActief ? styles.profielRijActief : ''}`}
-                                    >
-                                        <div className={styles.profielRijInfo}>
-                                            <div className={styles.profielRijNaam}>
-                                                {p.naam}
-                                                {isActief && (
-                                                    <span className={styles.profielRijBadge}>actief</span>
+                                    <div key={p.id} className={styles.profielItem}>
+                                        <div
+                                            className={`${styles.profielRij} ${isActief ? styles.profielRijActief : ''} ${deelOpen ? styles.profielRijOpen : ''}`}
+                                        >
+                                            <div className={styles.profielRijInfo}>
+                                                <div className={styles.profielRijNaam}>
+                                                    {p.naam}
+                                                    {isActief && (
+                                                        <span className={styles.profielRijBadge}>actief</span>
+                                                    )}
+                                                </div>
+                                                <div className={styles.profielRijMeta}>
+                                                    {profielSamenvatting(p.settings)} · bewaard op{' '}
+                                                    {formatDateTime(new Date(p.bewaardOp))}
+                                                </div>
+                                            </div>
+                                            <button
+                                                className={styles.toolbarBtn}
+                                                onClick={() => onKiesProfiel(p)}
+                                                disabled={isActief}
+                                                title={
+                                                    isActief
+                                                        ? `"${p.naam}" is het actieve profiel`
+                                                        : `Overschakelen naar "${p.naam}" — de gekozen OLODs worden gewist`
+                                                }
+                                            >
+                                                Activeren
+                                            </button>
+                                            <button
+                                                type="button"
+                                                className={`${styles.profielRijDeel} ${deelOpen ? styles.profielRijDeelActief : ''}`}
+                                                onClick={() => handleDeelProfiel(p)}
+                                                title={
+                                                    deelOpen
+                                                        ? 'Deel-link verbergen'
+                                                        : `Deel-link voor "${p.naam}" maken en kopiëren`
+                                                }
+                                                aria-label={`${p.naam} delen`}
+                                                aria-expanded={deelOpen}
+                                            >
+                                                <Share2 size={14} />
+                                            </button>
+                                            <button
+                                                type="button"
+                                                className={styles.olodListRemove}
+                                                onClick={() => onVerwijderProfiel(p)}
+                                                title={`"${p.naam}" verwijderen uit de bewaarde profielen`}
+                                                aria-label={`${p.naam} verwijderen`}
+                                            >
+                                                <X size={14} />
+                                            </button>
+                                        </div>
+
+                                        {deelOpen && profielDeel && (
+                                            <div className={styles.profielDeelBox}>
+                                                <div className={styles.profielDeelKop}>
+                                                    <Share2 size={13} />
+                                                    <span>
+                                                        Wie deze link opent, krijgt de instellingen van{' '}
+                                                        <strong>{p.naam}</strong> en kan het profiel onder
+                                                        die naam op zijn eigen toestel bewaren.
+                                                    </span>
+                                                </div>
+                                                <input
+                                                    className={styles.shareUrlInput}
+                                                    type="text"
+                                                    readOnly
+                                                    value={profielDeel.url}
+                                                    onFocus={e => e.currentTarget.select()}
+                                                />
+                                                <div className={styles.backupRow}>
+                                                    <button
+                                                        className={styles.toolbarBtn}
+                                                        onClick={handleKopieerProfielLink}
+                                                    >
+                                                        {profielDeelCopied ? (
+                                                            <Check size={14} />
+                                                        ) : (
+                                                            <Copy size={14} />
+                                                        )}
+                                                        {profielDeelCopied ? 'Gekopieerd!' : 'Kopieer link'}
+                                                    </button>
+                                                    <button
+                                                        className={styles.toolbarBtn}
+                                                        onClick={() => setProfielQr(q => !q)}
+                                                    >
+                                                        <QrCode size={14} />{' '}
+                                                        {profielQr ? 'Verberg QR' : 'Toon QR'}
+                                                    </button>
+                                                    {profielQr && (
+                                                        <button
+                                                            className={styles.toolbarBtn}
+                                                            onClick={() =>
+                                                                downloadQrPng(
+                                                                    profielQrRef.current,
+                                                                    `trajectplanner-${bestandsnaamDeel(p.naam)}-qr.png`
+                                                                )
+                                                            }
+                                                        >
+                                                            <Download size={14} /> Download QR (PNG)
+                                                        </button>
+                                                    )}
+                                                </div>
+                                                {profielQr && (
+                                                    <div className={styles.qrBox} ref={profielQrRef}>
+                                                        <QRCodeCanvas
+                                                            value={profielDeel.url}
+                                                            size={200}
+                                                            level="L"
+                                                            marginSize={2}
+                                                        />
+                                                    </div>
                                                 )}
                                             </div>
-                                            <div className={styles.profielRijMeta}>
-                                                {profielSamenvatting(p.settings)} · bewaard op{' '}
-                                                {formatDateTime(new Date(p.bewaardOp))}
-                                            </div>
-                                        </div>
-                                        <button
-                                            className={styles.toolbarBtn}
-                                            onClick={() => onKiesProfiel(p)}
-                                            disabled={isActief}
-                                            title={
-                                                isActief
-                                                    ? `"${p.naam}" is het actieve profiel`
-                                                    : `Overschakelen naar "${p.naam}" — de gekozen OLODs worden gewist`
-                                            }
-                                        >
-                                            Activeren
-                                        </button>
-                                        <button
-                                            type="button"
-                                            className={styles.olodListRemove}
-                                            onClick={() => onVerwijderProfiel(p)}
-                                            title={`"${p.naam}" verwijderen uit de bewaarde profielen`}
-                                            aria-label={`${p.naam} verwijderen`}
-                                        >
-                                            <X size={14} />
-                                        </button>
+                                        )}
                                     </div>
                                 );
                             })}
@@ -410,6 +545,15 @@ export function TrajectSettingsView({
                             (Ctrl+S in het werkblad). Een dossier bewaart het traject <em>samen met</em>{' '}
                             de instellingen, dus het openen ervan zet je meteen weer in de juiste set —
                             los van welk profiel er actief is.
+                        </p>
+                        <p>
+                            Met het <strong>deel-icoon</strong> naast een profiel maak je er een link
+                            of QR van. Wie die opent, krijgt de klasgroepen, de indeling en de
+                            grensdatums van dát profiel meteen goed staan, én de keuze om het onder
+                            dezelfde naam permanent op zijn eigen toestel te bewaren. Bestaat die
+                            naam daar al, dan wordt er een andere gevraagd — een deel-link
+                            overschrijft nooit stilzwijgend andermans profiel. Het studenttraject
+                            gaat ook hier niet mee.
                         </p>
                         <p>
                             Profielen worden, net als je dossiers, enkel in deze browser bewaard. Ze
@@ -812,6 +956,12 @@ export function TrajectSettingsView({
                         <p>
                             Een gegenereerde link of QR is een momentopname: wijzig je daarna de
                             klasgroepen of de periode, genereer dan een nieuwe.
+                        </p>
+                        <p>
+                            Deze knoppen delen de instellingen zoals ze <em>nu</em> op dit scherm
+                            staan. Wil je een specifiek profiel doorgeven — en de ontvanger de kans
+                            geven het als profiel te bewaren — gebruik dan het deel-icoon in de
+                            kaart <strong>Profielen</strong>.
                         </p>
                     </Uitleg>
                 </SettingsCard>

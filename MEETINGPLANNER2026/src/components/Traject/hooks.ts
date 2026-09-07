@@ -587,6 +587,23 @@ export function profielVingerafdruk(settings: TrajectSettings): string {
 }
 
 /**
+ * Maakt van `basis` een naam die nog niet bij een bewaard profiel hoort, door
+ * er " (2)", " (3)"... achter te zetten. Voor een profiel dat via een deel-link
+ * binnenkomt: dat mag nooit stilzwijgend een eigen profiel met dezelfde naam
+ * overschrijven, dus stelt de dialoog een vrije naam voor.
+ */
+export function uniekeProfielNaam(basis: string, profielen: Profiel[]): string {
+    const schoon = basis.trim() || 'Gedeeld profiel';
+    const bezet = (naam: string) => profielen.some(p => zelfdeNaam(p.naam, naam));
+    if (!bezet(schoon)) return schoon;
+    for (let n = 2; n < 100; n++) {
+        const kandidaat = `${schoon} (${n})`;
+        if (!bezet(kandidaat)) return kandidaat;
+    }
+    return `${schoon} (${Date.now().toString(36)})`;
+}
+
+/**
  * De bewaarde profielen (localStorage) plus welk profiel er actief is. Het
  * actieve profiel is enkel een **id**: naam en inhoud komen uit de lijst zelf,
  * zodat een hernoemd of bijgewerkt profiel nooit uit de pas kan lopen met wat

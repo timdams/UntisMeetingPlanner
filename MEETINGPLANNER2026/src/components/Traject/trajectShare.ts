@@ -24,7 +24,14 @@ export interface TrajectPreset {
     // opleiding, dus die hoort de student net zo goed te kennen. Optioneel,
     // want links van vóór deze tag hebben het veld niet.
     semesterOlods?: string[];
+    // Naam van het profiel waaruit de link gemaakt is. Enkel gezet bij een link
+    // die vanuit de profielenlijst gedeeld wordt; de ontvanger kan de set dan
+    // onder diezelfde naam op zijn eigen toestel bewaren.
+    naam?: string;
 }
+
+/** Bovengrens op de meegestuurde profielnaam — houdt de URL kort. */
+const MAX_NAAM = 60;
 
 // UTF-8-veilige base64url. Klasgroepnamen kunnen accenten bevatten, dus btoa()
 // rechtstreeks op de string zou breken; we encoderen eerst naar bytes.
@@ -47,9 +54,14 @@ function fromBase64Url(encoded: string): string {
  * grensdatums van de periodes bevat.
  * De huidige locatie (origin + pad) is de basis, met de preset in de hash zodat
  * statische hosting (GitHub Pages) niets hoeft te herschrijven.
+ *
+ * `naam` wordt meegegeven wanneer de link vanuit een bewaard profiel gedeeld
+ * wordt: de ontvanger krijgt dan de kans om de set onder die naam permanent op
+ * zijn eigen toestel te bewaren.
  */
-export function buildShareUrl(settings: TrajectSettings): string {
+export function buildShareUrl(settings: TrajectSettings, naam?: string): string {
     const g = effectieveGrenzen(settings.periodeGrenzen);
+    const profielNaam = naam?.trim().slice(0, MAX_NAAM) ?? '';
     const payload = JSON.stringify({
         v: PRESET_VERSION,
         k: settings.mijnOpleidingKlasgroepen,
@@ -63,6 +75,7 @@ export function buildShareUrl(settings: TrajectSettings): string {
         g: [g.s1Start, g.s1Eind, g.s2Start, g.s2Eind, g.m2Start, g.m4Start],
         // Enkel meesturen als er iets te melden valt: houdt de URL kort.
         ...(settings.semesterOlods.length > 0 ? { o: settings.semesterOlods } : {}),
+        ...(profielNaam ? { n: profielNaam } : {}),
     });
     const root = window.location.origin + window.location.pathname;
     return `${root}#${PRESET_PARAM}=${toBase64Url(payload)}`;
@@ -77,7 +90,7 @@ export function readTrajectPresetFromUrl(): TrajectPreset | null {
         if (!raw) return null;
         const data = JSON.parse(fromBase64Url(raw)) as Record<string, unknown>;
         if (data.v !== PRESET_VERSION) return null;
-        const { k, s, e, p, m, g, o } = data;
+        const { k, s, e, p, m, g, o, n } = data;
         if (!Array.isArray(k) || !k.every(x => typeof x === 'string')) return null;
         if (typeof s !== 'string' || typeof e !== 'string') return null;
         const preset: TrajectPreset = {
@@ -105,6 +118,9 @@ export function readTrajectPresetFromUrl(): TrajectPreset | null {
             const semesterOlods = normalizeSemesterOlods(o);
             if (semesterOlods.length > 0) preset.semesterOlods = semesterOlods;
         }
+        // Een gedeeld profiel draagt zijn naam mee; links van vóór deze tag (en
+        // de gewone "deel met student"-link) hebben hem niet.
+        if (typeof n === 'string' && n.trim()) preset.naam = n.trim().slice(0, MAX_NAAM);
         return preset;
     } catch {
         return null;

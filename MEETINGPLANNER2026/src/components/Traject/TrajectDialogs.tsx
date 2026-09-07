@@ -268,6 +268,11 @@ interface ProfielProps {
     // Eén regel die zegt wát er bewaard wordt ("7 klasgroepen · modules · M1"),
     // zodat de gebruiker niet moet raden welke instellingen in het profiel gaan.
     samenvatting: string;
+    // Kop en inleiding zijn overschrijfbaar: dezelfde dialoog dient ook om een
+    // profiel dat via een deel-link binnenkwam op dit toestel te bewaren, en
+    // dan klopt "je huidige instellingen" niet als uitleg.
+    titel?: string;
+    intro?: ReactNode;
     // `overschrijfId` is gezet wanneer de naam een bestaand profiel raakt.
     onBewaar: (naam: string, overschrijfId?: string) => void;
     onAnnuleer: () => void;
@@ -283,6 +288,8 @@ export function ProfielDialog({
     voorstel,
     profielen,
     samenvatting,
+    titel = 'Instellingen bewaren als profiel',
+    intro,
     onBewaar,
     onAnnuleer,
 }: ProfielProps) {
@@ -314,13 +321,18 @@ export function ProfielDialog({
         <DialogSchil label="Profiel bewaren" onSluit={onAnnuleer}>
             <div className={styles.dialoogKop}>
                 <SlidersHorizontal size={16} />
-                <span>Instellingen bewaren als profiel</span>
+                <span>{titel}</span>
             </div>
             <div className={styles.dialoogBody}>
                 <div className={styles.dialoogTekst}>
-                    Je huidige instellingen ({samenvatting}) worden onder deze naam bewaard. Vanuit
-                    het werkblad wissel je er dan met één klik naartoe. Het studenttraject zit er
-                    niet in — een profiel is herbruikbaar over studenten heen.
+                    {intro ?? (
+                        <>
+                            Je huidige instellingen ({samenvatting}) worden onder deze naam bewaard.
+                            Vanuit het werkblad wissel je er dan met één klik naartoe. Het
+                            studenttraject zit er niet in — een profiel is herbruikbaar over
+                            studenten heen.
+                        </>
+                    )}
                 </div>
                 <label className={styles.dialoogVeld}>
                     <span>Naam</span>
