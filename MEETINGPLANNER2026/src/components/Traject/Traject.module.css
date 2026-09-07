@@ -1227,6 +1227,14 @@
     line-height: 1;
 }
 
+/* Titel in een panelkop die plaats moet maken voor een knop ernaast. */
+.panelHeaderTitel {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
 /* Bijschrift in een panelkop (bv. de klasgroep waarvan het rooster toont). */
 .panelHeaderSub {
     min-width: 0;
@@ -1344,6 +1352,57 @@
     align-items: center;
     justify-content: space-between;
     gap: 0.4rem;
+}
+
+/* Actiebalk onder de kop van paneel A: de twee knoppen die van het vak
+   vertrekken in plaats van van de klasgroep. Ze delen de breedte, zodat ze ook
+   in een versmald paneel leesbaar blijven. */
+.paneelActieBalk {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.3rem;
+    padding: 0.35rem 0.4rem;
+    border-bottom: 1px solid var(--border-color);
+    background-color: var(--bg-color);
+}
+
+.paneelActieBtn {
+    flex: 1 1 0;
+    min-width: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.25rem;
+    padding: 2px 0.4rem;
+    font: inherit;
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: var(--text-color);
+    background-color: var(--bg-color);
+    border: 1px solid var(--border-color);
+    border-radius: 999px;
+    cursor: pointer;
+    white-space: nowrap;
+    overflow: hidden;
+}
+
+.paneelActieBtn:hover {
+    border-color: var(--primary);
+    color: var(--primary);
+}
+
+/* Beta-merkje op een knop: klein en grijs, want het hoort bij de knop en mag
+   het label niet verdringen. */
+.paneelActieBeta {
+    flex-shrink: 0;
+    font-size: 0.58rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #b45309;
+    background-color: #fef3c7;
+    border-radius: 3px;
+    padding: 0 3px;
 }
 
 .olodListCount {
@@ -2881,6 +2940,556 @@
     width: 12px;
     height: 12px;
     border-radius: 3px;
+}
+
+/* ===== OLOD-zoeker (dialoog achter "Zoek OLOD" in paneel A) ===== */
+.zoekDialog {
+    width: min(720px, 94vw);
+    max-height: 80vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    background-color: var(--bg-color);
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    box-shadow: 0 18px 48px rgba(0, 0, 0, 0.3);
+}
+
+.zoekVeldRij {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.55rem 0.9rem;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.zoekVeldIcon {
+    flex-shrink: 0;
+    color: #64748b;
+}
+
+.zoekVeld {
+    flex: 1;
+    min-width: 0;
+    font: inherit;
+    font-size: 0.95rem;
+    color: var(--text-color);
+    background-color: transparent;
+    border: none;
+    outline: none;
+    padding: 0.15rem 0;
+}
+
+.zoekWis {
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 3px;
+    color: #64748b;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: var(--border-radius);
+    cursor: pointer;
+}
+
+.zoekWis:hover {
+    border-color: var(--primary);
+    color: var(--primary);
+}
+
+.zoekLijst {
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
+    padding: 0.35rem;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.zoekRij {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    width: 100%;
+    padding: 0.4rem 0.5rem;
+    text-align: left;
+    font: inherit;
+    color: var(--text-color);
+    background-color: transparent;
+    border: 1px solid transparent;
+    border-radius: var(--border-radius);
+    cursor: pointer;
+}
+
+/* Een markering voor muis en toetsenbord samen: de pijltjes verplaatsen
+   dezelfde markering die de muis onder de cursor legt. */
+.zoekRijActief {
+    background-color: var(--secondary);
+    border-color: var(--primary);
+}
+
+.zoekRijNaam {
+    font-size: 0.85rem;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.zoekRijGekozen {
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    font-size: 0.68rem;
+    font-weight: 600;
+    white-space: nowrap;
+    color: var(--primary);
+}
+
+.zoekRijMeta {
+    margin-left: auto;
+    flex-shrink: 0;
+    font-size: 0.72rem;
+    color: #64748b;
+    white-space: nowrap;
+}
+
+.zoekRijPijl {
+    flex-shrink: 0;
+    color: #94a3b8;
+}
+
+.zoekVoet {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.45rem 0.9rem;
+    border-top: 1px solid var(--border-color);
+    background-color: var(--secondary);
+    font-size: 0.72rem;
+    color: #64748b;
+}
+
+.zoekVoetLaadt {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+}
+
+.zoekVoetFout {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    color: #b45309;
+}
+
+.zoekVoetHint {
+    margin-left: auto;
+    white-space: nowrap;
+}
+
+/* ===== Wizard: een voorstel voor het rooster van een hele periode ===== */
+.wizDialog {
+    width: min(980px, 96vw);
+    max-height: 88vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    background-color: var(--bg-color);
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    box-shadow: 0 18px 48px rgba(0, 0, 0, 0.3);
+}
+
+.wizBody {
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
+    padding: 0.75rem 0.9rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.9rem;
+}
+
+.wizSectie {
+    display: flex;
+    flex-direction: column;
+    gap: 0.45rem;
+}
+
+.wizSectieKop {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--text-color);
+}
+
+/* Zelfde volgnummer-taal als de drie panelen van het werkblad. */
+.wizStap {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    flex-shrink: 0;
+    border-radius: 999px;
+    background-color: var(--primary);
+    color: white;
+    font-size: 0.7rem;
+    font-weight: 700;
+    line-height: 1;
+}
+
+.wizSectieHint {
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: #64748b;
+}
+
+.wizVoetnoot {
+    font-size: 0.72rem;
+    color: #64748b;
+    line-height: 1.35;
+}
+
+.wizWeken {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.3rem;
+}
+
+.wizWeekChip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 2px 0.5rem;
+    font: inherit;
+    font-size: 0.75rem;
+    color: var(--text-color);
+    background-color: var(--bg-color);
+    border: 1px solid var(--border-color);
+    border-radius: 999px;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.wizWeekChip:hover:not(:disabled) {
+    border-color: var(--primary);
+}
+
+.wizWeekChip:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+
+.wizWeekChipAan {
+    background-color: var(--primary);
+    border-color: var(--primary);
+    color: white;
+    font-weight: 600;
+}
+
+/* Eerste en laatste lesweek: kiesbaar, maar niet vanzelfsprekend. */
+.wizWeekChipRand {
+    border-style: dashed;
+}
+
+.wizWeekAantal {
+    font-size: 0.65rem;
+    opacity: 0.7;
+}
+
+.wizBlokken {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 0.6rem;
+    align-items: start;
+}
+
+.wizBlok {
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    background-color: var(--bg-color);
+    padding: 0.4rem 0.5rem 0.5rem;
+}
+
+.wizBlokKop {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    margin-bottom: 0.35rem;
+}
+
+.wizBlokLabel {
+    flex: 1;
+    min-width: 0;
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #64748b;
+}
+
+.wizBlokActie {
+    font: inherit;
+    font-size: 0.68rem;
+    color: #64748b;
+    background: none;
+    border: none;
+    padding: 0 0.15rem;
+    text-decoration: underline;
+    cursor: pointer;
+}
+
+.wizBlokActie:hover {
+    color: var(--primary);
+}
+
+.wizChips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+}
+
+.wizChip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    max-width: 100%;
+    padding: 2px 0.45rem;
+    font: inherit;
+    font-size: 0.75rem;
+    color: var(--text-color);
+    background-color: var(--secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 999px;
+    cursor: pointer;
+    text-align: left;
+}
+
+.wizChip:hover {
+    border-color: var(--primary);
+}
+
+.wizChipAan {
+    background-color: var(--primary);
+    border-color: var(--primary);
+    color: white;
+    font-weight: 600;
+}
+
+/* Geen les in de gekozen referentieweken: aan te duiden, maar de puzzel kan er
+   niets mee. */
+.wizChipLeeg {
+    opacity: 0.5;
+    border-style: dashed;
+}
+
+.wizChipAantal {
+    font-size: 0.65rem;
+    opacity: 0.7;
+}
+
+.wizVoorkeurRij {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.wizVoorkeur {
+    display: inline-flex;
+    border: 1px solid var(--border-color);
+    border-radius: 999px;
+    overflow: hidden;
+}
+
+.wizVoorkeurKnop {
+    font: inherit;
+    font-size: 0.75rem;
+    padding: 3px 0.7rem;
+    color: var(--text-color);
+    background-color: var(--bg-color);
+    border: none;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.wizVoorkeurKnop + .wizVoorkeurKnop {
+    border-left: 1px solid var(--border-color);
+}
+
+.wizVoorkeurKnopAan {
+    background-color: var(--primary);
+    color: white;
+    font-weight: 600;
+}
+
+.wizRekenKnop {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 4px 0.8rem;
+    font: inherit;
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: white;
+    background-color: var(--primary);
+    border: 1px solid var(--primary);
+    border-radius: var(--border-radius);
+    cursor: pointer;
+}
+
+.wizRekenKnop:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.wizWaarschuwing {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.35rem;
+    padding: 0.4rem 0.5rem;
+    font-size: 0.75rem;
+    line-height: 1.35;
+    color: #92400e;
+    background-color: #fffbeb;
+    border: 1px solid #fcd34d;
+    border-radius: var(--border-radius);
+}
+
+.wizResultaat {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+}
+
+.wizSamenvatting {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.8rem;
+    font-size: 0.78rem;
+    color: #64748b;
+}
+
+.wizScoreGoed,
+.wizScoreSlecht {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    font-weight: 700;
+}
+
+.wizScoreGoed {
+    color: #15803d;
+}
+
+.wizScoreSlecht {
+    color: #b91c1c;
+}
+
+.wizRijen {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 2px 0.6rem;
+}
+
+.wizRij {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.25rem 0.35rem;
+    border-radius: var(--border-radius);
+    font-size: 0.8rem;
+}
+
+.wizRij:nth-child(odd) {
+    background-color: var(--secondary);
+}
+
+.wizRijVak {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.wizRijBadge {
+    flex-shrink: 0;
+    font-size: 0.62rem;
+    font-weight: 700;
+    color: #64748b;
+    border: 1px solid var(--border-color);
+    border-radius: 999px;
+    padding: 0 5px;
+}
+
+.wizRijKlas {
+    margin-left: auto;
+    flex-shrink: 0;
+    font-weight: 700;
+}
+
+.wizRijWas {
+    flex-shrink: 0;
+    font-size: 0.7rem;
+    color: #64748b;
+}
+
+.wizRijBotst {
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.2rem;
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: #b91c1c;
+}
+
+.wizVoet {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.5rem 0.9rem;
+    border-top: 1px solid var(--border-color);
+    background-color: var(--secondary);
+    font-size: 0.75rem;
+    color: #64748b;
+}
+
+.wizVoetHint {
+    margin-left: auto;
+    text-align: right;
+}
+
+.wizOverneemKnop {
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 4px 0.8rem;
+    font: inherit;
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: white;
+    background-color: var(--primary);
+    border: 1px solid var(--primary);
+    border-radius: var(--border-radius);
+    cursor: pointer;
+}
+
+.wizOverneemKnop:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
 }
 
 /* ===== Week-zoom: één weekstrook uitvergroot, alleen-lezen ===== */

@@ -30,6 +30,7 @@ import {
     type Profiel,
 } from './hooks';
 import { isActief, type Lesblok, type OLODSelectie } from './types';
+import { bereikRaakt } from './dateUtils';
 import { DossierMenu } from './BewaardeTrajecten';
 import { ProfielMenu } from './ProfielMenu';
 import { BevestigDialog, BewaarDialog, ProfielDialog, type DialogItem } from './TrajectDialogs';
@@ -37,6 +38,8 @@ import { UndoToast, useUndo } from './Toast';
 import { TrajectSettingsView } from './TrajectSettings';
 import { KlasgroepSelector } from './KlasgroepSelector';
 import { KlasgroepRooster } from './KlasgroepRooster';
+import { OlodZoeker } from './OlodZoeker';
+import { TrajectWizard } from './TrajectWizard';
 import { StudentOverzicht } from './StudentOverzicht';
 import { PeriodeSwitcher } from './PeriodeSwitcher';
 import { TrajectPrintView, buildTrajectClipboardText } from './TrajectPrintView';
@@ -647,6 +650,39 @@ export function TrajectPlanner({ onBack, presetApplied = false, presetNaam = nul
     // dan zou vallen.
     const [klasgroepPreview, setKlasgroepPreview] = useState<KlasgroepPreview | null>(null);
 
+    // Staat de OLOD-zoeker open? Ze hangt hier en niet in paneel A, omdat ze
+    // dezelfde acties nodig heeft als het rooster (een vak toevoegen met het
+    // bereik van dat vak) en over alle klasgroepen van de shortlist kijkt.
+    const [zoekerOpen, setZoekerOpen] = useState(false);
+    const [wizardOpen, setWizardOpen] = useState(false);
+
+    // Het voorstel van de wizard overnemen. De wizard vult één periode volledig
+    // in: alles wat de actieve periode raakt wordt vervangen door haar keuzes,
+    // keuzes in andere periodes blijven staan. `bereikRaakt` en niet
+    // `bereikOverlapt`, want semester 1 eindigt op de dag dat semester 2 begint
+    // — anders zou een S2-keuze sneuvelen bij een wizard in S1. Eén
+    // herstelpunt, zodat een voorstel met één klik terug te draaien is.
+    const handleWizardOvernemen = (keuzes: { olodNaam: string; klasgroep: string }[]) => {
+        // Een gedeactiveerde keuze is bewust geparkeerd (een scenario dat de
+        // gebruiker wil kunnen terughalen); die overleeft de wizard, tenzij het
+        // voorstel datzelfde vak invult — anders zou de gedeactiveerde variant
+        // de nieuwe keuze verdringen, want selectieKey kent geen `actief`.
+        const ingevuld = new Set(keuzes.map(k => k.olodNaam));
+        const behouden = traject.filter(
+            s =>
+                !bereikRaakt(s.van, s.tot, actiefBereik.van, actiefBereik.tot) ||
+                (!isActief(s) && !ingevuld.has(s.olodNaam))
+        );
+        const nieuw = keuzes.map(k => {
+            const bereik = bereikVoorOlod(k.olodNaam);
+            return { klasgroep: k.klasgroep, olodNaam: k.olodNaam, van: bereik.van, tot: bereik.tot };
+        });
+        setWizardOpen(false);
+        metUndo(`Voorstel overgenomen (${vakken(keuzes.length)})`, () =>
+            replaceTraject([...behouden, ...nieuw])
+        );
+    };
+
     return (
       <>
         <div className={styles.screenRoot}>
@@ -915,6 +951,8 @@ export function TrajectPlanner({ onBack, presetApplied = false, presetNaam = nul
                         periodeGrenzen={settings.periodeGrenzen}
                         semesterOlods={settings.semesterOlods}
                         onToggleSemesterOlod={handleToggleSemesterOlod}
+                        onZoekOlod={() => setZoekerOpen(true)}
+                        onWizard={() => setWizardOpen(true)}
                     />
                     <Splitter orientation="left" onDelta={adjustPanelA} />
                     <KlasgroepRooster
@@ -950,6 +988,40 @@ export function TrajectPlanner({ onBack, presetApplied = false, presetNaam = nul
             )}
         </div>
         </div>
+
+        {/* De OLOD-zoeker: een vak opzoeken over de hele shortlist heen en
+            meteen kiezen bij welke klasgroep het gevolgd wordt. Ze gebruikt
+            dezelfde toggle als een klik in het rooster, dus met hetzelfde
+            bereik per vak (`bereikVoorOlod`). */}
+        {zoekerOpen && (
+            <OlodZoeker
+                klasgroepen={settings.mijnOpleidingKlasgroepen}
+                actiefBereik={actiefBereik}
+                periodeGrenzen={settings.periodeGrenzen}
+                traject={traject}
+                blokkenPerKlas={blokkenPerKlas}
+                bereikVoorOlod={bereikVoorOlod}
+                selectieVoor={(k, o, d) => selectieVoor(k, o, d, bereikVoorOlod(o))}
+                colorOf={colorOf}
+                ensureColor={ensureColor}
+                onToggleBlok={b => toggleBlok(b, bereikVoorOlod(b.olodNaam))}
+                onClose={() => setZoekerOpen(false)}
+            />
+        )}
+
+        {/* De wizard: vakken aanduiden en er een rooster bij laten zoeken. Ze
+            puzzelt op referentieweken en vult daarmee de actieve periode. */}
+        {wizardOpen && (
+            <TrajectWizard
+                klasgroepen={settings.mijnOpleidingKlasgroepen}
+                actiefBereik={actiefBereik}
+                periodeGrenzen={settings.periodeGrenzen}
+                traject={traject}
+                bereikVoorOlod={bereikVoorOlod}
+                onOvernemen={handleWizardOvernemen}
+                onClose={() => setWizardOpen(false)}
+            />
+        )}
 
         {dialoog?.soort === 'bewaar' && (
             <BewaarDialog

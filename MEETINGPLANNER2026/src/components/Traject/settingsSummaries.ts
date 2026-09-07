@@ -102,6 +102,16 @@ export interface KlasgroepGroep {
     items: string[];
 }
 
+/**
+ * Het leerjaar in een klasgroepnaam: het eerste cijfer ("2 TI A" → "2"), of
+ * null wanneer de naam er niet mee begint. Eén plek voor die afspraak, want
+ * zowel de klasgroepenlijst als de wizard groepeert erop.
+ */
+export function jaarVanKlasgroep(klasgroep: string): string | null {
+    const m = /^\s*(\d)/.exec(klasgroep);
+    return m ? m[1] : null;
+}
+
 // Groepeert klasgroepen op het eerste cijfer van hun naam ("1e jaar", "2e
 // jaar", …); namen zonder leidend cijfer komen achteraan onder "Overige". De
 // volgorde binnen een groep is die van de invoer, zodat het zoekfilter en
@@ -110,11 +120,11 @@ export function groepeerKlasgroepen(klasgroepen: string[]): KlasgroepGroep[] {
     const perJaar = new Map<string, string[]>();
     const overige: string[] = [];
     for (const k of klasgroepen) {
-        const m = /^\s*(\d)/.exec(k);
-        if (m) {
-            const list = perJaar.get(m[1]) ?? [];
+        const jaar = jaarVanKlasgroep(k);
+        if (jaar) {
+            const list = perJaar.get(jaar) ?? [];
             list.push(k);
-            perJaar.set(m[1], list);
+            perJaar.set(jaar, list);
         } else {
             overige.push(k);
         }
@@ -125,3 +135,5 @@ export function groepeerKlasgroepen(klasgroepen: string[]): KlasgroepGroep[] {
     if (overige.length > 0) groepen.push({ label: 'Overige', items: overige });
     return groepen;
 }
+
+

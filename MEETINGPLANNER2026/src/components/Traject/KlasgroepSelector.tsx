@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, ArrowLeftRight, CalendarRange, ChevronDown, ChevronRight, Eye, EyeOff, Info, Loader2, Sparkles, Trash2, X } from 'lucide-react';
+import { AlertTriangle, ArrowLeftRight, CalendarRange, ChevronDown, ChevronRight, Eye, EyeOff, Info, Loader2, Search, Sparkles, Trash2, Wand2, X } from 'lucide-react';
 import { isActief, Lesblok, OLODSelectie, StudentTraject } from './types';
 import {
     matchtPeriode,
@@ -60,6 +60,12 @@ interface Props {
     // modulemodus. Zie semesterOlods.ts.
     semesterOlods: string[];
     onToggleSemesterOlod: (olodNaam: string) => void;
+    // Opent de OLOD-zoeker (TrajectPlanner rendert die): een vak opzoeken over
+    // alle klasgroepen heen, zonder eerst het juiste rooster te moeten vinden.
+    onZoekOlod: () => void;
+    // Opent de wizard: vakken aanduiden en er een botsingsvrij rooster bij
+    // laten zoeken.
+    onWizard: () => void;
 }
 
 // Welke kiezer onder een selectie open staat: de periode-kiezer (badge) of
@@ -90,6 +96,8 @@ export function KlasgroepSelector({
     periodeGrenzen,
     semesterOlods,
     onToggleSemesterOlod,
+    onZoekOlod,
+    onWizard,
 }: Props) {
     // Selectie waarvan een kiezer open staat. De sleutel bevat klasgroep én
     // periode; na een keuze volgt ze de gewijzigde selectie zodat de kiezer
@@ -298,7 +306,34 @@ export function KlasgroepSelector({
         <div className={styles.panel}>
             <div className={styles.panelHeader}>
                 <span className={styles.panelStap}>1</span>
-                Klasgroepen
+                <span className={styles.panelHeaderTitel}>Klasgroepen</span>
+            </div>
+            {/* Beide knoppen wijzen de omgekeerde weg door dit paneel: niet
+                eerst een klasgroep kiezen en dan haar vakken bekijken, maar van
+                het vak vertrekken. Ze staan op een eigen regel en niet in de
+                panelkop, want paneel A is standaard 200px — naast het
+                volgnummer en de titel past er hooguit één label. */}
+            <div className={styles.paneelActieBalk}>
+                <button
+                    type="button"
+                    className={styles.paneelActieBtn}
+                    onClick={onZoekOlod}
+                    title="Zoek een OLOD over al je klasgroepen heen en kies bij welke groep je hem volgt"
+                >
+                    <Search size={12} /> Zoek OLOD
+                </button>
+                <button
+                    type="button"
+                    className={styles.paneelActieBtn}
+                    onClick={onWizard}
+                    title={
+                        'Duid aan welke vakken de student volgt en laat de tool er een rooster bij zoeken.\n' +
+                        'Beta: nieuw en nog in test — kijk een voorstel altijd na vóór je het overneemt.'
+                    }
+                >
+                    <Wand2 size={12} /> Wizard
+                    <span className={styles.paneelActieBeta}>beta</span>
+                </button>
             </div>
             <div className={styles.selectorList}>
                 {klasgroepen.length === 0 ? (

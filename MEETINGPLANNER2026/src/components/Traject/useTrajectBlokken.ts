@@ -270,6 +270,69 @@ export function useWeekRoosters(
         : { perKlas: GEEN_ROOSTERS, loading: key !== null };
 }
 
+/**
+ * De roosters van een reeks klasgroepen over één periode, lui opgehaald zodra
+ * `bereik` gezet wordt (null = niets ophalen). Voedt de OLOD-zoeker, die alle
+ * vakken doorzoekt die de shortlist in de actieve periode geeft — daarvoor is
+ * één week te weinig ({@link useWeekRoosters}) en het hele jaar te veel
+ * ({@link useTrajectBlokken}).
+ *
+ * De resultaten druppelen binnen: elke klasgroep die klaar is verschijnt
+ * meteen in de kaart, zodat een lange shortlist niet als één blok staat te
+ * wachten. Een klasgroep waarvan het rooster niet opgehaald raakt levert een
+ * lege lijst op en komt in `mislukt` terecht, zodat de zoeker kan zeggen dat
+ * ze niet doorzocht is — anders lijkt een ontbrekend vak gewoon niet te
+ * bestaan.
+ */
+export function usePeriodeRoosters(
+    klasgroepen: string[],
+    bereik: { van: string; tot: string } | null
+): { perKlas: Record<string, Lesblok[]>; klaar: number; totaal: number; mislukt: string[] } {
+    const [state, setState] = useState<{
+        key: string;
+        perKlas: Record<string, Lesblok[]>;
+        mislukt: string[];
+    } | null>(null);
+
+    const key = bereik ? `${bereik.van}|${bereik.tot}|${klasgroepen.join('|')}` : null;
+
+    useEffect(() => {
+        if (!bereik || !key) return;
+        let cancelled = false;
+        const { van, tot } = periodeBereik(bereik.van, bereik.tot);
+        setState({ key, perKlas: {}, mislukt: [] });
+        klasgroepen.forEach(k => {
+            trajectUntisService
+                .getLesblokken(k, van, tot)
+                .then(bs => ({ bs, ok: true }))
+                .catch(() => ({ bs: [] as Lesblok[], ok: false }))
+                .then(({ bs, ok }) => {
+                    if (cancelled) return;
+                    setState(prev =>
+                        prev && prev.key === key
+                            ? {
+                                  key,
+                                  perKlas: { ...prev.perKlas, [k]: bs },
+                                  mislukt: ok ? prev.mislukt : [...prev.mislukt, k],
+                              }
+                            : prev
+                    );
+                });
+        });
+        return () => {
+            cancelled = true;
+        };
+    }, [key]);
+
+    const geldig = state !== null && state.key === key;
+    return {
+        perKlas: geldig ? state.perKlas : GEEN_ROOSTERS,
+        klaar: geldig ? Object.keys(state.perKlas).length : 0,
+        totaal: key === null ? 0 : klasgroepen.length,
+        mislukt: geldig ? state.mislukt : [],
+    };
+}
+
 // Eén kandidaat-klasgroep voor een bulkwissel: hoeveel van de aangevinkte
 // vakken ze in hun eigen periode geeft, en hoe het traject eruit zou zien als
 // die vakken naar haar verhuizen.

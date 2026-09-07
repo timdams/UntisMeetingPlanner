@@ -142,6 +142,18 @@ export function bereikOverlapt(aVan: string, aTot: string, bVan: string, bTot: s
     return aVan <= bTot && bVan <= aTot;
 }
 
+/**
+ * True wanneer twee bereiken meer delen dan alleen hun grensdag. Semester 1
+ * eindigt op de dag dat semester 2 begint (zie ACADEMIEJAAR), dus "raken ze
+ * elkaar" is voor een keuze die in een periode thuishoort te grof: een
+ * S2-selectie zou anders ook in S1 meetellen.
+ */
+export function bereikRaakt(aVan: string, aTot: string, bVan: string, bTot: string): boolean {
+    const van = aVan > bVan ? aVan : bVan;
+    const tot = aTot < bTot ? aTot : bTot;
+    return van < tot;
+}
+
 /** True wanneer de datum (op dagniveau) binnen het inclusieve ISO-bereik valt. */
 export function datumInBereik(d: Date, vanIso: string, totIso: string): boolean {
     const iso = toIsoDate(d);
