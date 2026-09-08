@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
-import { AlertTriangle, Save, SlidersHorizontal } from 'lucide-react';
+import { AlertTriangle, Circle, CircleDot, Save, SlidersHorizontal } from 'lucide-react';
 import type { BewaardTraject, Profiel } from './hooks';
 import { zelfdeNaam } from './hooks';
 import { formatDateTime } from './dateUtils';
@@ -396,6 +396,159 @@ export function ProfielDialog({
                     disabled={!schoon}
                 >
                     {bestaand ? 'Bijwerken' : 'Bewaren'}
+                </button>
+            </div>
+        </DialogSchil>
+    );
+}
+
+interface ProfielWisselProps {
+    // Naam en samenvatting van het profiel waar naartoe gewisseld wordt.
+    naam: string;
+    samenvatting: string;
+    aantalOlods: number;
+    // Hoeveel van die vakken onder de instellingen van het nieuwe profiel een
+    // waarschuwing krijgen: de prijs van behouden, in één getal.
+    aantalProblemen: number;
+    // De vakken die "wissen" weggooit — dezelfde opsomming als de reset-dialoog.
+    items: DialogItem[];
+    // Dat het huidige werk in geen enkel dossier staat — enkel van tel bij
+    // *wissen*, want behouden gooit niets weg.
+    nietBewaardDossier?: ReactNode;
+    // Dat de huidige instellingen nergens als profiel bewaard staan. Die gaan
+    // hoe dan ook verloren: de set wordt in beide gevallen vervangen.
+    nietBewaardProfiel?: ReactNode;
+    onWissel: (wisTraject: boolean) => void;
+    onAnnuleer: () => void;
+}
+
+/**
+ * Dialoog achter een profielwissel. Geen gewone bevestiging, want er valt écht
+ * iets te kiezen: de instellingen worden hoe dan ook vervangen, maar het
+ * studenttraject mag mee of blijven staan.
+ *
+ * **Behouden** is de standaard — het is de omkeerbare kant: wat niet meer bij
+ * de nieuwe set past blijft gewoon staan en krijgt een waarschuwing in de
+ * OLOD-lijst, die verdwijnt zodra de gebruiker het vak verzet. **Wissen**
+ * gooit weg, en verdient dus de bewuste klik (én de rode knop).
+ *
+ * De keuze staat als radiogroep in de body en niet als twee knoppen in de
+ * voet: zo staat de uitleg bij elke optie, en blijft "Annuleren / doorgaan"
+ * dezelfde vorm als in de rest van de tool.
+ */
+export function ProfielWisselDialog({
+    naam,
+    samenvatting,
+    aantalOlods,
+    aantalProblemen,
+    items,
+    nietBewaardDossier,
+    nietBewaardProfiel,
+    onWissel,
+    onAnnuleer,
+}: ProfielWisselProps) {
+    const [wisTraject, setWisTraject] = useState(false);
+    const focusRef = useRef<HTMLButtonElement | null>(null);
+    useEffect(() => {
+        focusRef.current?.focus();
+    }, []);
+
+    const vakken = (n: number) => `${n} ${n === 1 ? 'vak' : 'vakken'}`;
+
+    return (
+        <DialogSchil label={`Overschakelen naar ${naam}`} onSluit={onAnnuleer}>
+            <div className={styles.dialoogKop}>
+                <SlidersHorizontal size={16} className={styles.dialoogKopIcoon} />
+                <span>Overschakelen naar "{naam}"?</span>
+            </div>
+            <div className={styles.dialoogBody}>
+                <div className={styles.dialoogTekst}>
+                    Je klasgroepen, periode-indeling en grensdatums worden vervangen door die van{' '}
+                    <strong>{naam}</strong> ({samenvatting}). Kies wat er met het studenttraject
+                    gebeurt — {aantalOlods === 1 ? 'het gekozen OLOD' : `de ${aantalOlods} gekozen OLODs`}{' '}
+                    {aantalOlods === 1 ? 'hoort' : 'horen'} bij de klasgroepen en periodes van je
+                    huidige set. Bewaarde dossiers en profielen blijven staan.
+                </div>
+
+                <div
+                    className={`${styles.dialoogKeuzeLijst} ${styles.dialoogKeuzeGroep}`}
+                    role="radiogroup"
+                    aria-label="Wat gebeurt er met het studenttraject"
+                >
+                    <button
+                        ref={focusRef}
+                        type="button"
+                        role="radio"
+                        aria-checked={!wisTraject}
+                        className={`${styles.dialoogKeuze} ${!wisTraject ? styles.dialoogKeuzeActief : ''}`}
+                        onClick={() => setWisTraject(false)}
+                    >
+                        <span className={styles.dialoogKeuzeNaam}>
+                            {wisTraject ? <Circle size={13} /> : <CircleDot size={13} />}
+                            Traject behouden
+                        </span>
+                        <span className={styles.dialoogKeuzeUitleg}>
+                            De keuzes blijven staan en je dossier blijft open.{' '}
+                            {aantalProblemen > 0
+                                ? `${vakken(aantalProblemen)} ${
+                                      aantalProblemen === 1 ? 'past' : 'passen'
+                                  } niet bij deze set en ${
+                                      aantalProblemen === 1 ? 'krijgt' : 'krijgen'
+                                  } een waarschuwing in de OLOD-lijst; verzet ze daar naar een klasgroep of periode van "${naam}".`
+                                : `Alles past bij de klasgroepen en periodes van "${naam}".`}
+                        </span>
+                    </button>
+                    <button
+                        type="button"
+                        role="radio"
+                        aria-checked={wisTraject}
+                        className={`${styles.dialoogKeuze} ${wisTraject ? styles.dialoogKeuzeActief : ''}`}
+                        onClick={() => setWisTraject(true)}
+                    >
+                        <span className={styles.dialoogKeuzeNaam}>
+                            {wisTraject ? <CircleDot size={13} /> : <Circle size={13} />}
+                            Traject wissen
+                        </span>
+                        <span className={styles.dialoogKeuzeUitleg}>
+                            Begin met een leeg werkblad bij deze set; het geopende dossier wordt
+                            losgelaten. Meteen daarna ongedaan te maken.
+                        </span>
+                    </button>
+                </div>
+
+                {/* De dossierwaarschuwing hoort enkel bij wissen; dat de
+                    instellingen nergens bewaard staan geldt voor beide keuzes,
+                    want de set wordt hoe dan ook vervangen. */}
+                {(nietBewaardProfiel || (wisTraject && nietBewaardDossier)) && (
+                    <div className={styles.dialoogWaarschuwing} role="status">
+                        <AlertTriangle size={13} />
+                        <span>
+                            {wisTraject && nietBewaardDossier}
+                            {wisTraject && nietBewaardDossier && nietBewaardProfiel ? ' ' : null}
+                            {nietBewaardProfiel}
+                        </span>
+                    </div>
+                )}
+
+                {wisTraject && items.length > 0 && (
+                    <>
+                        <div className={styles.dialoogSubkop}>Wordt gewist</div>
+                        <ItemLijst items={items} />
+                    </>
+                )}
+            </div>
+            <div className={styles.dialoogVoet}>
+                <button type="button" className={styles.toolbarBtn} onClick={onAnnuleer}>
+                    Annuleren
+                </button>
+                <button
+                    type="button"
+                    className={`${styles.toolbarBtn} ${
+                        wisTraject ? styles.dialoogKnopDanger : styles.dialoogKnopPrimair
+                    }`}
+                    onClick={() => onWissel(wisTraject)}
+                >
+                    {wisTraject ? 'Overschakelen en wissen' : 'Overschakelen'}
                 </button>
             </div>
         </DialogSchil>

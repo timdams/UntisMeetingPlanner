@@ -33,7 +33,7 @@ import { isActief, type Lesblok, type OLODSelectie } from './types';
 import { bereikRaakt } from './dateUtils';
 import { DossierMenu } from './BewaardeTrajecten';
 import { ProfielMenu } from './ProfielMenu';
-import { BevestigDialog, BewaarDialog, ProfielDialog, type DialogItem } from './TrajectDialogs';
+import { BevestigDialog, BewaarDialog, ProfielDialog, ProfielWisselDialog, type DialogItem } from './TrajectDialogs';
 import { UndoToast, useUndo } from './Toast';
 import { TrajectSettingsView } from './TrajectSettings';
 import { KlasgroepSelector } from './KlasgroepSelector';
@@ -46,6 +46,7 @@ import { TrajectPrintView, buildTrajectClipboardText } from './TrajectPrintView'
 import { defaultRoosterWeek, periodesVoor } from './academicYear';
 import { isSemesterOlod, semesterBereikVoor } from './semesterOlods';
 import { profielSamenvatting } from './settingsSummaries';
+import { aantalMetProbleem } from './selectieProblemen';
 import { selectieStatussen, useTrajectBlokken, type KlasgroepPreview } from './useTrajectBlokken';
 import { backupFilename, buildBackup, downloadBackup, parseBackup, type TrajectBackup } from './trajectBackup';
 
@@ -427,52 +428,70 @@ export function TrajectPlanner({ onBack, presetApplied = false, presetNaam = nul
 
     /**
      * Schakelt over naar een ander profiel: de instellingen van dat profiel
-     * vervangen de huidige, en het studenttraject wordt gewist. Dat wissen is
-     * geen bijwerking maar de kern — de OLOD-keuzes verwijzen naar klasgroepen
-     * en periodes van de vórige set, en zouden daar als lege of foute selecties
-     * blijven staan. Om dezelfde reden laat het werkblad het geopende dossier
-     * los: met een leeg traject mag Ctrl+S dat dossier niet overschrijven.
+     * vervangen altijd de huidige. Wat er met het **studenttraject** gebeurt,
+     * kiest de gebruiker in de dialoog:
      *
-     * Alles samen vormt één herstelpunt (instellingen + traject + dossier +
-     * profiel), zodat een verkeerde klik met "Ongedaan maken" volledig terug te
-     * draaien is.
+     * - `wisTraject`: het werkblad start leeg bij de nieuwe set, en laat het
+     *   geopende dossier los — met een leeg traject mag Ctrl+S dat dossier niet
+     *   overschrijven. Zinvol wanneer de wissel over een andere student gaat.
+     * - behouden: de keuzes blijven staan, dossier incluis. Ze verwijzen dan
+     *   naar klasgroepen en periodes van de vórige set; wat niet meer past
+     *   krijgt in paneel ③ een waarschuwing (zie selectieProblemen.ts) die
+     *   verdwijnt zodra het vak verzet is. Zinvol wanneer dezelfde student
+     *   onder een andere indeling bekeken wordt.
+     *
+     * In beide gevallen vormt alles samen één herstelpunt (instellingen +
+     * traject + dossier + profiel), zodat een verkeerde klik met "Ongedaan
+     * maken" volledig terug te draaien is.
      */
-    const doeWisselProfiel = (p: Profiel) => {
+    const doeWisselProfiel = (p: Profiel, wisTraject: boolean) => {
         const vorigeSettings = settings;
         const vorigTraject = traject;
         const vorigDossier = actiefTraject;
         const vorigProfielId = actiefProfiel?.id ?? null;
         const aantal = traject.length;
+        // Wat een behouden traject onder de nieuwe set aan waarschuwingen
+        // oplevert — zodat de melding zegt waar de gebruiker moet kijken.
+        const problemen = wisTraject ? 0 : aantalMetProbleem(traject, p.settings);
 
         replaceSettings(p.settings);
-        reset();
-        wisActief();
+        if (wisTraject) {
+            reset();
+            wisActief();
+        }
         zetActiefProfiel(p.id);
         setDialoog(null);
         // Bewust géén sprong naar het werkblad: wie vanuit de instellingen
         // wisselt, wil daar meestal meteen verder kijken of bijstellen.
 
-        meldUndo(
-            aantal > 0
+        const melding = wisTraject
+            ? aantal > 0
                 ? `Profiel "${p.naam}" actief — ${aantal} ${aantal === 1 ? 'OLOD' : 'OLODs'} gewist`
-                : `Profiel "${p.naam}" actief`,
-            () => {
-                replaceSettings(vorigeSettings);
-                replaceTraject(vorigTraject);
-                herstelActiefTraject(vorigDossier);
-                zetActiefProfiel(vorigProfielId);
-            }
-        );
+                : `Profiel "${p.naam}" actief`
+            : problemen > 0
+              ? `Profiel "${p.naam}" actief — traject behouden, ${vakken(problemen)} ${
+                    problemen === 1 ? 'past' : 'passen'
+                } niet bij deze set`
+              : `Profiel "${p.naam}" actief — traject behouden`;
+
+        meldUndo(melding, () => {
+            replaceSettings(vorigeSettings);
+            replaceTraject(vorigTraject);
+            herstelActiefTraject(vorigDossier);
+            zetActiefProfiel(vorigProfielId);
+        });
     };
 
-    // Vraagt eerst om bevestiging zodra er iets te verliezen valt: gekozen
-    // OLODs, of instellingen die nergens bewaard staan. Valt er niets te
-    // verliezen, dan is een dialoog enkel een extra klik.
+    // Staat er een traject, dan vraagt de dialoog wat ermee moet gebeuren
+    // (wissen of behouden) — dat is geen bevestiging maar een keuze. Is het
+    // traject leeg, dan valt er enkel aan instellingen iets te verliezen: dan
+    // volstaat een bevestiging, en zonder ook dát is een dialoog enkel een
+    // extra klik.
     const handleKiesProfiel = (p: Profiel) => {
         if (p.id === actiefProfiel?.id) return;
         const heeftWerk = traject.length > 0 || profielNietBewaard;
         if (heeftWerk) setDialoog({ soort: 'profielWissel', profiel: p });
-        else doeWisselProfiel(p);
+        else doeWisselProfiel(p, true);
     };
 
     const doeVerwijderProfiel = (p: Profiel) => {
@@ -1119,27 +1138,39 @@ export function TrajectPlanner({ onBack, presetApplied = false, presetNaam = nul
             />
         )}
 
-        {dialoog?.soort === 'profielWissel' && (
+        {/* Met een traject op het werkblad is een profielwissel een keuze
+            (meenemen of wissen), zonder traject enkel nog een bevestiging over
+            instellingen die nergens bewaard staan. */}
+        {dialoog?.soort === 'profielWissel' && traject.length > 0 && (
+            <ProfielWisselDialog
+                naam={dialoog.profiel.naam}
+                samenvatting={profielSamenvatting(dialoog.profiel.settings)}
+                aantalOlods={traject.length}
+                aantalProblemen={aantalMetProbleem(traject, dialoog.profiel.settings)}
+                items={resetItems}
+                nietBewaardDossier={
+                    nietBewaard ? 'Je huidige werk is niet bewaard in een dossier.' : undefined
+                }
+                nietBewaardProfiel={
+                    profielNietBewaard
+                        ? actiefProfiel
+                            ? `De wijzigingen aan "${actiefProfiel.naam}" zijn niet bewaard.`
+                            : 'Je huidige instellingen staan in geen enkel profiel.'
+                        : undefined
+                }
+                onWissel={wis => doeWisselProfiel(dialoog.profiel, wis)}
+                onAnnuleer={annuleerDialoog}
+            />
+        )}
+
+        {dialoog?.soort === 'profielWissel' && traject.length === 0 && (
             <BevestigDialog
                 titel={`Overschakelen naar "${dialoog.profiel.naam}"?`}
                 bericht={
                     <>
                         Je klasgroepen, periode-indeling en grensdatums worden vervangen door die
                         van <strong>{dialoog.profiel.naam}</strong> ({profielSamenvatting(dialoog.profiel.settings)}).
-                        {traject.length > 0 ? (
-                            <>
-                                {' '}
-                                {traject.length === 1
-                                    ? 'Het gekozen OLOD wordt'
-                                    : `De ${traject.length} gekozen OLODs worden`}{' '}
-                                daarbij <strong>gewist</strong> — die keuzes horen bij de
-                                klasgroepen en periodes van je huidige set.
-                                {nietBewaard &&
-                                    ' Je huidige werk is niet bewaard in een dossier.'}
-                            </>
-                        ) : (
-                            ' Je studenttraject is leeg, dus daar gaat niets verloren.'
-                        )}
+                        {' Je studenttraject is leeg, dus daar gaat niets verloren.'}
                         {profielNietBewaard && (
                             <>
                                 {' '}
@@ -1151,11 +1182,8 @@ export function TrajectPlanner({ onBack, presetApplied = false, presetNaam = nul
                         Bewaarde dossiers en profielen blijven staan.
                     </>
                 }
-                itemsKop={traject.length > 0 ? 'Wordt gewist' : undefined}
-                items={traject.length > 0 ? resetItems : undefined}
                 bevestigLabel="Overschakelen"
-                danger={traject.length > 0}
-                onBevestig={() => doeWisselProfiel(dialoog.profiel)}
+                onBevestig={() => doeWisselProfiel(dialoog.profiel, true)}
                 onAnnuleer={annuleerDialoog}
             />
         )}

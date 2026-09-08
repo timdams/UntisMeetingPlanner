@@ -1729,6 +1729,28 @@
 
 /* ===== Bulkselectie: meerdere vakken samen van klasgroep wisselen ===== */
 
+/* Strookje boven de OLOD-lijst zodra er keuzes niet bij de huidige
+   instellingenset passen (na een profielwissel met behouden traject, een
+   geopend dossier, een verzette grensdatum). Zelfde oranje als de markering op
+   de rijen zelf, zodat het strookje en de rij als één ding lezen. */
+.olodPastNietStrip {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.3rem;
+    padding: 0.3rem 0.5rem;
+    border-bottom: 1px solid #FDE68A;
+    background-color: #FFFBEB;
+    color: #92400E;
+    font-size: 0.7rem;
+    font-weight: 600;
+    line-height: 1.3;
+}
+
+.olodPastNietStrip svg {
+    flex-shrink: 0;
+    margin-top: 1px;
+}
+
 /* Snelkeuze-chips boven de lijst: alles van één periode in één klik. */
 .olodSnelRij {
     display: flex;
@@ -3672,12 +3694,33 @@
 }
 
 .dialoogKeuzeNaam {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
     font-size: 0.85rem;
     font-weight: 600;
 }
 
 .dialoogKeuzeMeta {
     font-size: 0.74rem;
+    color: #64748b;
+}
+
+/* Keuzelijst als radiogroep (de profielwissel-dialoog): geen scrollende lijst
+   van bewaarde items maar twee volwaardige opties met uitleg, dus zonder
+   hoogtelimiet en met lucht boven de tekst erboven. */
+.dialoogKeuzeGroep {
+    max-height: none;
+    overflow: visible;
+    margin-top: 0.7rem;
+    gap: 0.35rem;
+}
+
+/* Uitleg onder zo'n keuze: een hele zin in plaats van de meta-regel van een
+   lijstitem, dus ruimer gezet en afbrekend. */
+.dialoogKeuzeUitleg {
+    font-size: 0.76rem;
+    line-height: 1.4;
     color: #64748b;
 }
 

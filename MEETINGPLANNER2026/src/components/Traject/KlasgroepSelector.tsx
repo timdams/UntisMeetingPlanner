@@ -12,6 +12,7 @@ import { bereikOverlapt } from './dateUtils';
 import { selectieKey } from './hooks';
 import { groepeerKlasgroepen } from './settingsSummaries';
 import { botsendeKlasgroepen, isSemesterOlod, semesterBereikVoor } from './semesterOlods';
+import { trajectProblemen, type SelectieProbleem } from './selectieProblemen';
 import {
     useBulkAlternatieven,
     useKlasgroepAlternatieven,
@@ -71,6 +72,10 @@ interface Props {
 // Welke kiezer onder een selectie open staat: de periode-kiezer (badge) of
 // de klasgroep-kiezer (klasgroepnaam). Hooguit één tegelijk.
 type Kiezer = { key: string; soort: 'periode' | 'klasgroep' };
+
+// Stabiele lege lijst voor selecties zonder probleem — scheelt een nieuwe array
+// per rij per render.
+const GEEN_PROBLEMEN: SelectieProbleem[] = [];
 
 // Bevestiging die een bulkactie afwacht.
 type BulkDialoog = { soort: 'verzet'; alternatief: BulkAlternatief } | { soort: 'verwijder' };
@@ -199,6 +204,21 @@ export function KlasgroepSelector({
     );
 
     const gedeactiveerd = useMemo(() => traject.filter(s => !isActief(s)).length, [traject]);
+
+    // Selecties die niet bij de instellingen passen waaronder ze nu bekeken
+    // worden: een klasgroep buiten de shortlist, of een periode die niet op de
+    // grensdatums van deze set valt. Ontstaat vooral na een profielwissel
+    // waarbij het traject behouden bleef, maar evengoed na een geopend dossier
+    // of een grensdatum die met de hand verzet is. Zie selectieProblemen.ts.
+    const problemen = useMemo(
+        () =>
+            trajectProblemen(traject, {
+                mijnOpleidingKlasgroepen: klasgroepen,
+                periodeType,
+                periodeGrenzen,
+            }),
+        [traject, klasgroepen, periodeType, periodeGrenzen]
+    );
 
     // Kandidaat-klasgroepen worden enkel opgehaald voor de selectie waarvan de
     // klasgroep-kiezer open staat.
@@ -405,6 +425,21 @@ export function KlasgroepSelector({
                 </span>
             </div>
 
+            {/* Eén regel boven de lijst, want een gemarkeerde rij kan ver naar
+                onderen staan: na een profielwissel met behouden traject moet in
+                één oogopslag duidelijk zijn dát er nog iets recht te zetten is. */}
+            {problemen.size > 0 && (
+                <div className={styles.olodPastNietStrip} role="status">
+                    <AlertTriangle size={12} />
+                    <span>
+                        {problemen.size === 1
+                            ? '1 vak past niet'
+                            : `${problemen.size} vakken passen niet`}{' '}
+                        bij deze instellingen — hieronder gemarkeerd.
+                    </span>
+                </div>
+            )}
+
             {periodeGroepen.length > 0 && (
                 <div className={styles.olodSnelRij}>
                     <span className={styles.olodSnelLabel}>Snel kiezen:</span>
@@ -522,7 +557,10 @@ export function KlasgroepSelector({
                         // het vak twee keer naast elkaar lopen — dat moet de
                         // gebruiker zelf oplossen, wij wijzen het enkel aan.
                         const botsers = semestervak ? botsendeKlasgroepen(traject, sel) : [];
-                        const waarschuwing = status === 'geen-lessen' || botsers.length > 0;
+                        // Past deze keuze nog bij de huidige instellingenset?
+                        const selProblemen = problemen.get(key) ?? GEEN_PROBLEMEN;
+                        const waarschuwing =
+                            status === 'geen-lessen' || botsers.length > 0 || selProblemen.length > 0;
                         const badgeClass = `${styles.olodListPeriode} ${zichtbaar ? styles.olodListPeriodeActief : ''} ${
                             semestervak ? styles.olodListPeriodeSemester : ''
                         }`;
@@ -629,6 +667,42 @@ export function KlasgroepSelector({
                                             Dit semestervak staat in {periode.kort} ook bij{' '}
                                             {botsers.join(', ')}. Het loopt over beide modules, dus
                                             houd er één klasgroep van over.
+                                        </span>
+                                    </div>
+                                )}
+                                {/* Past niet bij de huidige instellingenset — meestal een
+                                    keuze die van vóór een profielwissel dateert. De tekst
+                                    wijst telkens de weg naar de knop die het rechtzet. */}
+                                {selProblemen.includes('klasgroep-buiten-lijst') && (
+                                    <div className={`${styles.olodListStatus} ${styles.olodListStatusWaarschuwing}`} role="alert">
+                                        <AlertTriangle size={12} />
+                                        <span>
+                                            {sel.klasgroep} staat niet in de klasgroepen van deze
+                                            instellingen. Kies hierboven een andere klasgroep, of
+                                            voeg {sel.klasgroep} bij Instellingen aan je lijst toe.
+                                        </span>
+                                    </div>
+                                )}
+                                {selProblemen.includes('periode-onbekend') && (
+                                    <div className={`${styles.olodListStatus} ${styles.olodListStatusWaarschuwing}`} role="alert">
+                                        <AlertTriangle size={12} />
+                                        <span>
+                                            Deze periode valt niet op de grensdatums van deze
+                                            instellingen.
+                                            {kiesbaar
+                                                ? ' Kies hierboven een periode van deze set.'
+                                                : ' Verwijder het vak en kies het opnieuw in de juiste periode.'}
+                                        </span>
+                                    </div>
+                                )}
+                                {selProblemen.includes('module-in-semesterset') && (
+                                    <div className={`${styles.olodListStatus} ${styles.olodListStatusWaarschuwing}`} role="alert">
+                                        <AlertTriangle size={12} />
+                                        <span>
+                                            Deze keuze loopt enkel over {periode.kort}, terwijl deze
+                                            instellingen per semester werken — het vak stopt
+                                            halverwege. Verwijder het en kies het opnieuw voor het
+                                            hele semester.
                                         </span>
                                     </div>
                                 )}
