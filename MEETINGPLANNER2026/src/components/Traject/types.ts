@@ -1,4 +1,7 @@
 import type { PeriodeGrenzen, PeriodeType } from './academicYear';
+// Enkel het type: koppelGroepen.ts leest op zijn beurt uit dit bestand, en een
+// type-import verdwijnt bij het compileren — er blijft dus geen kring over.
+import type { KoppelInstellingen } from './koppelGroepen';
 
 export interface Lesblok {
     klasgroep: string;
@@ -50,6 +53,10 @@ export interface TrajectSettings {
     // back-up, een bewaard traject en de student-link mee moet reizen.
     // Zie semesterOlods.ts.
     semesterOlods: string[];
+    // Vakken die samen bij één klasgroep horen (een lab). Staat standaard uit
+    // en leeg: enkel een opleiding die zulke groepen aanduidt, merkt er iets
+    // van. Zie koppelGroepen.ts.
+    koppelGroepen: KoppelInstellingen;
 }
 
 export type KleurMap = Record<string, string>;

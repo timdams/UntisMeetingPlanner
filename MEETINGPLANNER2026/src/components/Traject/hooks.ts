@@ -14,6 +14,11 @@ import {
 } from './academicYear';
 import { datumInBereik, isIsoDate, parseIsoDate } from './dateUtils';
 import { metSemesterOlod, normalizeSemesterOlods, verbreedNaarSemesters } from './semesterOlods';
+import {
+    koppelVingerafdruk,
+    normalizeKoppelInstellingen,
+    type KoppelInstellingen,
+} from './koppelGroepen';
 
 const KEY_SETTINGS = 'traject_settings';
 const KEY_TRAJECT = 'traject_student';
@@ -77,6 +82,9 @@ export function normalizeSettings(raw: unknown): TrajectSettings {
         // Ontbreekt in opslag van vóór de semestervak-tag: dan is er gewoon
         // geen enkel vak als semestervak gemarkeerd.
         semesterOlods: normalizeSemesterOlods(r.semesterOlods),
+        // Idem voor de vakgroepen: oudere opslag levert de uit-stand op, en
+        // daarmee exact het gedrag van vóór deze instelling.
+        koppelGroepen: normalizeKoppelInstellingen(r.koppelGroepen),
     };
 }
 
@@ -211,6 +219,7 @@ export function applyTrajectSettingsPreset(preset: TrajectPreset): void {
         periodeType: preset.periodeType ?? current.periodeType,
         periodeGrenzen: preset.periodeGrenzen ?? current.periodeGrenzen,
         semesterOlods: preset.semesterOlods ?? current.semesterOlods,
+        koppelGroepen: preset.koppelGroepen ?? current.koppelGroepen,
     });
 }
 
@@ -304,6 +313,13 @@ export function useTrajectSettings() {
         setSettings(s => ({ ...s, semesterOlods: metSemesterOlod(s.semesterOlods, olodNaam, aan) }));
     }, []);
 
+    // De vakgroepen (labs) die samen bij één klasgroep horen. De gebruiker stelt
+    // ze in vanuit de wizard — het is een eigenschap van de opleiding, dus hoort
+    // ze bij de instellingen en reist ze mee met profiel, back-up en link.
+    const setKoppelGroepen = useCallback((koppelGroepen: KoppelInstellingen) => {
+        setSettings(s => ({ ...s, koppelGroepen: normalizeKoppelInstellingen(koppelGroepen) }));
+    }, []);
+
     const replaceSettings = useCallback((next: TrajectSettings) => {
         setSettings(normalizeSettings(next));
     }, []);
@@ -326,6 +342,7 @@ export function useTrajectSettings() {
         setPeriodeType,
         setPeriodeGrenzen,
         setSemesterOlod,
+        setKoppelGroepen,
         replaceSettings,
         setKlasgroepen,
     };
@@ -480,6 +497,7 @@ export function trajectVingerafdruk(traject: StudentTraject, settings: TrajectSe
         // Een vak als semestervak markeren verandert hoe het traject gelezen
         // wordt, dus telt het als niet-bewaard werk.
         s.semesterOlods.join(','),
+        koppelVingerafdruk(s.koppelGroepen),
     ].join('|');
     return `${sels}##${kern}`;
 }
@@ -583,6 +601,7 @@ export function profielVingerafdruk(settings: TrajectSettings): string {
         s.periodeGrenzen.m2Start,
         s.periodeGrenzen.m4Start,
         [...s.semesterOlods].sort().join(','),
+        koppelVingerafdruk(s.koppelGroepen),
     ].join('|');
 }
 

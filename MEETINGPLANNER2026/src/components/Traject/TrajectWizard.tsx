@@ -1,9 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { AlertTriangle, Check, Loader2, Sparkles, Wand2, X } from 'lucide-react';
+import { AlertTriangle, Check, Link2, Loader2, Sparkles, Wand2, X } from 'lucide-react';
 import type { Lesblok, StudentTraject } from './types';
 import { isActief } from './types';
-import { actievePeriode, allePeriodes, type PeriodeGrenzen } from './academicYear';
+import {
+    actievePeriode,
+    allePeriodes,
+    type PeriodeGrenzen,
+    type PeriodeType,
+} from './academicYear';
 import { addDays, bereikRaakt, formatDateBE, fridayEndOf, parseIsoDate } from './dateUtils';
 import { jaarVanKlasgroep } from './settingsSummaries';
 import { usePeriodeRoosters } from './useTrajectBlokken';
@@ -17,8 +22,17 @@ import {
     type VakInRoosters,
     type Voorkeur,
     type Voorstel,
-    type VoorstelVak,
 } from './trajectVoorstel';
+import {
+    bouwPuzzel,
+    groepVoorOlod,
+    koppelingActief,
+    nietGeplaatst,
+    vasteKlasgroepen,
+    type KoppelInstellingen,
+    type OnmogelijkeGroep,
+} from './koppelGroepen';
+import { KoppelGroepenDialoog } from './KoppelGroepenDialoog';
 import styles from './Traject.module.css';
 
 // Meer dan drie ijkweken maakt het voorstel niet beter, wel trager: een rooster
@@ -31,7 +45,13 @@ interface Props {
     // De periode waarvoor de wizard een rooster zoekt.
     actiefBereik: { van: string; tot: string };
     periodeGrenzen: PeriodeGrenzen;
+    periodeType: PeriodeType;
     traject: StudentTraject;
+    // Vakken die samen bij één klasgroep horen (een lab). Wordt hier ingesteld
+    // — het is een eigenschap van de opleiding — maar hoort bij de instellingen,
+    // zodat ze meereist met profiel, back-up en link. Zie koppelGroepen.ts.
+    koppelGroepen: KoppelInstellingen;
+    onKoppelGroepen: (inst: KoppelInstellingen) => void;
     // De periode waarvoor een keuze van dít vak geldt (semestervak = zijn hele
     // semester) — enkel om ze in het resultaat te benoemen.
     bereikVoorOlod: (olodNaam: string) => { van: string; tot: string };
@@ -84,7 +104,10 @@ export function TrajectWizard({
     klasgroepen,
     actiefBereik,
     periodeGrenzen,
+    periodeType,
     traject,
+    koppelGroepen,
+    onKoppelGroepen,
     bereikVoorOlod,
     onOvernemen,
     onClose,
@@ -97,14 +120,17 @@ export function TrajectWizard({
     const [voorkeur, setVoorkeur] = useState<Voorkeur>('conflictvrij');
     const [voorstel, setVoorstel] = useState<Voorstel | null>(null);
     const [bezig, setBezig] = useState(false);
+    const [koppelOpen, setKoppelOpen] = useState(false);
 
     useEffect(() => {
+        // Staat het geavanceerde venster open, dan sluit Esc enkel dát venster
+        // (die dialoog luistert zelf mee) en niet de hele wizard eronder.
         const onKey = (e: KeyboardEvent) => {
-            if (e.key === 'Escape') onClose();
+            if (e.key === 'Escape' && !koppelOpen) onClose();
         };
         window.addEventListener('keydown', onKey);
         return () => window.removeEventListener('keydown', onKey);
-    }, [onClose]);
+    }, [onClose, koppelOpen]);
 
     const vakken = useMemo(() => vakkenUitRoosters(perKlas), [perKlas]);
     const weken = useMemo<Lesweek[]>(() => lesweken(perKlas), [perKlas]);
@@ -184,24 +210,20 @@ export function TrajectWizard({
         return vensters.some(v => t >= v.van && t <= v.tot);
     };
 
+    // Waar een groep elders in het jaar al vastligt — enkel met de instelling
+    // "ook in de andere periodes dezelfde klasgroep".
+    const elders = useMemo(
+        () => vasteKlasgroepen(traject, koppelGroepen, actiefBereik),
+        [traject, koppelGroepen, actiefBereik]
+    );
+
     // De puzzel zoals ze aan de solver gegeven wordt: per gekozen vak de
-    // klasgroepen die het in de referentieweken effectief geven.
-    const puzzel = useMemo(() => {
-        const mee: VoorstelVak[] = [];
-        const zonderLes: string[] = [];
-        for (const vak of vakken) {
-            if (!gekozenVakken.has(vak.olodNaam)) continue;
-            const opties = vak.klasgroepen
-                .map(kg => ({
-                    klasgroep: kg,
-                    blokken: vak.blokken.filter(b => b.klasgroep === kg && inWeken(b)),
-                }))
-                .filter(o => o.blokken.length > 0);
-            if (opties.length === 0) zonderLes.push(vak.olodNaam);
-            else mee.push({ olodNaam: vak.olodNaam, opties });
-        }
-        return { mee, zonderLes };
-    }, [vakken, gekozenVakken, vensters]);
+    // klasgroepen die het in de referentieweken effectief geven, en per groep
+    // vakken die samen horen één gezamenlijke keuze. Zie koppelGroepen.ts.
+    const puzzel = useMemo(
+        () => bouwPuzzel(vakken, gekozenVakken, inWeken, koppelGroepen, elders.vast),
+        [vakken, gekozenVakken, vensters, koppelGroepen, elders]
+    );
 
     const doeVoorstel = () => {
         setBezig(true);
@@ -216,21 +238,26 @@ export function TrajectWizard({
 
     // Vakken die de puzzel niet kon plaatsen maar die al in het traject staan,
     // houden hun huidige klasgroep: het voorstel overnemen mag geen keuze
-    // opeten die de wizard zelf niet kan maken.
+    // opeten die de wizard zelf niet kan maken. Naast vakken zonder les in de
+    // ijkweken gaat het om de leden van een groep die niet in één klasgroep past.
     const behouden = useMemo(
         () =>
-            puzzel.zonderLes
+            nietGeplaatst(puzzel)
                 .filter(naam => huidig.has(naam))
                 .map(naam => ({ olodNaam: naam, klasgroep: huidig.get(naam) as string })),
-        [puzzel.zonderLes, huidig]
+        [puzzel, huidig]
     );
+
+    // Een keuze voor een groep vult al haar leden in: het traject kent geen
+    // groepen, enkel vakken.
+    const alsKeuzes = (v: Voorstel) =>
+        v.keuzes.flatMap(k =>
+            (k.leden ?? [k.olodNaam]).map(olodNaam => ({ olodNaam, klasgroep: k.klasgroep }))
+        );
 
     const neemOver = () => {
         if (!voorstel) return;
-        onOvernemen([
-            ...voorstel.keuzes.map(k => ({ olodNaam: k.olodNaam, klasgroep: k.klasgroep })),
-            ...behouden,
-        ]);
+        onOvernemen([...alsKeuzes(voorstel), ...behouden]);
     };
 
     const periodeLabel = useMemo(() => {
@@ -254,7 +281,9 @@ export function TrajectWizard({
     // TrajectPlanner: alles wat de periode raakt gaat eruit, behalve een
     // gedeactiveerde keuze die het voorstel niet invult — die blijft geparkeerd.
     const teVervangen = useMemo(() => {
-        const ingevuld = new Set((voorstel?.keuzes ?? []).map(k => k.olodNaam));
+        const ingevuld = new Set(
+            (voorstel?.keuzes ?? []).flatMap(k => k.leden ?? [k.olodNaam])
+        );
         return traject.filter(
             s =>
                 bereikRaakt(s.van, s.tot, actiefBereik.van, actiefBereik.tot) &&
@@ -263,6 +292,21 @@ export function TrajectWizard({
     }, [traject, actiefBereik, voorstel]);
 
     const kanRekenen = !laadt && weekKeuze.length > 0 && puzzel.mee.length > 0;
+
+    // Wie geeft hoeveel van de aangevinkte leden — en welk vak ontbreekt daar
+    // dan. Dat laatste maakt het verschil tussen "mijn shortlist is te smal" en
+    // "dit vak bestaat daar niet".
+    const dekkingTekst = (g: OnmogelijkeGroep) =>
+        g.dekking
+            .slice(0, 3)
+            .map(d => {
+                const mist = g.olods.filter(o => !d.olods.includes(o));
+                return (
+                    `${d.klasgroep}: ${d.olods.length} van de ${g.olods.length}` +
+                    (mist.length > 0 ? ` (mist ${mist.join(', ')})` : '')
+                );
+            })
+            .join(' · ');
 
     // Bewust geen onClick op de achtergrond: dit is een formulier met een
     // berekend resultaat, en een misklik ernaast mag dat niet weggooien.
@@ -372,6 +416,26 @@ export function TrajectWizard({
                             <span className={styles.wizSectieHint}>
                                 {gekozenVakken.size} aangeduid
                             </span>
+                            {/* Achter een knopje: de meeste opleidingen hebben
+                                niets te koppelen en hoeven dit nooit te zien. */}
+                            <button
+                                type="button"
+                                className={styles.wizKopActie}
+                                onClick={() => setKoppelOpen(true)}
+                                title="Duid aan welke vakken samen bij één klasgroep horen (een lab)"
+                            >
+                                <Link2 size={12} />
+                                Vakken die samen horen
+                                <span className={styles.wizKopActieStand}>
+                                    {koppelingActief(koppelGroepen)
+                                        ? `${koppelGroepen.groepen.length} ${
+                                              koppelGroepen.groepen.length === 1
+                                                  ? 'groep'
+                                                  : 'groepen'
+                                          }`
+                                        : 'uit'}
+                                </span>
+                            </button>
                         </div>
                         {!laadt && blokken.length === 0 ? (
                             <div className={styles.kiesEmpty}>Niets te kiezen in deze periode.</div>
@@ -400,6 +464,10 @@ export function TrajectWizard({
                                             {blok.vakken.map(vak => {
                                                 const aan = gekozenVakken.has(vak.olodNaam);
                                                 const heeftLes = vak.blokken.some(inWeken);
+                                                const groep = groepVoorOlod(
+                                                    vak.olodNaam,
+                                                    koppelGroepen
+                                                );
                                                 return (
                                                     <button
                                                         key={vak.olodNaam}
@@ -413,11 +481,23 @@ export function TrajectWizard({
                                                             `${vak.klasgroepen.join(', ')}` +
                                                             (heeftLes
                                                                 ? ''
-                                                                : '\nGeen les in de gekozen referentieweken.')
+                                                                : '\nGeen les in de gekozen referentieweken.') +
+                                                            (groep
+                                                                ? `\nHoort bij ${groep.naam}: die vakken komen samen in één klasgroep.`
+                                                                : '')
                                                         }
                                                     >
                                                         {aan && <Check size={11} strokeWidth={3} />}
                                                         {vak.olodNaam}
+                                                        {groep && (
+                                                            <span
+                                                                className={styles.wizChipGroep}
+                                                                title={`Groep ${groep.naam}`}
+                                                            >
+                                                                <Link2 size={10} />
+                                                                {groep.naam}
+                                                            </span>
+                                                        )}
                                                         <span className={styles.wizChipAantal}>
                                                             {vak.klasgroepen.length}
                                                         </span>
@@ -476,7 +556,10 @@ export function TrajectWizard({
                                           ? 'Kies eerst minstens één referentieweek'
                                           : puzzel.mee.length === 0
                                             ? 'Duid eerst vakken aan die in de referentieweken lesgeven'
-                                            : `Zoek een combinatie van klasgroepen voor ${puzzel.mee.length} vakken`
+                                            : `Zoek een combinatie van klasgroepen voor ${puzzel.mee.reduce(
+                                                  (n, v) => n + (v.leden?.length ?? 1),
+                                                  0
+                                              )} vakken`
                                 }
                             >
                                 {bezig ? (
@@ -500,6 +583,52 @@ export function TrajectWizard({
                                     {behouden.length > 0
                                         ? ' De keuze die er nu voor in het traject staat, blijft staan.'
                                         : ' Kies er een andere week bij als dat vak toch mee moet.'}
+                                </span>
+                            </div>
+                        )}
+
+                        {/* Een groep die niet in één klasgroep past, wordt niet
+                            geplaatst — liever geen antwoord dan een stil
+                            gesplitst lab. */}
+                        {puzzel.onmogelijk.map(g => (
+                            <div key={g.naam} className={styles.wizWaarschuwing}>
+                                <AlertTriangle size={13} />
+                                <span>
+                                    <strong>{g.naam}</strong>{' '}
+                                    {g.reden === 'geen-les' ? (
+                                        <>
+                                            heeft geen les in de gekozen referentieweken en zit niet
+                                            in de puzzel.
+                                        </>
+                                    ) : g.reden === 'vast-elders' ? (
+                                        <>
+                                            ligt in een andere periode bij <strong>{g.vast}</strong>{' '}
+                                            vast, maar daar zitten niet alle aangevinkte vakken van
+                                            de groep. Zet het vinkje “ook in de andere periodes
+                                            dezelfde klasgroep” uit, of pas die andere periode aan.
+                                        </>
+                                    ) : (
+                                        <>
+                                            past niet in één klasgroep: geen enkele klasgroep uit je
+                                            shortlist geeft alle {g.olods.length} aangevinkte
+                                            vakken. {dekkingTekst(g)}
+                                        </>
+                                    )}{' '}
+                                    De groep zit niet in de puzzel; wat er nu voor in het traject
+                                    staat, blijft staan.
+                                </span>
+                            </div>
+                        ))}
+
+                        {elders.verdeeld.length > 0 && (
+                            <div className={styles.wizWaarschuwing}>
+                                <AlertTriangle size={13} />
+                                <span>
+                                    {elders.verdeeld
+                                        .map(v => `${v.naam} (${v.klasgroepen.join(', ')})`)
+                                        .join(', ')}{' '}
+                                    staat in andere periodes zelf al bij meerdere klasgroepen. Daar
+                                    valt niets af te dwingen: de wizard kiest hier vrij.
                                 </span>
                             </div>
                         )}
@@ -537,18 +666,39 @@ export function TrajectWizard({
 
                                 <div className={styles.wizRijen}>
                                     {voorstel.keuzes.map(k => {
-                                        const badge = periodeBadge(k.olodNaam);
-                                        const anders = huidig.get(k.olodNaam);
+                                        // Een groep vult meerdere vakken in; het
+                                        // "was" ernaast is dan alles waar die
+                                        // vakken nu verspreid staan.
+                                        const leden = k.leden ?? [k.olodNaam];
+                                        const badge = periodeBadge(leden[0]);
+                                        const anders = Array.from(
+                                            new Set(
+                                                leden
+                                                    .map(l => huidig.get(l))
+                                                    .filter(
+                                                        (x): x is string =>
+                                                            !!x && x !== k.klasgroep
+                                                    )
+                                            )
+                                        );
                                         return (
                                             <div key={k.olodNaam} className={styles.wizRij}>
-                                                <span className={styles.wizRijVak}>{k.olodNaam}</span>
+                                                <span className={styles.wizRijVak}>
+                                                    {k.leden && (
+                                                        <Link2
+                                                            size={11}
+                                                            className={styles.wizRijGroepIcoon}
+                                                        />
+                                                    )}
+                                                    {k.olodNaam}
+                                                </span>
                                                 {badge && (
                                                     <span className={styles.wizRijBadge}>{badge}</span>
                                                 )}
                                                 <span className={styles.wizRijKlas}>{k.klasgroep}</span>
-                                                {anders && anders !== k.klasgroep && (
+                                                {anders.length > 0 && (
                                                     <span className={styles.wizRijWas}>
-                                                        was {anders}
+                                                        was {anders.join(', ')}
                                                     </span>
                                                 )}
                                                 {k.botsendeLessen > 0 && (
@@ -556,6 +706,11 @@ export function TrajectWizard({
                                                         <AlertTriangle size={12} />
                                                         {k.botsendeLessen} botsende{' '}
                                                         {k.botsendeLessen === 1 ? 'les' : 'lessen'}
+                                                    </span>
+                                                )}
+                                                {k.leden && (
+                                                    <span className={styles.wizRijLeden}>
+                                                        {k.leden.join(' · ')}
                                                     </span>
                                                 )}
                                             </div>
@@ -605,6 +760,23 @@ export function TrajectWizard({
                     </button>
                 </div>
             </div>
+
+            {koppelOpen && (
+                <KoppelGroepenDialoog
+                    inst={koppelGroepen}
+                    onChange={inst => {
+                        // Andere groepen, ander voorstel: het bestaande
+                        // resultaat is meteen oud nieuws.
+                        setVoorstel(null);
+                        onKoppelGroepen(inst);
+                    }}
+                    klasgroepen={klasgroepen}
+                    periodeType={periodeType}
+                    periodeGrenzen={periodeGrenzen}
+                    actiefBereik={actiefBereik}
+                    onClose={() => setKoppelOpen(false)}
+                />
+            )}
         </div>,
         document.body
     );

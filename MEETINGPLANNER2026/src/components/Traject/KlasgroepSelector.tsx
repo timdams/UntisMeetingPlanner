@@ -14,6 +14,12 @@ import { groepeerKlasgroepen } from './settingsSummaries';
 import { botsendeKlasgroepen, isSemesterOlod, semesterBereikVoor } from './semesterOlods';
 import { trajectProblemen, type SelectieProbleem } from './selectieProblemen';
 import {
+    gesplitsteGroep,
+    groepsgenoten,
+    groepVoorOlod,
+    type KoppelInstellingen,
+} from './koppelGroepen';
+import {
     useBulkAlternatieven,
     useKlasgroepAlternatieven,
     type BulkAlternatief,
@@ -61,6 +67,10 @@ interface Props {
     // modulemodus. Zie semesterOlods.ts.
     semesterOlods: string[];
     onToggleSemesterOlod: (olodNaam: string) => void;
+    // Vakken die samen bij één klasgroep horen (een lab). Staan die verspreid,
+    // dan zegt de lijst het; wie er één verzet, krijgt de rest mee aangeboden.
+    // Standaard leeg — dan gebeurt geen van beide. Zie koppelGroepen.ts.
+    koppelGroepen: KoppelInstellingen;
     // Opent de OLOD-zoeker (TrajectPlanner rendert die): een vak opzoeken over
     // alle klasgroepen heen, zonder eerst het juiste rooster te moeten vinden.
     onZoekOlod: () => void;
@@ -101,6 +111,7 @@ export function KlasgroepSelector({
     periodeGrenzen,
     semesterOlods,
     onToggleSemesterOlod,
+    koppelGroepen,
     onZoekOlod,
     onWizard,
 }: Props) {
@@ -113,6 +124,13 @@ export function KlasgroepSelector({
     const [gekozen, setGekozen] = useState<Set<string>>(new Set());
     const [bulkOpen, setBulkOpen] = useState(false);
     const [bulkDialoog, setBulkDialoog] = useState<BulkDialoog | null>(null);
+    // Een klasgroepwissel die de rest van een groep achterlaat: welke vakken
+    // zouden mee moeten, en waarheen. Null zodra er niets te vragen valt.
+    const [groepVerzet, setGroepVerzet] = useState<{
+        naam: string;
+        doel: string;
+        sels: OLODSelectie[];
+    } | null>(null);
     const kiesbaar = periodeType === 'module';
 
     // De klasgroepenlijst staat per jaar gegroepeerd — het eerste karakter van
@@ -174,6 +192,14 @@ export function KlasgroepSelector({
         if (klasgroep === sel.klasgroep) return;
         onSetKlasgroep(sel, klasgroep);
         setOpen({ key: selectieKey({ ...sel, klasgroep }), soort: 'klasgroep' });
+        // Hoort dit vak bij een groep die samen bij één klasgroep moet zitten,
+        // dan laten we de rest niet achter: die krijgt hij meteen aangeboden.
+        // Bewust een vraag en geen automatisme — het blijft zijn traject.
+        const groep = groepVoorOlod(sel.olodNaam, koppelGroepen);
+        const genoten = groepsgenoten(traject, sel, koppelGroepen, klasgroep);
+        if (groep && genoten.length > 0) {
+            setGroepVerzet({ naam: groep.naam, doel: klasgroep, sels: genoten });
+        }
     };
 
     const toggleGekozen = (key: string) => {
@@ -274,6 +300,30 @@ export function KlasgroepSelector({
         blokkenPerKlas,
         periodeGrenzen
     );
+
+    // Dezelfde weegschaal voor de rest van een groep: geeft de doelklasgroep die
+    // vakken wel in hun periode, en wat doet de wissel met de botsingen?
+    // Bewust enkel de doelklasgroep als kandidaat en niet de hele shortlist —
+    // deze vraag komt vanzelf na een klasgroepwissel, en dan hoort ze niet
+    // stilletjes elk rooster van het jaar op te halen.
+    const groepDoel = useMemo(() => (groepVerzet ? [groepVerzet.doel] : []), [groepVerzet]);
+    const groepAlternatieven = useBulkAlternatieven(
+        groepVerzet ? groepVerzet.sels : null,
+        groepDoel,
+        traject,
+        blokkenPerKlas,
+        periodeGrenzen
+    );
+    const groepAlt = groepVerzet
+        ? (groepAlternatieven?.items.find(i => i.klasgroep === groepVerzet.doel) ?? null)
+        : null;
+
+    // Valt er niets te verzetten (de doelklasgroep geeft geen van die vakken,
+    // of haar rooster kwam niet binnen), dan komt er geen vraag. De rij zelf
+    // waarschuwt dan wel dat de groep uit elkaar ligt.
+    useEffect(() => {
+        if (groepVerzet && groepAlt && groepAlt.verhuizend.length === 0) setGroepVerzet(null);
+    }, [groepVerzet, groepAlt]);
 
     const doeBulkVerzet = (a: BulkAlternatief) => {
         setBulkDialoog(null);
@@ -559,8 +609,15 @@ export function KlasgroepSelector({
                         const botsers = semestervak ? botsendeKlasgroepen(traject, sel) : [];
                         // Past deze keuze nog bij de huidige instellingenset?
                         const selProblemen = problemen.get(key) ?? GEEN_PROBLEMEN;
+                        // Ligt de groep waar dit vak bij hoort uit elkaar? Kan
+                        // niet meer via de wizard, wel met de hand of via een
+                        // geïmporteerd traject.
+                        const gesplitst = gesplitsteGroep(traject, sel, koppelGroepen);
                         const waarschuwing =
-                            status === 'geen-lessen' || botsers.length > 0 || selProblemen.length > 0;
+                            status === 'geen-lessen' ||
+                            botsers.length > 0 ||
+                            selProblemen.length > 0 ||
+                            gesplitst !== null;
                         const badgeClass = `${styles.olodListPeriode} ${zichtbaar ? styles.olodListPeriodeActief : ''} ${
                             semestervak ? styles.olodListPeriodeSemester : ''
                         }`;
@@ -670,6 +727,19 @@ export function KlasgroepSelector({
                                         </span>
                                     </div>
                                 )}
+                                {gesplitst && (
+                                    <div className={`${styles.olodListStatus} ${styles.olodListStatusWaarschuwing}`} role="alert">
+                                        <AlertTriangle size={12} />
+                                        <span>
+                                            De vakken van {gesplitst.groep.naam} horen samen bij één
+                                            klasgroep, maar staan in {periode.kort} ook bij{' '}
+                                            {gesplitst.elders
+                                                .map(e => `${e.klasgroep} (${e.olods.join(', ')})`)
+                                                .join(' en ')}
+                                            . Verzet ze naar dezelfde klasgroep.
+                                        </span>
+                                    </div>
+                                )}
                                 {/* Past niet bij de huidige instellingenset — meestal een
                                     keuze die van vóór een profielwissel dateert. De tekst
                                     wijst telkens de weg naar de knop die het rechtzet. */}
@@ -769,6 +839,39 @@ export function KlasgroepSelector({
                     })
                 )}
             </div>
+
+            {/* Eén labvak verzet: de rest van de groep hoort mee. */}
+            {groepVerzet && groepAlt && groepAlt.verhuizend.length > 0 && (
+                <BevestigDialog
+                    titel={`De rest van ${groepVerzet.naam} mee naar ${groepVerzet.doel}?`}
+                    bericht={
+                        groepAlt.ontbrekend.length === 0 ? (
+                            <>
+                                De vakken van <strong>{groepVerzet.naam}</strong> horen samen bij
+                                één klasgroep. Verzet je ze mee, dan blijft de groep bij elkaar.
+                            </>
+                        ) : (
+                            <>
+                                <strong>{groepVerzet.doel}</strong> geeft {groepAlt.gedekt} van de{' '}
+                                {groepAlt.totaal} andere vakken van {groepVerzet.naam} in hun
+                                periode. Enkel die verhuizen mee — de groep ligt daarna dus nog
+                                altijd uit elkaar.
+                            </>
+                        )
+                    }
+                    itemsKop="Verhuist mee"
+                    items={selsAlsItems(groepAlt.verhuizend)}
+                    bevestigLabel={`${groepAlt.verhuizend.length} ${
+                        groepAlt.verhuizend.length === 1 ? 'vak' : 'vakken'
+                    } mee verzetten`}
+                    onBevestig={() => {
+                        onBulkSetKlasgroep(groepAlt.verhuizend, groepVerzet.doel);
+                        setGroepVerzet(null);
+                        onPreview(null);
+                    }}
+                    onAnnuleer={() => setGroepVerzet(null)}
+                />
+            )}
 
             {bulkDialoog?.soort === 'verzet' && (
                 <BevestigDialog

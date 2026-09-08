@@ -3427,6 +3427,7 @@
 .wizRij {
     display: flex;
     align-items: center;
+    flex-wrap: wrap;
     gap: 0.35rem;
     padding: 0.25rem 0.35rem;
     border-radius: var(--border-radius);
@@ -3512,6 +3513,463 @@
 .wizOverneemKnop:disabled {
     opacity: 0.5;
     cursor: not-allowed;
+}
+
+/* Knopje rechts in een sectiekop van de wizard ("Vakken die samen horen"). */
+.wizKopActie {
+    margin-left: auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 1px 0.45rem;
+    font: inherit;
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: #64748b;
+    background-color: var(--bg-color);
+    border: 1px solid var(--border-color);
+    border-radius: 999px;
+    cursor: pointer;
+}
+
+.wizKopActie:hover {
+    border-color: var(--primary);
+    color: var(--primary);
+}
+
+.wizKopActieStand {
+    font-weight: 700;
+    color: var(--text-color);
+}
+
+/* Merkje op een vak dat bij een groep hoort. */
+.wizChipGroep {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.15rem;
+    flex-shrink: 0;
+    font-size: 0.62rem;
+    font-weight: 700;
+    opacity: 0.75;
+}
+
+.wizRijGroepIcoon {
+    vertical-align: -1px;
+    margin-right: 0.2rem;
+    opacity: 0.7;
+}
+
+/* De vakken van een groep, onder de regel van hun gezamenlijke keuze. */
+.wizRijLeden {
+    flex-basis: 100%;
+    min-width: 0;
+    padding-left: 1rem;
+    font-size: 0.68rem;
+    color: #64748b;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* ===== Vakken die samen horen: het geavanceerde venster van de wizard ===== */
+/* Ligt boven de wizard zelf (z-index 1100), want ze wordt eruit geopend. */
+.koppelBackdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 1200;
+    background-color: rgba(15, 23, 42, 0.45);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1.5rem;
+}
+
+.koppelDialog {
+    width: min(720px, 94vw);
+    max-height: 86vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    background-color: var(--bg-color);
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    box-shadow: 0 18px 48px rgba(0, 0, 0, 0.3);
+}
+
+.koppelBody {
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
+    padding: 0.75rem 0.9rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.koppelIntro {
+    margin: 0;
+    font-size: 0.78rem;
+    line-height: 1.45;
+    color: #475569;
+}
+
+.koppelSchakelaar {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.45rem;
+    font-size: 0.8rem;
+    color: var(--text-color);
+    cursor: pointer;
+}
+
+.koppelSchakelaar input {
+    margin-top: 2px;
+    flex-shrink: 0;
+    cursor: pointer;
+}
+
+.koppelSchakelaar input:disabled {
+    cursor: not-allowed;
+}
+
+.koppelSchakelaar input:disabled + span {
+    opacity: 0.55;
+}
+
+.koppelSchakelaarHint {
+    display: block;
+    margin-top: 1px;
+    font-size: 0.72rem;
+    font-weight: 400;
+    line-height: 1.35;
+    color: #64748b;
+}
+
+.koppelSectie {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    padding-top: 0.65rem;
+    border-top: 1px solid var(--border-color);
+}
+
+.koppelSectieKop {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: var(--text-color);
+}
+
+.koppelLeeg {
+    font-size: 0.75rem;
+    line-height: 1.4;
+    color: #64748b;
+}
+
+.koppelGroepen {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+}
+
+.koppelGroep {
+    padding: 0.35rem 0.5rem;
+    background-color: var(--secondary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+}
+
+.koppelGroepKop {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+.koppelGroepNaam {
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: var(--text-color);
+}
+
+.koppelGroepAantal {
+    font-size: 0.7rem;
+    color: #64748b;
+}
+
+.koppelWeg {
+    margin-left: auto;
+    display: inline-flex;
+    align-items: center;
+    padding: 2px;
+    color: #b91c1c;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: var(--border-radius);
+    cursor: pointer;
+}
+
+.koppelWeg:hover {
+    border-color: #b91c1c;
+}
+
+.koppelLeden {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+    margin-top: 0.3rem;
+}
+
+.koppelLid {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.2rem;
+    padding: 1px 0.4rem;
+    font-size: 0.72rem;
+    color: var(--text-color);
+    background-color: var(--bg-color);
+    border: 1px solid var(--border-color);
+    border-radius: 999px;
+}
+
+.koppelLidWeg {
+    display: inline-flex;
+    align-items: center;
+    padding: 0;
+    color: #64748b;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+}
+
+.koppelLidWeg:hover {
+    color: #b91c1c;
+}
+
+.koppelPeriodes {
+    margin-left: auto;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.3rem;
+}
+
+/* Een groep die de tweede klik opvangt: er staat een vak klaar dat hier nog
+   niet in zit. */
+.koppelGroepDoel {
+    border-color: var(--primary);
+    border-style: dashed;
+    background-color: var(--selected-bg);
+}
+
+.koppelGroepDoelHint {
+    font-size: 0.68rem;
+    font-weight: 600;
+    color: var(--primary);
+}
+
+/* De vraag "horen deze samen?", vastgeprikt onder de kop van het venster. */
+.koppelVraag {
+    flex-shrink: 0;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 0.9rem;
+    background-color: var(--selected-bg);
+    border-bottom: 1px solid var(--primary);
+    font-size: 0.78rem;
+    color: var(--text-color);
+}
+
+.koppelVraagTekst {
+    flex: 1;
+    min-width: 12rem;
+    line-height: 1.35;
+}
+
+.koppelVraagNaam {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    font-size: 0.72rem;
+    color: #64748b;
+}
+
+.koppelVraagNaam input {
+    width: 9rem;
+    padding: 2px 0.4rem;
+    font: inherit;
+    font-size: 0.78rem;
+    color: var(--text-color);
+    background-color: var(--bg-color);
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+}
+
+.koppelVraagNaam input:focus {
+    outline: none;
+    border-color: var(--primary);
+}
+
+.koppelVraagJa {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 3px 0.7rem;
+    font: inherit;
+    font-size: 0.76rem;
+    font-weight: 600;
+    color: white;
+    background-color: var(--primary);
+    border: 1px solid var(--primary);
+    border-radius: var(--border-radius);
+    cursor: pointer;
+}
+
+.koppelVraagJa:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.koppelVraagNee {
+    padding: 3px 0.6rem;
+    font: inherit;
+    font-size: 0.76rem;
+    color: var(--text-color);
+    background-color: var(--bg-color);
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    cursor: pointer;
+}
+
+.koppelZoek {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 2px 0.5rem;
+    color: #64748b;
+    background-color: var(--bg-color);
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+}
+
+.koppelZoek:focus-within {
+    border-color: var(--primary);
+}
+
+.koppelZoek input {
+    flex: 1;
+    min-width: 0;
+    padding: 2px 0;
+    font: inherit;
+    font-size: 0.78rem;
+    color: var(--text-color);
+    background: transparent;
+    border: none;
+    outline: none;
+}
+
+.koppelZoekWis {
+    display: inline-flex;
+    align-items: center;
+    padding: 0;
+    color: #64748b;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+}
+
+/* De vakken van de gekozen periode. Koppelen gaat in twee klikken: het ene vak
+   aan, dan het andere. Scrollt op zichzelf, want een periode telt er algauw
+   enkele tientallen. */
+.koppelVakken {
+    display: flex;
+    flex-wrap: wrap;
+    align-content: flex-start;
+    gap: 0.25rem;
+    max-height: 11rem;
+    overflow: auto;
+    padding: 0.35rem;
+    background-color: var(--secondary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+}
+
+.koppelVak {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    max-width: 100%;
+    padding: 2px 0.45rem;
+    font: inherit;
+    font-size: 0.75rem;
+    text-align: left;
+    color: var(--text-color);
+    background-color: var(--bg-color);
+    border: 1px solid var(--border-color);
+    border-radius: 999px;
+    cursor: pointer;
+}
+
+.koppelVak:hover {
+    border-color: var(--primary);
+}
+
+/* Aangeklikt: wacht op het vak (of de groep) waar het bij hoort. */
+.koppelVakAan {
+    background-color: var(--primary);
+    border-color: var(--primary);
+    color: white;
+    font-weight: 600;
+}
+
+
+.koppelVakGroep {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.15rem;
+    flex-shrink: 0;
+    font-size: 0.62rem;
+    font-weight: 700;
+    opacity: 0.75;
+}
+
+.koppelSuggestie {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+    padding-top: 0.5rem;
+    margin-top: 0.15rem;
+    border-top: 1px dashed var(--border-color);
+}
+
+.koppelSuggestieKop {
+    font-size: 0.76rem;
+    font-weight: 700;
+    color: var(--text-color);
+}
+
+/* Een groep die al in de lijst staat: te zien, niet nog eens toe te voegen. */
+.koppelChipAl {
+    opacity: 0.6;
+    cursor: default;
+}
+
+.koppelWisAlles {
+    flex-shrink: 0;
+    padding: 3px 0.6rem;
+    font: inherit;
+    font-size: 0.75rem;
+    color: #b91c1c;
+    background-color: var(--bg-color);
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    cursor: pointer;
+}
+
+.koppelWisAlles:hover {
+    border-color: #b91c1c;
 }
 
 /* ===== Week-zoom: één weekstrook uitvergroot, alleen-lezen ===== */

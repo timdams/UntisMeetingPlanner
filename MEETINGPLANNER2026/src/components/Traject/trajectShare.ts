@@ -2,6 +2,11 @@ import { TrajectSettings } from './types';
 import { effectieveGrenzen, type PeriodeGrenzen, type PeriodeType } from './academicYear';
 import { isIsoDate } from './dateUtils';
 import { normalizeSemesterOlods } from './semesterOlods';
+import {
+    koppelingActief,
+    normalizeKoppelInstellingen,
+    type KoppelInstellingen,
+} from './koppelGroepen';
 
 /** Hash-parameter waaronder de preset in een gedeelde URL verstopt zit. */
 const PRESET_PARAM = 'traject';
@@ -24,6 +29,11 @@ export interface TrajectPreset {
     // opleiding, dus die hoort de student net zo goed te kennen. Optioneel,
     // want links van vóór deze tag hebben het veld niet.
     semesterOlods?: string[];
+    // De vakgroepen (labs) die samen bij één klasgroep horen — net als de
+    // semestervakken een eigenschap van de opleiding. Enkel meegestuurd wanneer
+    // ze effectief aan staan, dus links van andere opleidingen dragen niets
+    // extra's mee. Zie koppelGroepen.ts.
+    koppelGroepen?: KoppelInstellingen;
     // Naam van het profiel waaruit de link gemaakt is. Enkel gezet bij een link
     // die vanuit de profielenlijst gedeeld wordt; de ontvanger kan de set dan
     // onder diezelfde naam op zijn eigen toestel bewaren.
@@ -75,6 +85,15 @@ export function buildShareUrl(settings: TrajectSettings, naam?: string): string 
         g: [g.s1Start, g.s1Eind, g.s2Start, g.s2Eind, g.m2Start, g.m4Start],
         // Enkel meesturen als er iets te melden valt: houdt de URL kort.
         ...(settings.semesterOlods.length > 0 ? { o: settings.semesterOlods } : {}),
+        // Idem voor de vakgroepen: staan ze uit, dan staat er niets in de URL.
+        ...(koppelingActief(settings.koppelGroepen)
+            ? {
+                  c: {
+                      j: settings.koppelGroepen.overPeriodes ? 1 : 0,
+                      g: settings.koppelGroepen.groepen.map(g => [g.naam, ...g.olods]),
+                  },
+              }
+            : {}),
         ...(profielNaam ? { n: profielNaam } : {}),
     });
     const root = window.location.origin + window.location.pathname;
@@ -90,7 +109,7 @@ export function readTrajectPresetFromUrl(): TrajectPreset | null {
         if (!raw) return null;
         const data = JSON.parse(fromBase64Url(raw)) as Record<string, unknown>;
         if (data.v !== PRESET_VERSION) return null;
-        const { k, s, e, p, m, g, o, n } = data;
+        const { k, s, e, p, m, g, o, c, n } = data;
         if (!Array.isArray(k) || !k.every(x => typeof x === 'string')) return null;
         if (typeof s !== 'string' || typeof e !== 'string') return null;
         const preset: TrajectPreset = {
@@ -117,6 +136,22 @@ export function readTrajectPresetFromUrl(): TrajectPreset | null {
         if (Array.isArray(o)) {
             const semesterOlods = normalizeSemesterOlods(o);
             if (semesterOlods.length > 0) preset.semesterOlods = semesterOlods;
+        }
+        // De vakgroepen: elke groep staat in de link als [naam, ...olods].
+        // Ontbreekt `c` (elke link van een opleiding zonder groepen, en elke
+        // oudere link), dan blijft de eigen instelling van de ontvanger staan.
+        if (c && typeof c === 'object') {
+            const cg = c as Record<string, unknown>;
+            const koppel = normalizeKoppelInstellingen({
+                actief: true,
+                overPeriodes: cg.j === 1,
+                groepen: Array.isArray(cg.g)
+                    ? cg.g.map(rij =>
+                          Array.isArray(rij) ? { naam: rij[0], olods: rij.slice(1) } : null
+                      )
+                    : [],
+            });
+            if (koppelingActief(koppel)) preset.koppelGroepen = koppel;
         }
         // Een gedeeld profiel draagt zijn naam mee; links van vóór deze tag (en
         // de gewone "deel met student"-link) hebben hem niet.

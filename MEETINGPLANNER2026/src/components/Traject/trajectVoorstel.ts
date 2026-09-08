@@ -35,14 +35,27 @@ export interface VoorstelOptie {
     blokken: Lesblok[];
 }
 
-/** Een vak dat in het voorstel moet komen. `opties` is nooit leeg. */
+/**
+ * Eén keuze die de puzzel moet maken: normaal één vak, maar even goed een groep
+ * vakken die samen bij dezelfde klasgroep horen (een lab — zie koppelGroepen.ts).
+ * Die groep is hier bewust één variabele en geen extra kost: zo *kan* de solver
+ * ze niet uit elkaar trekken, ook niet om een botsing te vermijden.
+ *
+ * `opties` is nooit leeg.
+ */
 export interface VoorstelVak {
+    // Het label van deze keuze: de OLOD-naam, of de naam van de groep.
     olodNaam: string;
+    // Bij een groep: de OLOD-namen die deze ene keuze invult. Ontbreekt bij een
+    // gewoon vak, dat enkel zichzelf invult.
+    leden?: string[];
     opties: VoorstelOptie[];
 }
 
 export interface VoorstelKeuze {
     olodNaam: string;
+    // Zie {@link VoorstelVak.leden}.
+    leden?: string[];
     klasgroep: string;
     blokken: Lesblok[];
     // Lessen van dit vak die met een ander gekozen vak botsen — zo wijst het
@@ -226,6 +239,7 @@ export function zoekVoorstel(
         const anderen = gekozenBlokken.filter((_, j) => j !== i).flatMap(o => o.blokken);
         return {
             olodNaam: orde[i].olodNaam,
+            leden: orde[i].leden,
             klasgroep: optie.klasgroep,
             blokken: optie.blokken,
             botsendeLessen: optie.blokken.filter(b => anderen.some(o => overlapt(b, o))).length,

@@ -148,6 +148,7 @@ export function TrajectPlanner({ onBack, presetApplied = false, presetNaam = nul
         setPeriodeType,
         setPeriodeGrenzen,
         setSemesterOlod,
+        setKoppelGroepen,
         replaceSettings,
         setKlasgroepen,
     } = useTrajectSettings();
@@ -970,6 +971,7 @@ export function TrajectPlanner({ onBack, presetApplied = false, presetNaam = nul
                         periodeGrenzen={settings.periodeGrenzen}
                         semesterOlods={settings.semesterOlods}
                         onToggleSemesterOlod={handleToggleSemesterOlod}
+                        koppelGroepen={settings.koppelGroepen}
                         onZoekOlod={() => setZoekerOpen(true)}
                         onWizard={() => setWizardOpen(true)}
                     />
@@ -1035,7 +1037,10 @@ export function TrajectPlanner({ onBack, presetApplied = false, presetNaam = nul
                 klasgroepen={settings.mijnOpleidingKlasgroepen}
                 actiefBereik={actiefBereik}
                 periodeGrenzen={settings.periodeGrenzen}
+                periodeType={settings.periodeType}
                 traject={traject}
+                koppelGroepen={settings.koppelGroepen}
+                onKoppelGroepen={setKoppelGroepen}
                 bereikVoorOlod={bereikVoorOlod}
                 onOvernemen={handleWizardOvernemen}
                 onClose={() => setWizardOpen(false)}
