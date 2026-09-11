@@ -127,8 +127,8 @@ export function dagVoorIso(iso: string): string {
 /**
  * Het volledige tijdsbereik van een periode (start 00:00 t/m einde 23:59:59.999).
  * Alle consumenten die een periode bij de adapter opvragen gebruiken deze ene
- * constructie, zodat de cache-slices en de in-flight dedup-sleutels van
- * trajectService exact overeenkomen.
+ * constructie, zodat hun aanvragen op hele dagen vallen — net als de stukken
+ * die trajectService ophaalt en bewaart.
  */
 export function periodeBereik(startIso: string, eindIso: string): { van: Date; tot: Date } {
     const van = parseIsoDate(startIso);
