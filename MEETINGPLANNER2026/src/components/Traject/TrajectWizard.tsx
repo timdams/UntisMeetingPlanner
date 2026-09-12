@@ -1,6 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { AlertTriangle, ArrowRight, Check, Link2, Loader2, Sparkles, Wand2, X } from 'lucide-react';
+import {
+    AlertTriangle,
+    ArrowRight,
+    Check,
+    ClipboardList,
+    Link2,
+    Loader2,
+    Sparkles,
+    Wand2,
+    X,
+} from 'lucide-react';
 import type { Lesblok, StudentTraject } from './types';
 import { isActief } from './types';
 import {
@@ -35,7 +45,15 @@ import {
     type KoppelInstellingen,
     type OnmogelijkeGroep,
 } from './koppelGroepen';
+import {
+    aantalGeregeld,
+    bewaarProgramma,
+    laadProgramma,
+    leesProgramma,
+    treffers,
+} from './programma';
 import { KoppelGroepenDialoog } from './KoppelGroepenDialoog';
+import { PlakProgrammaDialoog, ProgrammaPaneel } from './ProgrammaPaneel';
 import { PeriodeSwitcher } from './PeriodeSwitcher';
 import styles from './Traject.module.css';
 
@@ -131,6 +149,11 @@ export function TrajectWizard({
     const [voorstel, setVoorstel] = useState<Voorstel | null>(null);
     const [bezig, setBezig] = useState(false);
     const [koppelOpen, setKoppelOpen] = useState(false);
+    // Het geplakte programma van de student: zie programma.ts. Het overleeft
+    // het sluiten van de wizard (sessieopslag), want wie het hele jaar periode
+    // per periode legt, doet dat niet in één keer.
+    const [programma, setProgramma] = useState<string[]>(laadProgramma);
+    const [plakOpen, setPlakOpen] = useState(false);
     // De periode waar de gebruiker heen wil terwijl er nog een onbenut
     // voorstel op tafel ligt; null zolang er niets te vragen valt.
     const [wisselVraag, setWisselVraag] = useState<Periode | null>(null);
@@ -142,13 +165,15 @@ export function TrajectWizard({
         // pas daarna de wizard.
         const onKey = (e: KeyboardEvent) => {
             if (e.key !== 'Escape') return;
-            if (koppelOpen) return;
+            if (koppelOpen || plakOpen) return;
             if (wisselVraag) setWisselVraag(null);
             else onClose();
         };
         window.addEventListener('keydown', onKey);
         return () => window.removeEventListener('keydown', onKey);
-    }, [onClose, koppelOpen, wisselVraag]);
+    }, [onClose, koppelOpen, plakOpen, wisselVraag]);
+
+    useEffect(() => bewaarProgramma(programma), [programma]);
 
     // De periodes waar de knoppen in de kop tussen wisselen: dezelfde reeks
     // als de contextbalk van het werkblad (S1/S2 of M1…M4).
@@ -213,6 +238,44 @@ export function TrajectWizard({
         const namen = vakken.map(v => v.olodNaam).filter(n => huidig.has(n));
         if (namen.length > 0) setGekozenVakken(new Set(namen));
     }, [laadt, vakken, weken, huidig]);
+
+    // ----- Het geplakte programma (zie programma.ts) -----
+
+    // Alles wat al in het traject staat, ongeacht de periode: een vak dat in M1
+    // gekozen werd, is voor de lijst behandeld en hoeft in M2 niet opnieuw op te
+    // lichten.
+    const trajectNamen = useMemo(
+        () => Array.from(new Set(traject.filter(isActief).map(s => s.olodNaam))),
+        [traject]
+    );
+    const periodeVakken = useMemo(() => vakken.map(v => v.olodNaam), [vakken]);
+    const programmaRegels = useMemo(
+        () => leesProgramma(programma, periodeVakken, trajectNamen),
+        [programma, periodeVakken, trajectNamen]
+    );
+    const programmaTreffers = useMemo(() => treffers(programmaRegels), [programmaRegels]);
+
+    // De treffers aanduiden zodra de roosters van deze periode binnen zijn, en
+    // opnieuw na elke periodewissel of nieuwe lijst — dat is de hele belofte van
+    // de knop. Eén keer per (periode, lijst): daarna is het aan de gebruiker, en
+    // een vak dat hij zelf uitvinkt mag niet bij de volgende render terugkomen.
+    //
+    // Dit effect staat bewust ná het klaarzet-effect hierboven: dat vervangt de
+    // selectie door wat er al in het traject staat, terwijl dit erbij zet.
+    const programmaStempel = useRef('');
+    useEffect(() => {
+        if (laadt || vakken.length === 0) return;
+        const stempel = `${bereikKey}|${JSON.stringify(programma)}`;
+        if (programmaStempel.current === stempel) return;
+        programmaStempel.current = stempel;
+        if (programmaTreffers.length === 0) return;
+        setVoorstel(null);
+        setGekozenVakken(s => {
+            const next = new Set(s);
+            for (const naam of programmaTreffers) next.add(naam);
+            return next;
+        });
+    }, [laadt, vakken, bereikKey, programma, programmaTreffers]);
 
     // Elke wijziging aan de invoer maakt een bestaand voorstel oud nieuws.
     const wijzig = (actie: () => void) => {
@@ -397,7 +460,9 @@ export function TrajectWizard({
     return createPortal(
         <div className={styles.zoomBackdrop}>
             <div
-                className={styles.wizDialog}
+                className={`${styles.wizDialog} ${
+                    programma.length > 0 ? styles.wizDialogBreed : ''
+                }`}
                 role="dialog"
                 aria-modal="true"
                 aria-label="Wizard: stel een rooster voor"
@@ -466,401 +531,436 @@ export function TrajectWizard({
                     </div>
                 )}
 
-                <div className={styles.wizBody}>
-                    {/* ① Referentieweken */}
-                    <section className={styles.wizSectie}>
-                        <div className={styles.wizSectieKop}>
-                            <span className={styles.wizStap}>1</span>
-                            Referentieweken
-                            <span className={styles.wizSectieHint}>
-                                de weken waarop de puzzel gelegd wordt — maximaal {MAX_WEKEN}
-                            </span>
-                        </div>
-                        {laadt ? (
-                            <div className={styles.kiesEmpty}>
-                                <Loader2 size={14} className="animate-spin" /> Roosters laden… (
-                                {klaar}/{totaal})
-                            </div>
-                        ) : weken.length === 0 ? (
-                            <div className={styles.kiesEmpty}>
-                                Geen enkele klasgroep uit je shortlist geeft les in deze periode.
-                            </div>
-                        ) : (
-                            <>
-                                <div className={styles.wizWeken}>
-                                    {weken.map((w, i) => {
-                                        const ma = w.maandag.getTime();
-                                        const aan = weekKeuze.includes(ma);
-                                        const vol = !aan && weekKeuze.length >= MAX_WEKEN;
-                                        const rand = i === 0 || i === weken.length - 1;
-                                        return (
-                                            <button
-                                                key={ma}
-                                                type="button"
-                                                className={`${styles.wizWeekChip} ${
-                                                    aan ? styles.wizWeekChipAan : ''
-                                                } ${rand ? styles.wizWeekChipRand : ''}`}
-                                                onClick={() => toggleWeek(ma)}
-                                                disabled={vol}
-                                                aria-pressed={aan}
-                                                title={
-                                                    `Week ${formatDateBE(w.maandag)} – ${formatDateBE(
-                                                        addDays(w.maandag, 4)
-                                                    )}\n` +
-                                                    (rand
-                                                        ? `${
-                                                              i === 0 ? 'Eerste' : 'Laatste'
-                                                          } lesweek van de periode — vaak atypisch.\n`
-                                                        : '') +
-                                                    `${w.lessen} lessen bij je klasgroepen deze week` +
-                                                    (w.lessen > normaleWeek
-                                                        ? `\nMeer dan een doorsneeweek (${normaleWeek}) — mogelijk inhaallessen.`
-                                                        : w.lessen < normaleWeek
-                                                          ? `\nMinder dan een doorsneeweek (${normaleWeek}) — mogelijk een feestdag.`
-                                                          : '') +
-                                                    (vol
-                                                        ? `\nEr zijn al ${MAX_WEKEN} weken gekozen.`
-                                                        : '')
-                                                }
-                                            >
-                                                {formatDateBE(w.maandag)}
-                                                <span className={styles.wizWeekAantal}>{w.lessen}</span>
-                                            </button>
-                                        );
-                                    })}
-                                </div>
-                                <div className={styles.wizVoetnoot}>
-                                    Een rooster herhaalt zich meestal week na week; losse eenmalige
-                                    lessen mogen een voorstel niet doen mislukken. Twee
-                                    opeenvolgende weken vangen ook een even/oneven ritme. De eerste
-                                    en laatste lesweek staan er wel bij, maar zijn vaak atypisch —
-                                    ze worden niet vanzelf gekozen.
-                                </div>
-                            </>
-                        )}
-                    </section>
-
-                    {/* ② Vakken */}
-                    <section className={styles.wizSectie}>
-                        <div className={styles.wizSectieKop}>
-                            <span className={styles.wizStap}>2</span>
-                            Vakken
-                            <span className={styles.wizSectieHint}>
-                                {gekozenVakken.size} aangeduid
-                            </span>
-                            {/* Achter een knopje: de meeste opleidingen hebben
-                                niets te koppelen en hoeven dit nooit te zien. */}
-                            <button
-                                type="button"
-                                className={styles.wizKopActie}
-                                onClick={() => setKoppelOpen(true)}
-                                title="Duid aan welke vakken samen bij één klasgroep horen (een lab)"
-                            >
-                                <Link2 size={12} />
-                                Vakken die samen horen
-                                <span className={styles.wizKopActieStand}>
-                                    {koppelingActief(koppelGroepen)
-                                        ? `${koppelGroepen.groepen.length} ${
-                                              koppelGroepen.groepen.length === 1
-                                                  ? 'groep'
-                                                  : 'groepen'
-                                          }`
-                                        : 'uit'}
+                <div className={styles.wizMain}>
+                    <div className={styles.wizBody}>
+                        {/* ① Referentieweken */}
+                        <section className={styles.wizSectie}>
+                            <div className={styles.wizSectieKop}>
+                                <span className={styles.wizStap}>1</span>
+                                Referentieweken
+                                <span className={styles.wizSectieHint}>
+                                    de weken waarop de puzzel gelegd wordt — maximaal {MAX_WEKEN}
                                 </span>
-                            </button>
-                        </div>
-                        {!laadt && blokken.length === 0 ? (
-                            <div className={styles.kiesEmpty}>Niets te kiezen in deze periode.</div>
-                        ) : (
-                            <div className={styles.wizBlokken}>
-                                {blokken.map(blok => (
-                                    <div key={blok.label} className={styles.wizBlok}>
-                                        <div className={styles.wizBlokKop}>
-                                            <span className={styles.wizBlokLabel}>{blok.label}</span>
-                                            <button
-                                                type="button"
-                                                className={styles.wizBlokActie}
-                                                onClick={() => zetBlok(blok, true)}
-                                            >
-                                                alles
-                                            </button>
-                                            <button
-                                                type="button"
-                                                className={styles.wizBlokActie}
-                                                onClick={() => zetBlok(blok, false)}
-                                            >
-                                                geen
-                                            </button>
-                                        </div>
-                                        <div className={styles.wizChips}>
-                                            {blok.vakken.map(vak => {
-                                                const aan = gekozenVakken.has(vak.olodNaam);
-                                                const heeftLes = vak.blokken.some(inWeken);
-                                                const groep = groepVoorOlod(
-                                                    vak.olodNaam,
-                                                    koppelGroepen
-                                                );
-                                                return (
-                                                    <button
-                                                        key={vak.olodNaam}
-                                                        type="button"
-                                                        className={`${styles.wizChip} ${
-                                                            aan ? styles.wizChipAan : ''
-                                                        } ${heeftLes ? '' : styles.wizChipLeeg}`}
-                                                        onClick={() => toggleVak(vak.olodNaam)}
-                                                        aria-pressed={aan}
-                                                        title={
-                                                            `${vak.klasgroepen.join(', ')}` +
-                                                            (heeftLes
-                                                                ? ''
-                                                                : '\nGeen les in de gekozen referentieweken.') +
-                                                            (groep
-                                                                ? `\nHoort bij ${groep.naam}: die vakken komen samen in één klasgroep.`
-                                                                : '')
-                                                        }
-                                                    >
-                                                        {aan && <Check size={11} strokeWidth={3} />}
-                                                        {vak.olodNaam}
-                                                        {groep && (
-                                                            <span
-                                                                className={styles.wizChipGroep}
-                                                                title={`Groep ${groep.naam}`}
-                                                            >
-                                                                <Link2 size={10} />
-                                                                {groep.naam}
-                                                            </span>
-                                                        )}
-                                                        <span className={styles.wizChipAantal}>
-                                                            {vak.klasgroepen.length}
-                                                        </span>
-                                                    </button>
-                                                );
-                                            })}
-                                        </div>
+                            </div>
+                            {laadt ? (
+                                <div className={styles.kiesEmpty}>
+                                    <Loader2 size={14} className="animate-spin" /> Roosters laden… (
+                                    {klaar}/{totaal})
+                                </div>
+                            ) : weken.length === 0 ? (
+                                <div className={styles.kiesEmpty}>
+                                    Geen enkele klasgroep uit je shortlist geeft les in deze periode.
+                                </div>
+                            ) : (
+                                <>
+                                    <div className={styles.wizWeken}>
+                                        {weken.map((w, i) => {
+                                            const ma = w.maandag.getTime();
+                                            const aan = weekKeuze.includes(ma);
+                                            const vol = !aan && weekKeuze.length >= MAX_WEKEN;
+                                            const rand = i === 0 || i === weken.length - 1;
+                                            return (
+                                                <button
+                                                    key={ma}
+                                                    type="button"
+                                                    className={`${styles.wizWeekChip} ${
+                                                        aan ? styles.wizWeekChipAan : ''
+                                                    } ${rand ? styles.wizWeekChipRand : ''}`}
+                                                    onClick={() => toggleWeek(ma)}
+                                                    disabled={vol}
+                                                    aria-pressed={aan}
+                                                    title={
+                                                        `Week ${formatDateBE(w.maandag)} – ${formatDateBE(
+                                                            addDays(w.maandag, 4)
+                                                        )}\n` +
+                                                        (rand
+                                                            ? `${
+                                                                  i === 0 ? 'Eerste' : 'Laatste'
+                                                              } lesweek van de periode — vaak atypisch.\n`
+                                                            : '') +
+                                                        `${w.lessen} lessen bij je klasgroepen deze week` +
+                                                        (w.lessen > normaleWeek
+                                                            ? `\nMeer dan een doorsneeweek (${normaleWeek}) — mogelijk inhaallessen.`
+                                                            : w.lessen < normaleWeek
+                                                              ? `\nMinder dan een doorsneeweek (${normaleWeek}) — mogelijk een feestdag.`
+                                                              : '') +
+                                                        (vol
+                                                            ? `\nEr zijn al ${MAX_WEKEN} weken gekozen.`
+                                                            : '')
+                                                    }
+                                                >
+                                                    {formatDateBE(w.maandag)}
+                                                    <span className={styles.wizWeekAantal}>{w.lessen}</span>
+                                                </button>
+                                            );
+                                        })}
                                     </div>
-                                ))}
-                            </div>
-                        )}
-                    </section>
+                                    <div className={styles.wizVoetnoot}>
+                                        Een rooster herhaalt zich meestal week na week; losse eenmalige
+                                        lessen mogen een voorstel niet doen mislukken. Twee
+                                        opeenvolgende weken vangen ook een even/oneven ritme. De eerste
+                                        en laatste lesweek staan er wel bij, maar zijn vaak atypisch —
+                                        ze worden niet vanzelf gekozen.
+                                    </div>
+                                </>
+                            )}
+                        </section>
 
-                    {/* ③ Voorkeur + resultaat */}
-                    <section className={styles.wizSectie}>
-                        <div className={styles.wizSectieKop}>
-                            <span className={styles.wizStap}>3</span>
-                            Voorstel
-                        </div>
-                        <div className={styles.wizVoorkeurRij}>
-                            <div className={styles.wizVoorkeur} role="radiogroup" aria-label="Voorkeur">
-                                <button
-                                    type="button"
-                                    role="radio"
-                                    aria-checked={voorkeur === 'conflictvrij'}
-                                    className={`${styles.wizVoorkeurKnop} ${
-                                        voorkeur === 'conflictvrij' ? styles.wizVoorkeurKnopAan : ''
-                                    }`}
-                                    onClick={() => wijzig(() => setVoorkeur('conflictvrij'))}
-                                    title="Een botsing weegt altijd zwaarder dan een extra lesdag: er wordt alleen gebotst als het niet anders kan."
-                                >
-                                    Zo weinig mogelijk botsingen
-                                </button>
-                                <button
-                                    type="button"
-                                    role="radio"
-                                    aria-checked={voorkeur === 'compact'}
-                                    className={`${styles.wizVoorkeurKnop} ${
-                                        voorkeur === 'compact' ? styles.wizVoorkeurKnopAan : ''
-                                    }`}
-                                    onClick={() => wijzig(() => setVoorkeur('compact'))}
-                                    title="Een lesdag minder mag één botsing per week kosten (twee niet). Handig voor wie werkt of pendelt."
-                                >
-                                    Zo weinig mogelijk lesdagen
-                                </button>
-                            </div>
-                            <button
-                                type="button"
-                                className={styles.wizRekenKnop}
-                                onClick={doeVoorstel}
-                                disabled={!kanRekenen || bezig}
-                                title={
-                                    laadt
-                                        ? 'De roosters worden nog opgehaald'
-                                        : weekKeuze.length === 0
-                                          ? 'Kies eerst minstens één referentieweek'
-                                          : puzzel.mee.length === 0
-                                            ? 'Duid eerst vakken aan die in de referentieweken lesgeven'
-                                            : `Zoek een combinatie van klasgroepen voor ${puzzel.mee.reduce(
-                                                  (n, v) => n + (v.leden?.length ?? 1),
-                                                  0
-                                              )} vakken`
-                                }
-                            >
-                                {bezig ? (
-                                    <>
-                                        <Loader2 size={14} className="animate-spin" /> Rekenen…
-                                    </>
-                                ) : (
-                                    <>
-                                        <Sparkles size={14} /> Doe voorstel
-                                    </>
-                                )}
-                            </button>
-                        </div>
-
-                        {puzzel.zonderLes.length > 0 && (
-                            <div className={styles.wizWaarschuwing}>
-                                <AlertTriangle size={13} />
-                                <span>
-                                    <strong>{puzzel.zonderLes.join(', ')}</strong> heeft geen les in
-                                    de gekozen referentieweken en zit niet in de puzzel.
-                                    {behouden.length > 0
-                                        ? ' De keuze die er nu voor in het traject staat, blijft staan.'
-                                        : ' Kies er een andere week bij als dat vak toch mee moet.'}
+                        {/* ② Vakken */}
+                        <section className={styles.wizSectie}>
+                            <div className={styles.wizSectieKop}>
+                                <span className={styles.wizStap}>2</span>
+                                Vakken
+                                <span className={styles.wizSectieHint}>
+                                    {gekozenVakken.size} aangeduid
                                 </span>
+                                {/* Het programma van de student in één keer
+                                    aanduiden in plaats van vak per vak. Zie
+                                    programma.ts. */}
+                                <button
+                                    type="button"
+                                    className={styles.wizKopActie}
+                                    onClick={() => setPlakOpen(true)}
+                                    title={
+                                        'Plak de OLODs van de student, één per regel. De wizard duidt ' +
+                                        'aan wat in deze periode lesgegeven wordt en houdt de rest bij.'
+                                    }
+                                >
+                                    <ClipboardList size={12} />
+                                    Plak programma
+                                    <span className={styles.wizKopActieStand}>
+                                        {programma.length === 0
+                                            ? 'leeg'
+                                            : `${aantalGeregeld(programmaRegels)}/${programma.length}`}
+                                    </span>
+                                </button>
+                                {/* Achter een knopje: de meeste opleidingen hebben
+                                    niets te koppelen en hoeven dit nooit te zien. */}
+                                <button
+                                    type="button"
+                                    className={`${styles.wizKopActie} ${styles.wizKopActieNaast}`}
+                                    onClick={() => setKoppelOpen(true)}
+                                    title="Duid aan welke vakken samen bij één klasgroep horen (een lab)"
+                                >
+                                    <Link2 size={12} />
+                                    Vakken die samen horen
+                                    <span className={styles.wizKopActieStand}>
+                                        {koppelingActief(koppelGroepen)
+                                            ? `${koppelGroepen.groepen.length} ${
+                                                  koppelGroepen.groepen.length === 1
+                                                      ? 'groep'
+                                                      : 'groepen'
+                                              }`
+                                            : 'uit'}
+                                    </span>
+                                </button>
                             </div>
-                        )}
+                            {!laadt && blokken.length === 0 ? (
+                                <div className={styles.kiesEmpty}>Niets te kiezen in deze periode.</div>
+                            ) : (
+                                <div className={styles.wizBlokken}>
+                                    {blokken.map(blok => (
+                                        <div key={blok.label} className={styles.wizBlok}>
+                                            <div className={styles.wizBlokKop}>
+                                                <span className={styles.wizBlokLabel}>{blok.label}</span>
+                                                <button
+                                                    type="button"
+                                                    className={styles.wizBlokActie}
+                                                    onClick={() => zetBlok(blok, true)}
+                                                >
+                                                    alles
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    className={styles.wizBlokActie}
+                                                    onClick={() => zetBlok(blok, false)}
+                                                >
+                                                    geen
+                                                </button>
+                                            </div>
+                                            <div className={styles.wizChips}>
+                                                {blok.vakken.map(vak => {
+                                                    const aan = gekozenVakken.has(vak.olodNaam);
+                                                    const heeftLes = vak.blokken.some(inWeken);
+                                                    const groep = groepVoorOlod(
+                                                        vak.olodNaam,
+                                                        koppelGroepen
+                                                    );
+                                                    return (
+                                                        <button
+                                                            key={vak.olodNaam}
+                                                            type="button"
+                                                            className={`${styles.wizChip} ${
+                                                                aan ? styles.wizChipAan : ''
+                                                            } ${heeftLes ? '' : styles.wizChipLeeg}`}
+                                                            onClick={() => toggleVak(vak.olodNaam)}
+                                                            aria-pressed={aan}
+                                                            title={
+                                                                `${vak.klasgroepen.join(', ')}` +
+                                                                (heeftLes
+                                                                    ? ''
+                                                                    : '\nGeen les in de gekozen referentieweken.') +
+                                                                (groep
+                                                                    ? `\nHoort bij ${groep.naam}: die vakken komen samen in één klasgroep.`
+                                                                    : '')
+                                                            }
+                                                        >
+                                                            {aan && <Check size={11} strokeWidth={3} />}
+                                                            {vak.olodNaam}
+                                                            {groep && (
+                                                                <span
+                                                                    className={styles.wizChipGroep}
+                                                                    title={`Groep ${groep.naam}`}
+                                                                >
+                                                                    <Link2 size={10} />
+                                                                    {groep.naam}
+                                                                </span>
+                                                            )}
+                                                            <span className={styles.wizChipAantal}>
+                                                                {vak.klasgroepen.length}
+                                                            </span>
+                                                        </button>
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </section>
 
-                        {/* Een groep die niet in één klasgroep past, wordt niet
-                            geplaatst — liever geen antwoord dan een stil
-                            gesplitst lab. */}
-                        {puzzel.onmogelijk.map(g => (
-                            <div key={g.naam} className={styles.wizWaarschuwing}>
-                                <AlertTriangle size={13} />
-                                <span>
-                                    <strong>{g.naam}</strong>{' '}
-                                    {g.reden === 'geen-les' ? (
+                        {/* ③ Voorkeur + resultaat */}
+                        <section className={styles.wizSectie}>
+                            <div className={styles.wizSectieKop}>
+                                <span className={styles.wizStap}>3</span>
+                                Voorstel
+                            </div>
+                            <div className={styles.wizVoorkeurRij}>
+                                <div className={styles.wizVoorkeur} role="radiogroup" aria-label="Voorkeur">
+                                    <button
+                                        type="button"
+                                        role="radio"
+                                        aria-checked={voorkeur === 'conflictvrij'}
+                                        className={`${styles.wizVoorkeurKnop} ${
+                                            voorkeur === 'conflictvrij' ? styles.wizVoorkeurKnopAan : ''
+                                        }`}
+                                        onClick={() => wijzig(() => setVoorkeur('conflictvrij'))}
+                                        title="Een botsing weegt altijd zwaarder dan een extra lesdag: er wordt alleen gebotst als het niet anders kan."
+                                    >
+                                        Zo weinig mogelijk botsingen
+                                    </button>
+                                    <button
+                                        type="button"
+                                        role="radio"
+                                        aria-checked={voorkeur === 'compact'}
+                                        className={`${styles.wizVoorkeurKnop} ${
+                                            voorkeur === 'compact' ? styles.wizVoorkeurKnopAan : ''
+                                        }`}
+                                        onClick={() => wijzig(() => setVoorkeur('compact'))}
+                                        title="Een lesdag minder mag één botsing per week kosten (twee niet). Handig voor wie werkt of pendelt."
+                                    >
+                                        Zo weinig mogelijk lesdagen
+                                    </button>
+                                </div>
+                                <button
+                                    type="button"
+                                    className={styles.wizRekenKnop}
+                                    onClick={doeVoorstel}
+                                    disabled={!kanRekenen || bezig}
+                                    title={
+                                        laadt
+                                            ? 'De roosters worden nog opgehaald'
+                                            : weekKeuze.length === 0
+                                              ? 'Kies eerst minstens één referentieweek'
+                                              : puzzel.mee.length === 0
+                                                ? 'Duid eerst vakken aan die in de referentieweken lesgeven'
+                                                : `Zoek een combinatie van klasgroepen voor ${puzzel.mee.reduce(
+                                                      (n, v) => n + (v.leden?.length ?? 1),
+                                                      0
+                                                  )} vakken`
+                                    }
+                                >
+                                    {bezig ? (
                                         <>
-                                            heeft geen les in de gekozen referentieweken en zit niet
-                                            in de puzzel.
-                                        </>
-                                    ) : g.reden === 'vast-elders' ? (
-                                        <>
-                                            ligt in een andere periode bij <strong>{g.vast}</strong>{' '}
-                                            vast, maar daar zitten niet alle aangevinkte vakken van
-                                            de groep. Zet het vinkje “ook in de andere periodes
-                                            dezelfde klasgroep” uit, of pas die andere periode aan.
+                                            <Loader2 size={14} className="animate-spin" /> Rekenen…
                                         </>
                                     ) : (
                                         <>
-                                            past niet in één klasgroep: geen enkele klasgroep uit je
-                                            shortlist geeft alle {g.olods.length} aangevinkte
-                                            vakken. {dekkingTekst(g)}
+                                            <Sparkles size={14} /> Doe voorstel
                                         </>
-                                    )}{' '}
-                                    De groep zit niet in de puzzel; wat er nu voor in het traject
-                                    staat, blijft staan.
-                                </span>
+                                    )}
+                                </button>
                             </div>
-                        ))}
 
-                        {elders.verdeeld.length > 0 && (
-                            <div className={styles.wizWaarschuwing}>
-                                <AlertTriangle size={13} />
-                                <span>
-                                    {elders.verdeeld
-                                        .map(v => `${v.naam} (${v.klasgroepen.join(', ')})`)
-                                        .join(', ')}{' '}
-                                    staat in andere periodes zelf al bij meerdere klasgroepen. Daar
-                                    valt niets af te dwingen: de wizard kiest hier vrij.
-                                </span>
-                            </div>
-                        )}
+                            {puzzel.zonderLes.length > 0 && (
+                                <div className={styles.wizWaarschuwing}>
+                                    <AlertTriangle size={13} />
+                                    <span>
+                                        <strong>{puzzel.zonderLes.join(', ')}</strong> heeft geen les in
+                                        de gekozen referentieweken en zit niet in de puzzel.
+                                        {behouden.length > 0
+                                            ? ' De keuze die er nu voor in het traject staat, blijft staan.'
+                                            : ' Kies er een andere week bij als dat vak toch mee moet.'}
+                                    </span>
+                                </div>
+                            )}
 
-                        {voorstel && (
-                            <div className={styles.wizResultaat}>
-                                <div className={styles.wizSamenvatting}>
-                                    <span
-                                        className={
-                                            voorstel.conflicten === 0
-                                                ? styles.wizScoreGoed
-                                                : styles.wizScoreSlecht
-                                        }
-                                    >
-                                        {voorstel.conflicten === 0 ? (
+                            {/* Een groep die niet in één klasgroep past, wordt niet
+                                geplaatst — liever geen antwoord dan een stil
+                                gesplitst lab. */}
+                            {puzzel.onmogelijk.map(g => (
+                                <div key={g.naam} className={styles.wizWaarschuwing}>
+                                    <AlertTriangle size={13} />
+                                    <span>
+                                        <strong>{g.naam}</strong>{' '}
+                                        {g.reden === 'geen-les' ? (
                                             <>
-                                                <Check size={13} strokeWidth={3} /> geen botsingen
+                                                heeft geen les in de gekozen referentieweken en zit niet
+                                                in de puzzel.
+                                            </>
+                                        ) : g.reden === 'vast-elders' ? (
+                                            <>
+                                                ligt in een andere periode bij <strong>{g.vast}</strong>{' '}
+                                                vast, maar daar zitten niet alle aangevinkte vakken van
+                                                de groep. Zet het vinkje “ook in de andere periodes
+                                                dezelfde klasgroep” uit, of pas die andere periode aan.
                                             </>
                                         ) : (
                                             <>
-                                                <AlertTriangle size={13} /> {voorstel.conflicten}{' '}
-                                                botsende {voorstel.conflicten === 1 ? 'les' : 'lessen'}
+                                                past niet in één klasgroep: geen enkele klasgroep uit je
+                                                shortlist geeft alle {g.olods.length} aangevinkte
+                                                vakken. {dekkingTekst(g)}
                                             </>
-                                        )}
-                                    </span>
-                                    <span>
-                                        {voorstel.dagen} {voorstel.dagen === 1 ? 'lesdag' : 'lesdagen'}
-                                    </span>
-                                    <span>{voorstel.tussenuren} tussenuren per week</span>
-                                    <span>
-                                        {new Set(voorstel.keuzes.map(k => k.klasgroep)).size}{' '}
-                                        klasgroepen
+                                        )}{' '}
+                                        De groep zit niet in de puzzel; wat er nu voor in het traject
+                                        staat, blijft staan.
                                     </span>
                                 </div>
+                            ))}
 
-                                <div className={styles.wizRijen}>
-                                    {voorstel.keuzes.map(k => {
-                                        // Een groep vult meerdere vakken in; het
-                                        // "was" ernaast is dan alles waar die
-                                        // vakken nu verspreid staan.
-                                        const leden = k.leden ?? [k.olodNaam];
-                                        const badge = periodeBadge(leden[0]);
-                                        const anders = Array.from(
-                                            new Set(
-                                                leden
-                                                    .map(l => huidig.get(l))
-                                                    .filter(
-                                                        (x): x is string =>
-                                                            !!x && x !== k.klasgroep
-                                                    )
-                                            )
-                                        );
-                                        return (
-                                            <div key={k.olodNaam} className={styles.wizRij}>
-                                                <span className={styles.wizRijVak}>
-                                                    {k.leden && (
-                                                        <Link2
-                                                            size={11}
-                                                            className={styles.wizRijGroepIcoon}
-                                                        />
-                                                    )}
-                                                    {k.olodNaam}
-                                                </span>
-                                                {badge && (
-                                                    <span className={styles.wizRijBadge}>{badge}</span>
-                                                )}
-                                                <span className={styles.wizRijKlas}>{k.klasgroep}</span>
-                                                {anders.length > 0 && (
-                                                    <span className={styles.wizRijWas}>
-                                                        was {anders.join(', ')}
-                                                    </span>
-                                                )}
-                                                {k.botsendeLessen > 0 && (
-                                                    <span className={styles.wizRijBotst}>
-                                                        <AlertTriangle size={12} />
-                                                        {k.botsendeLessen} botsende{' '}
-                                                        {k.botsendeLessen === 1 ? 'les' : 'lessen'}
-                                                    </span>
-                                                )}
-                                                {k.leden && (
-                                                    <span className={styles.wizRijLeden}>
-                                                        {k.leden.join(' · ')}
-                                                    </span>
-                                                )}
-                                            </div>
-                                        );
-                                    })}
+                            {elders.verdeeld.length > 0 && (
+                                <div className={styles.wizWaarschuwing}>
+                                    <AlertTriangle size={13} />
+                                    <span>
+                                        {elders.verdeeld
+                                            .map(v => `${v.naam} (${v.klasgroepen.join(', ')})`)
+                                            .join(', ')}{' '}
+                                        staat in andere periodes zelf al bij meerdere klasgroepen. Daar
+                                        valt niets af te dwingen: de wizard kiest hier vrij.
+                                    </span>
                                 </div>
+                            )}
 
-                                {voorstel.afgekapt && (
-                                    <div className={styles.wizVoetnoot}>
-                                        De zoektocht is afgekapt bij haar tijdslimiet: dit is het
-                                        beste voorstel dat gevonden werd, niet noodzakelijk het
-                                        allerbeste. Duid minder vakken tegelijk aan voor een
-                                        volledige zoektocht.
+                            {voorstel && (
+                                <div className={styles.wizResultaat}>
+                                    <div className={styles.wizSamenvatting}>
+                                        <span
+                                            className={
+                                                voorstel.conflicten === 0
+                                                    ? styles.wizScoreGoed
+                                                    : styles.wizScoreSlecht
+                                            }
+                                        >
+                                            {voorstel.conflicten === 0 ? (
+                                                <>
+                                                    <Check size={13} strokeWidth={3} /> geen botsingen
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <AlertTriangle size={13} /> {voorstel.conflicten}{' '}
+                                                    botsende {voorstel.conflicten === 1 ? 'les' : 'lessen'}
+                                                </>
+                                            )}
+                                        </span>
+                                        <span>
+                                            {voorstel.dagen} {voorstel.dagen === 1 ? 'lesdag' : 'lesdagen'}
+                                        </span>
+                                        <span>{voorstel.tussenuren} tussenuren per week</span>
+                                        <span>
+                                            {new Set(voorstel.keuzes.map(k => k.klasgroep)).size}{' '}
+                                            klasgroepen
+                                        </span>
                                     </div>
-                                )}
-                            </div>
-                        )}
-                    </section>
+
+                                    <div className={styles.wizRijen}>
+                                        {voorstel.keuzes.map(k => {
+                                            // Een groep vult meerdere vakken in; het
+                                            // "was" ernaast is dan alles waar die
+                                            // vakken nu verspreid staan.
+                                            const leden = k.leden ?? [k.olodNaam];
+                                            const badge = periodeBadge(leden[0]);
+                                            const anders = Array.from(
+                                                new Set(
+                                                    leden
+                                                        .map(l => huidig.get(l))
+                                                        .filter(
+                                                            (x): x is string =>
+                                                                !!x && x !== k.klasgroep
+                                                        )
+                                                )
+                                            );
+                                            return (
+                                                <div key={k.olodNaam} className={styles.wizRij}>
+                                                    <span className={styles.wizRijVak}>
+                                                        {k.leden && (
+                                                            <Link2
+                                                                size={11}
+                                                                className={styles.wizRijGroepIcoon}
+                                                            />
+                                                        )}
+                                                        {k.olodNaam}
+                                                    </span>
+                                                    {badge && (
+                                                        <span className={styles.wizRijBadge}>{badge}</span>
+                                                    )}
+                                                    <span className={styles.wizRijKlas}>{k.klasgroep}</span>
+                                                    {anders.length > 0 && (
+                                                        <span className={styles.wizRijWas}>
+                                                            was {anders.join(', ')}
+                                                        </span>
+                                                    )}
+                                                    {k.botsendeLessen > 0 && (
+                                                        <span className={styles.wizRijBotst}>
+                                                            <AlertTriangle size={12} />
+                                                            {k.botsendeLessen} botsende{' '}
+                                                            {k.botsendeLessen === 1 ? 'les' : 'lessen'}
+                                                        </span>
+                                                    )}
+                                                    {k.leden && (
+                                                        <span className={styles.wizRijLeden}>
+                                                            {k.leden.join(' · ')}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+
+                                    {voorstel.afgekapt && (
+                                        <div className={styles.wizVoetnoot}>
+                                            De zoektocht is afgekapt bij haar tijdslimiet: dit is het
+                                            beste voorstel dat gevonden werd, niet noodzakelijk het
+                                            allerbeste. Duid minder vakken tegelijk aan voor een
+                                            volledige zoektocht.
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                        </section>
+                    </div>
+
+                    {/* De checklist van het geplakte programma. Enkel zichtbaar
+                        wanneer er een lijst is: wie er geen gebruikt, hoort er
+                        niets van te merken. */}
+                    {programma.length > 0 && (
+                        <ProgrammaPaneel
+                            regels={programmaRegels}
+                            gekozen={gekozenVakken}
+                            periodeNaam={periodeNaam}
+                            onBewerk={() => setPlakOpen(true)}
+                            onWis={() => setProgramma([])}
+                        />
+                    )}
                 </div>
 
                 <div className={styles.wizVoet}>
@@ -907,6 +1007,17 @@ export function TrajectWizard({
                     periodeGrenzen={periodeGrenzen}
                     actiefBereik={actiefBereik}
                     onClose={() => setKoppelOpen(false)}
+                />
+            )}
+
+            {plakOpen && (
+                <PlakProgrammaDialoog
+                    huidig={programma}
+                    onKlaar={lijst => {
+                        setProgramma(lijst);
+                        setPlakOpen(false);
+                    }}
+                    onClose={() => setPlakOpen(false)}
                 />
             )}
         </div>,
