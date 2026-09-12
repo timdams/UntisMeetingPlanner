@@ -3516,6 +3516,17 @@
 }
 
 /* Knopje rechts in een sectiekop van de wizard ("Vakken die samen horen"). */
+/* Het woordje voor de periode-snelkeuze in de kop van de wizard: dezelfde
+   toon als de labels in de contextbalk van het werkblad. */
+.wizPeriodeLabel {
+    font-size: 0.72rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #64748b;
+    flex-shrink: 0;
+}
+
 .wizKopActie {
     margin-left: auto;
     display: inline-flex;

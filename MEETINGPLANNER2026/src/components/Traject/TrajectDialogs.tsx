@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
-import { AlertTriangle, Circle, CircleDot, Save, SlidersHorizontal } from 'lucide-react';
+import { AlertTriangle, Circle, CircleDot, Save, SlidersHorizontal, Wand2 } from 'lucide-react';
 import type { BewaardTraject, Profiel } from './hooks';
 import { zelfdeNaam } from './hooks';
 import { formatDateTime } from './dateUtils';
@@ -549,6 +549,146 @@ export function ProfielWisselDialog({
                     onClick={() => onWissel(wisTraject)}
                 >
                     {wisTraject ? 'Overschakelen en wissen' : 'Overschakelen'}
+                </button>
+            </div>
+        </DialogSchil>
+    );
+}
+
+interface WizardStartProps {
+    // Hoeveel OLODs er al in het traject staan, en hoeveel daarvan in de
+    // periode waarin de wizard meteen begint te puzzelen.
+    aantalOlods: number;
+    aantalInPeriode: number;
+    // Naam van die periode ("Module 2"), of het datumbereik als ze nergens op past.
+    periodeLabel: string;
+    // De vakken die "wissen" weggooit — dezelfde opsomming als de reset-dialoog.
+    items: DialogItem[];
+    // Dat het huidige werk in geen enkel dossier staat — enkel van tel bij wissen.
+    nietBewaardDossier?: ReactNode;
+    onStart: (wisTraject: boolean) => void;
+    onAnnuleer: () => void;
+}
+
+/**
+ * De vraag vóór de wizard opengaat, en enkel wanneer er al iets in het traject
+ * staat. De wizard is geen leeg blad: ze vinkt aan wat er al staat, en
+ * *overnemen* vervangt alle keuzes van de periode waarin ze puzzelt. Wie met
+ * de periodeknoppen in de wizard het hele jaar afgaat, schrijft dus na elkaar
+ * over elke periode heen. Dat hoort de gebruiker te weten vóór hij begint —
+ * en hij hoort te kunnen kiezen om eerst schoon schip te maken.
+ *
+ * **Laten staan** is de standaard: het is de omkeerbare kant, en meestal wil
+ * de begeleider net vertrekken van wat er al ligt. **Wissen** gooit weg en
+ * krijgt daarom de bewuste klik én de rode knop (met undo achteraf).
+ */
+export function WizardStartDialog({
+    aantalOlods,
+    aantalInPeriode,
+    periodeLabel,
+    items,
+    nietBewaardDossier,
+    onStart,
+    onAnnuleer,
+}: WizardStartProps) {
+    const [wisTraject, setWisTraject] = useState(false);
+    const focusRef = useRef<HTMLButtonElement | null>(null);
+    useEffect(() => {
+        focusRef.current?.focus();
+    }, []);
+
+    const olods = (n: number) => `${n} ${n === 1 ? 'OLOD' : 'OLODs'}`;
+
+    return (
+        <DialogSchil label="De wizard starten" onSluit={onAnnuleer}>
+            <div className={styles.dialoogKop}>
+                <Wand2 size={16} className={styles.dialoogKopIcoon} />
+                <span>De wizard starten?</span>
+            </div>
+            <div className={styles.dialoogBody}>
+                <div className={styles.dialoogTekst}>
+                    Er {aantalOlods === 1 ? 'staat' : 'staan'} al <strong>{olods(aantalOlods)}</strong> in
+                    het studenttraject
+                    {aantalInPeriode > 0 ? (
+                        <>
+                            , waarvan {aantalInPeriode === 1 ? 'er één' : `er ${aantalInPeriode}`} in{' '}
+                            <strong>{periodeLabel}</strong>
+                        </>
+                    ) : null}
+                    . De wizard vertrekt van wat er staat: ze vinkt die vakken aan, en een voorstel
+                    <em> overnemen</em> vervangt alle keuzes van de periode waarin je op dat moment
+                    puzzelt. Wissel je in de wizard van periode, dan gebeurt dat opnieuw voor die
+                    periode. Kies wat er nu met het traject moet gebeuren.
+                </div>
+
+                <div
+                    className={`${styles.dialoogKeuzeLijst} ${styles.dialoogKeuzeGroep}`}
+                    role="radiogroup"
+                    aria-label="Wat gebeurt er met het studenttraject"
+                >
+                    <button
+                        ref={focusRef}
+                        type="button"
+                        role="radio"
+                        aria-checked={!wisTraject}
+                        className={`${styles.dialoogKeuze} ${!wisTraject ? styles.dialoogKeuzeActief : ''}`}
+                        onClick={() => setWisTraject(false)}
+                    >
+                        <span className={styles.dialoogKeuzeNaam}>
+                            {wisTraject ? <Circle size={13} /> : <CircleDot size={13} />}
+                            Traject laten staan
+                        </span>
+                        <span className={styles.dialoogKeuzeUitleg}>
+                            De wizard vult aan en schrijft over: ze start met deze vakken
+                            aangevinkt, en wat je overneemt vervangt de keuzes van díe periode.
+                            Periodes die je in de wizard niet aandoet, blijven ongemoeid.
+                        </span>
+                    </button>
+                    <button
+                        type="button"
+                        role="radio"
+                        aria-checked={wisTraject}
+                        className={`${styles.dialoogKeuze} ${wisTraject ? styles.dialoogKeuzeActief : ''}`}
+                        onClick={() => setWisTraject(true)}
+                    >
+                        <span className={styles.dialoogKeuzeNaam}>
+                            {wisTraject ? <CircleDot size={13} /> : <Circle size={13} />}
+                            Traject eerst wissen
+                        </span>
+                        <span className={styles.dialoogKeuzeUitleg}>
+                            Begin met een leeg blad en bouw het hele jaar in de wizard op. Je
+                            klasgroepen, periode-instellingen en bewaarde dossiers blijven staan;
+                            het wissen is meteen ongedaan te maken.
+                        </span>
+                    </button>
+                </div>
+
+                {wisTraject && nietBewaardDossier && (
+                    <div className={styles.dialoogWaarschuwing} role="status">
+                        <AlertTriangle size={13} />
+                        <span>{nietBewaardDossier}</span>
+                    </div>
+                )}
+
+                {wisTraject && items.length > 0 && (
+                    <>
+                        <div className={styles.dialoogSubkop}>Wordt gewist</div>
+                        <ItemLijst items={items} />
+                    </>
+                )}
+            </div>
+            <div className={styles.dialoogVoet}>
+                <button type="button" className={styles.toolbarBtn} onClick={onAnnuleer}>
+                    Annuleren
+                </button>
+                <button
+                    type="button"
+                    className={`${styles.toolbarBtn} ${
+                        wisTraject ? styles.dialoogKnopDanger : styles.dialoogKnopPrimair
+                    }`}
+                    onClick={() => onStart(wisTraject)}
+                >
+                    {wisTraject ? 'Wissen en starten' : 'Wizard starten'}
                 </button>
             </div>
         </DialogSchil>

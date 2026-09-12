@@ -1,11 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { AlertTriangle, Check, Link2, Loader2, Sparkles, Wand2, X } from 'lucide-react';
+import { AlertTriangle, ArrowRight, Check, Link2, Loader2, Sparkles, Wand2, X } from 'lucide-react';
 import type { Lesblok, StudentTraject } from './types';
 import { isActief } from './types';
 import {
     actievePeriode,
     allePeriodes,
+    matchtPeriode,
+    periodesVoor,
+    type Periode,
     type PeriodeGrenzen,
     type PeriodeType,
 } from './academicYear';
@@ -33,6 +36,7 @@ import {
     type OnmogelijkeGroep,
 } from './koppelGroepen';
 import { KoppelGroepenDialoog } from './KoppelGroepenDialoog';
+import { PeriodeSwitcher } from './PeriodeSwitcher';
 import styles from './Traject.module.css';
 
 // Meer dan drie ijkweken maakt het voorstel niet beter, wel trager: een rooster
@@ -55,8 +59,13 @@ interface Props {
     // De periode waarvoor een keuze van dít vak geldt (semestervak = zijn hele
     // semester) — enkel om ze in het resultaat te benoemen.
     bereikVoorOlod: (olodNaam: string) => { van: string; tot: string };
-    // De voorgestelde keuzes overnemen in het traject.
-    onOvernemen: (keuzes: { olodNaam: string; klasgroep: string }[]) => void;
+    // De voorgestelde keuzes overnemen in het traject. `sluiten` is false
+    // wanneer het overnemen enkel een periodewissel voorafgaat: de wizard
+    // blijft dan open om verder te puzzelen in de volgende periode.
+    onOvernemen: (keuzes: { olodNaam: string; klasgroep: string }[], sluiten: boolean) => void;
+    // Van periode wisselen zonder de wizard te verlaten. Zet de actieve periode
+    // van het hele werkblad om — dezelfde schakelaar als in de contextbalk.
+    onKiesPeriode: (p: Periode) => void;
     onClose: () => void;
 }
 
@@ -110,6 +119,7 @@ export function TrajectWizard({
     onKoppelGroepen,
     bereikVoorOlod,
     onOvernemen,
+    onKiesPeriode,
     onClose,
 }: Props) {
     const { perKlas, klaar, totaal, mislukt } = usePeriodeRoosters(klasgroepen, actiefBereik);
@@ -121,16 +131,57 @@ export function TrajectWizard({
     const [voorstel, setVoorstel] = useState<Voorstel | null>(null);
     const [bezig, setBezig] = useState(false);
     const [koppelOpen, setKoppelOpen] = useState(false);
+    // De periode waar de gebruiker heen wil terwijl er nog een onbenut
+    // voorstel op tafel ligt; null zolang er niets te vragen valt.
+    const [wisselVraag, setWisselVraag] = useState<Periode | null>(null);
 
     useEffect(() => {
         // Staat het geavanceerde venster open, dan sluit Esc enkel dát venster
         // (die dialoog luistert zelf mee) en niet de hele wizard eronder.
+        // Dezelfde regel voor de vraag bij een periodewissel: eerst die weg,
+        // pas daarna de wizard.
         const onKey = (e: KeyboardEvent) => {
-            if (e.key === 'Escape' && !koppelOpen) onClose();
+            if (e.key !== 'Escape') return;
+            if (koppelOpen) return;
+            if (wisselVraag) setWisselVraag(null);
+            else onClose();
         };
         window.addEventListener('keydown', onKey);
         return () => window.removeEventListener('keydown', onKey);
-    }, [onClose, koppelOpen]);
+    }, [onClose, koppelOpen, wisselVraag]);
+
+    // De periodes waar de knoppen in de kop tussen wisselen: dezelfde reeks
+    // als de contextbalk van het werkblad (S1/S2 of M1…M4).
+    const periodes = useMemo(
+        () => periodesVoor(periodeType, periodeGrenzen),
+        [periodeType, periodeGrenzen]
+    );
+
+    // Eénmalig klaarzetten per periode; zie de twee effecten hieronder.
+    const klaargezet = useRef(false);
+
+    // Wisselt de gebruiker van periode zonder de wizard te verlaten, dan
+    // begint de puzzel van nul: andere lesweken, andere vakken, een ander
+    // stuk traject. Enkel de **voorkeur** blijft staan — die hoort bij de
+    // student en niet bij de periode, en wie het hele jaar na elkaar
+    // wizardt wil ze niet vier keer opnieuw aanduiden.
+    //
+    // Dit effect staat bewust vóór het klaarzet-effect: effecten lopen in
+    // volgorde van declaratie, dus binnen dezelfde commit is `klaargezet`
+    // alweer vrijgegeven tegen de tijd dat het klaarzetten aan de beurt is.
+    // Anders zou een periode waarvan de roosters al in de cache zitten met
+    // een lege weekkeuze achterblijven.
+    const bereikKey = `${actiefBereik.van}|${actiefBereik.tot}`;
+    const vorigeKey = useRef(bereikKey);
+    useEffect(() => {
+        if (vorigeKey.current === bereikKey) return;
+        vorigeKey.current = bereikKey;
+        klaargezet.current = false;
+        setWeekKeuze([]);
+        setGekozenVakken(new Set());
+        setVoorstel(null);
+        setWisselVraag(null);
+    }, [bereikKey]);
 
     const vakken = useMemo(() => vakkenUitRoosters(perKlas), [perKlas]);
     const weken = useMemo<Lesweek[]>(() => lesweken(perKlas), [perKlas]);
@@ -151,10 +202,10 @@ export function TrajectWizard({
         return map;
     }, [traject, actiefBereik]);
 
-    // Eénmalig klaarzetten zodra de roosters binnen zijn: de weken uit
-    // standaardWeken en de vakken die al in het traject staan. Daarna is het
-    // van de gebruiker — latere renders mogen zijn keuzes niet overschrijven.
-    const klaargezet = useRef(false);
+    // Eénmalig per periode klaarzetten zodra de roosters binnen zijn: de weken
+    // uit standaardWeken en de vakken die al in het traject staan. Daarna is
+    // het van de gebruiker — latere renders mogen zijn keuzes niet
+    // overschrijven, tot de periode wisselt (zie het effect hierboven).
     useEffect(() => {
         if (klaargezet.current || laadt || vakken.length === 0) return;
         klaargezet.current = true;
@@ -255,17 +306,49 @@ export function TrajectWizard({
             (k.leden ?? [k.olodNaam]).map(olodNaam => ({ olodNaam, klasgroep: k.klasgroep }))
         );
 
-    const neemOver = () => {
+    // Het voorstel in het traject zetten. `sluiten` staat enkel op false
+    // wanneer het overnemen een periodewissel voorafgaat: de wizard blijft dan
+    // open om in de volgende periode verder te puzzelen.
+    const neemOver = (sluiten = true) => {
         if (!voorstel) return;
-        onOvernemen([...alsKeuzes(voorstel), ...behouden]);
+        onOvernemen([...alsKeuzes(voorstel), ...behouden], sluiten);
     };
 
-    const periodeLabel = useMemo(() => {
-        const datums = `${formatDateBE(parseIsoDate(actiefBereik.van))} – ${formatDateBE(
-            parseIsoDate(actiefBereik.tot)
-        )}`;
+    // Een klik op een periodeknop in de kop. Ligt er nog een voorstel dat niet
+    // overgenomen is, dan wordt eerst gevraagd wat ermee moet: een wissel
+    // herstart de puzzel, en een berekend voorstel mag niet in stilte
+    // verdwijnen. Zo gaat de begeleider met één venster het hele jaar af —
+    // M1 overnemen, door naar M2 — in plaats van de wizard vier keer te openen.
+    const kiesPeriode = (p: Periode) => {
+        if (matchtPeriode(p, actiefBereik.van, actiefBereik.tot)) return;
+        if (voorstel) setWisselVraag(p);
+        else onKiesPeriode(p);
+    };
+
+    const wisselNa = (overnemen: boolean) => {
+        const p = wisselVraag;
+        if (!p) return;
+        setWisselVraag(null);
+        if (overnemen) neemOver(false);
+        onKiesPeriode(p);
+    };
+
+    // Enkel de datums: welke periode het is, staat naast de titel al als
+    // opgelichte knop in de periode-schakelaar.
+    const periodeLabel = useMemo(
+        () =>
+            `${formatDateBE(parseIsoDate(actiefBereik.van))} – ${formatDateBE(
+                parseIsoDate(actiefBereik.tot)
+            )}`,
+        [actiefBereik]
+    );
+
+    // De naam van de actieve periode, voor de zinnen die erover gaan. Een
+    // handmatig ingesteld bereik past op geen enkele periode en heet dan
+    // gewoon "deze periode".
+    const periodeNaam = useMemo(() => {
         const p = actievePeriode(allePeriodes(periodeGrenzen), actiefBereik.van, actiefBereik.tot);
-        return p ? `${p.kort} · ${datums}` : datums;
+        return p ? p.label : 'deze periode';
     }, [actiefBereik, periodeGrenzen]);
 
     // Een vak waarvan de keuze verder reikt dan de actieve periode (een
@@ -323,6 +406,20 @@ export function TrajectWizard({
                     <Wand2 size={16} />
                     <span className={styles.zoomTitle}>Stel een rooster voor</span>
                     <span className={styles.zoomSubtitle}>{periodeLabel}</span>
+                    <div className={styles.zoomSpacer} />
+                    {/* Dezelfde schakelaar als in de contextbalk van het
+                        werkblad, zodat het hele jaar in één zitting gepuzzeld
+                        kan worden. Ze zet de actieve periode van het werkblad
+                        om: sluit de wizard, dan staat het werkblad in de
+                        periode waar je laatst aan werkte. */}
+                    <span className={styles.wizPeriodeLabel}>Periode</span>
+                    <PeriodeSwitcher
+                        compact
+                        periodes={periodes}
+                        actieveStart={actiefBereik.van}
+                        actieveEind={actiefBereik.tot}
+                        onKies={kiesPeriode}
+                    />
                     <button
                         type="button"
                         className={styles.zoomClose}
@@ -333,6 +430,41 @@ export function TrajectWizard({
                         <X size={18} />
                     </button>
                 </div>
+
+                {/* De wissel wacht op een antwoord: overnemen is de reden dat
+                    de knoppen er staan, dus die staat vooraan. */}
+                {wisselVraag && (
+                    <div className={styles.koppelVraag} role="alertdialog" aria-live="polite">
+                        <span className={styles.koppelVraagTekst}>
+                            Je voorstel voor <strong>{periodeNaam}</strong> is nog niet
+                            overgenomen. Overnemen vóór je naar{' '}
+                            <strong>{wisselVraag.label}</strong> gaat?
+                        </span>
+                        <button
+                            type="button"
+                            className={styles.koppelVraagJa}
+                            onClick={() => wisselNa(true)}
+                            title={`Zet dit voorstel in het traject en puzzel verder in ${wisselVraag.label}`}
+                        >
+                            <Check size={13} /> Overnemen en wisselen
+                        </button>
+                        <button
+                            type="button"
+                            className={styles.koppelVraagNee}
+                            onClick={() => wisselNa(false)}
+                            title="Het voorstel vervalt; het traject blijft zoals het was"
+                        >
+                            <ArrowRight size={13} /> Wisselen zonder overnemen
+                        </button>
+                        <button
+                            type="button"
+                            className={styles.koppelVraagNee}
+                            onClick={() => setWisselVraag(null)}
+                        >
+                            Annuleren
+                        </button>
+                    </div>
+                )}
 
                 <div className={styles.wizBody}>
                     {/* ① Referentieweken */}
@@ -746,14 +878,14 @@ export function TrajectWizard({
                             ? teVervangen > 0
                                 ? `Overnemen vervangt de ${teVervangen} ${
                                       teVervangen === 1 ? 'keuze' : 'keuzes'
-                                  } die nu in deze periode staan (met ongedaan maken).`
+                                  } die nu in ${periodeNaam} staan (met ongedaan maken).`
                                 : 'Overnemen zet deze keuzes in het traject.'
-                            : 'De keuzes in andere periodes blijven altijd staan.'}
+                            : 'Enkel de keuzes van deze periode worden vervangen; wissel hierboven van periode om het jaar stuk voor stuk te leggen.'}
                     </span>
                     <button
                         type="button"
                         className={styles.wizOverneemKnop}
-                        onClick={neemOver}
+                        onClick={() => neemOver()}
                         disabled={!voorstel}
                     >
                         <Check size={14} /> Overnemen in traject

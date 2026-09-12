@@ -33,7 +33,14 @@ import { isActief, type Lesblok, type OLODSelectie } from './types';
 import { bereikRaakt } from './dateUtils';
 import { DossierMenu } from './BewaardeTrajecten';
 import { ProfielMenu } from './ProfielMenu';
-import { BevestigDialog, BewaarDialog, ProfielDialog, ProfielWisselDialog, type DialogItem } from './TrajectDialogs';
+import {
+    BevestigDialog,
+    BewaarDialog,
+    ProfielDialog,
+    ProfielWisselDialog,
+    WizardStartDialog,
+    type DialogItem,
+} from './TrajectDialogs';
 import { UndoToast, useUndo } from './Toast';
 import { TrajectSettingsView } from './TrajectSettings';
 import { KlasgroepSelector } from './KlasgroepSelector';
@@ -43,7 +50,7 @@ import { TrajectWizard } from './TrajectWizard';
 import { StudentOverzicht } from './StudentOverzicht';
 import { PeriodeSwitcher } from './PeriodeSwitcher';
 import { TrajectPrintView, buildTrajectClipboardText } from './TrajectPrintView';
-import { defaultRoosterWeek, periodesVoor } from './academicYear';
+import { defaultRoosterWeek, periodeLabelVoor, periodesVoor } from './academicYear';
 import { isSemesterOlod, semesterBereikVoor } from './semesterOlods';
 import { profielSamenvatting } from './settingsSummaries';
 import { aantalMetProbleem } from './selectieProblemen';
@@ -61,6 +68,9 @@ const handleidingUrl = `${import.meta.env.BASE_URL}trajectplannerHandleiding.pdf
 type Dialoog =
     | { soort: 'bewaar' }
     | { soort: 'reset' }
+    // De waarschuwing vóór de wizard opengaat: er staan al OLODs, en de wizard
+    // vult die aan of schrijft erover. Enkel wanneer het traject niet leeg is.
+    | { soort: 'wizardStart' }
     | { soort: 'laad'; item: BewaardTraject }
     | { soort: 'verwijderBewaard'; item: BewaardTraject }
     // Profielen (instellingssets): bewaren onder een naam, overschakelen naar
@@ -682,7 +692,10 @@ export function TrajectPlanner({ onBack, presetApplied = false, presetNaam = nul
     // `bereikOverlapt`, want semester 1 eindigt op de dag dat semester 2 begint
     // — anders zou een S2-keuze sneuvelen bij een wizard in S1. Eén
     // herstelpunt, zodat een voorstel met één klik terug te draaien is.
-    const handleWizardOvernemen = (keuzes: { olodNaam: string; klasgroep: string }[]) => {
+    const handleWizardOvernemen = (
+        keuzes: { olodNaam: string; klasgroep: string }[],
+        sluiten = true
+    ) => {
         // Een gedeactiveerde keuze is bewust geparkeerd (een scenario dat de
         // gebruiker wil kunnen terughalen); die overleeft de wizard, tenzij het
         // voorstel datzelfde vak invult — anders zou de gedeactiveerde variant
@@ -697,10 +710,29 @@ export function TrajectPlanner({ onBack, presetApplied = false, presetNaam = nul
             const bereik = bereikVoorOlod(k.olodNaam);
             return { klasgroep: k.klasgroep, olodNaam: k.olodNaam, van: bereik.van, tot: bereik.tot };
         });
-        setWizardOpen(false);
+        if (sluiten) setWizardOpen(false);
         metUndo(`Voorstel overgenomen (${vakken(keuzes.length)})`, () =>
             replaceTraject([...behouden, ...nieuw])
         );
+    };
+
+    // De wizard openen. Staat er al iets in het traject, dan gaat daar de
+    // waarschuwing aan vooraf: de wizard vertrekt van wat er ligt en vervangt
+    // bij elk overnemen de keuzes van de periode waarin ze op dat moment
+    // puzzelt. Wie het hele jaar in één zitting wil leggen, wil vaak eerst
+    // schoon schip — vandaar de keuze in plaats van een loutere melding.
+    const handleWizard = () => {
+        if (traject.length === 0) setWizardOpen(true);
+        else setDialoog({ soort: 'wizardStart' });
+    };
+
+    const doeWizardStart = (wisTraject: boolean) => {
+        setDialoog(null);
+        if (wisTraject) {
+            const aantal = traject.length;
+            metUndo(`Traject gewist (${aantal} ${aantal === 1 ? 'OLOD' : 'OLODs'})`, reset);
+        }
+        setWizardOpen(true);
     };
 
     return (
@@ -973,7 +1005,7 @@ export function TrajectPlanner({ onBack, presetApplied = false, presetNaam = nul
                         onToggleSemesterOlod={handleToggleSemesterOlod}
                         koppelGroepen={settings.koppelGroepen}
                         onZoekOlod={() => setZoekerOpen(true)}
-                        onWizard={() => setWizardOpen(true)}
+                        onWizard={handleWizard}
                     />
                     <Splitter orientation="left" onDelta={adjustPanelA} />
                     <KlasgroepRooster
@@ -1043,6 +1075,7 @@ export function TrajectPlanner({ onBack, presetApplied = false, presetNaam = nul
                 onKoppelGroepen={setKoppelGroepen}
                 bereikVoorOlod={bereikVoorOlod}
                 onOvernemen={handleWizardOvernemen}
+                onKiesPeriode={p => setSemesterPeriode(p.start, p.eind)}
                 onClose={() => setWizardOpen(false)}
             />
         )}
@@ -1072,6 +1105,24 @@ export function TrajectPlanner({ onBack, presetApplied = false, presetNaam = nul
                 bevestigLabel="Traject wissen"
                 danger
                 onBevestig={doeReset}
+                onAnnuleer={annuleerDialoog}
+            />
+        )}
+
+        {dialoog?.soort === 'wizardStart' && (
+            <WizardStartDialog
+                aantalOlods={traject.length}
+                aantalInPeriode={
+                    traject.filter(s =>
+                        bereikRaakt(s.van, s.tot, actiefBereik.van, actiefBereik.tot)
+                    ).length
+                }
+                periodeLabel={periodeLabelVoor(actiefBereik.van, actiefBereik.tot, settings.periodeGrenzen).label}
+                items={resetItems}
+                nietBewaardDossier={
+                    nietBewaard ? 'Je huidige werk is niet bewaard in een dossier.' : undefined
+                }
+                onStart={doeWizardStart}
                 onAnnuleer={annuleerDialoog}
             />
         )}
