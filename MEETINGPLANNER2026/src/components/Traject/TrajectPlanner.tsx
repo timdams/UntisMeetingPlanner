@@ -692,10 +692,9 @@ export function TrajectPlanner({ onBack, presetApplied = false, presetNaam = nul
     // `bereikOverlapt`, want semester 1 eindigt op de dag dat semester 2 begint
     // — anders zou een S2-keuze sneuvelen bij een wizard in S1. Eén
     // herstelpunt, zodat een voorstel met één klik terug te draaien is.
-    const handleWizardOvernemen = (
-        keuzes: { olodNaam: string; klasgroep: string }[],
-        sluiten = true
-    ) => {
+    // Sluit de wizard niet: zij vraagt na elk overnemen zelf of de andere
+    // periodes ook nog gelegd worden, en sluit pas op `onClose`.
+    const handleWizardOvernemen = (keuzes: { olodNaam: string; klasgroep: string }[]) => {
         // Een gedeactiveerde keuze is bewust geparkeerd (een scenario dat de
         // gebruiker wil kunnen terughalen); die overleeft de wizard, tenzij het
         // voorstel datzelfde vak invult — anders zou de gedeactiveerde variant
@@ -710,7 +709,6 @@ export function TrajectPlanner({ onBack, presetApplied = false, presetNaam = nul
             const bereik = bereikVoorOlod(k.olodNaam);
             return { klasgroep: k.klasgroep, olodNaam: k.olodNaam, van: bereik.van, tot: bereik.tot };
         });
-        if (sluiten) setWizardOpen(false);
         metUndo(`Voorstel overgenomen (${vakken(keuzes.length)})`, () =>
             replaceTraject([...behouden, ...nieuw])
         );
