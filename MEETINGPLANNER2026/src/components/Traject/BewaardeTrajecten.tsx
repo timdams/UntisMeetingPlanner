@@ -1,4 +1,4 @@
-import { Save, Trash2 } from 'lucide-react';
+import { FilePlus, Save, Trash2 } from 'lucide-react';
 import type { BewaardTraject } from './hooks';
 import { formatDateTime } from './dateUtils';
 import { periodeLabelVoor } from './academicYear';
@@ -18,6 +18,10 @@ interface Props {
     onBewaar: () => void;
     // Altijd de naamdialoog, om onder een andere naam te bewaren.
     onBewaarAls: () => void;
+    // Aan een volgende student beginnen: leeg traject, geen dossier open.
+    // Zinloos wanneer het werkblad al leeg is en nergens bij hoort.
+    kanNieuw: boolean;
+    onNieuw: () => void;
     // Laden en verwijderen vragen allebei eerst om bevestiging in een dialoog;
     // het menu sluit meteen, zodat de dialoog vrij staat.
     onLaad: (item: BewaardTraject) => void;
@@ -60,6 +64,8 @@ export function DossierMenu({
     kanBewaren,
     onBewaar,
     onBewaarAls,
+    kanNieuw,
+    onNieuw,
     onLaad,
     onVerwijder,
 }: Props) {
@@ -87,6 +93,26 @@ export function DossierMenu({
         >
             {close => (
                 <div className={styles.laadMenuInhoud} aria-label="Dossier">
+                    {/* Bovenaan: dit is het antwoord op "ik ben klaar met deze
+                        student, waar begin ik aan de volgende?". */}
+                    <TopbarMenuItem
+                        icon={<FilePlus size={14} />}
+                        disabled={!kanNieuw}
+                        title={
+                            kanNieuw
+                                ? 'Begin aan een volgende student: leeg traject, instellingen blijven staan. Niet-bewaard werk wordt eerst gevraagd.'
+                                : 'Je werkt al aan een nieuw, leeg dossier'
+                        }
+                        onClick={() => {
+                            close();
+                            onNieuw();
+                        }}
+                    >
+                        Nieuw dossier
+                    </TopbarMenuItem>
+
+                    <div className={styles.menuScheiding} />
+
                     <TopbarMenuItem
                         icon={<Save size={14} />}
                         disabled={!kanBewaren}

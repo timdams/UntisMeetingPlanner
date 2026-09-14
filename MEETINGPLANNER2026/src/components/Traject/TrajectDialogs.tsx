@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
-import { AlertTriangle, Circle, CircleDot, Save, SlidersHorizontal, Wand2 } from 'lucide-react';
+import { AlertTriangle, Circle, CircleDot, FilePlus, Save, SlidersHorizontal, Wand2 } from 'lucide-react';
 import type { BewaardTraject, Profiel } from './hooks';
 import { zelfdeNaam } from './hooks';
 import { formatDateTime } from './dateUtils';
@@ -134,6 +134,81 @@ export function BevestigDialog({
                     onClick={onBevestig}
                 >
                     {bevestigLabel}
+                </button>
+            </div>
+        </DialogSchil>
+    );
+}
+
+interface NieuwDossierProps {
+    // Naam van het geopende dossier, of null wanneer het werk nog nergens
+    // bewaard staat (dan vraagt "bewaren" eerst een naam).
+    actieveNaam: string | null;
+    aantalOlods: number;
+    onBewaarEnNieuw: () => void;
+    onNietBewaren: () => void;
+    onAnnuleer: () => void;
+}
+
+/**
+ * De vraag vóór "Nieuw dossier", enkel wanneer er werk openstaat dat nog niet
+ * bewaard is. Drie uitwegen in plaats van een gewone bevestiging: wie aan een
+ * volgende student begint, wil het huidige werk meestal net wél bewaren.
+ * **Bewaren** is daarom de standaard en krijgt de focus; **niet bewaren**
+ * gooit weg en is rood (met undo achteraf).
+ */
+export function NieuwDossierDialog({
+    actieveNaam,
+    aantalOlods,
+    onBewaarEnNieuw,
+    onNietBewaren,
+    onAnnuleer,
+}: NieuwDossierProps) {
+    const focusRef = useRef<HTMLButtonElement | null>(null);
+    useEffect(() => {
+        focusRef.current?.focus();
+    }, []);
+
+    const olods = `${aantalOlods} ${aantalOlods === 1 ? 'OLOD' : 'OLODs'}`;
+
+    return (
+        <DialogSchil label="Nieuw dossier" onSluit={onAnnuleer}>
+            <div className={styles.dialoogKop}>
+                <FilePlus size={16} className={styles.dialoogKopIcoon} />
+                <span>Nieuw dossier beginnen?</span>
+            </div>
+            <div className={styles.dialoogBody}>
+                <div className={styles.dialoogTekst}>
+                    {actieveNaam ? (
+                        <>
+                            Er zijn wijzigingen aan <strong>{actieveNaam}</strong> die nog niet bewaard
+                            zijn.
+                        </>
+                    ) : (
+                        <>Het huidige werk ({olods}) staat nog in geen enkel dossier.</>
+                    )}{' '}
+                    Een nieuw dossier begint met een leeg studenttraject; je klasgroepen,
+                    periode-instellingen, profielen en bewaarde dossiers blijven staan.
+                </div>
+            </div>
+            <div className={styles.dialoogVoet}>
+                <button type="button" className={styles.toolbarBtn} onClick={onAnnuleer}>
+                    Annuleren
+                </button>
+                <button
+                    type="button"
+                    className={`${styles.toolbarBtn} ${styles.dialoogKnopDanger}`}
+                    onClick={onNietBewaren}
+                >
+                    Niet bewaren
+                </button>
+                <button
+                    ref={focusRef}
+                    type="button"
+                    className={`${styles.toolbarBtn} ${styles.dialoogKnopPrimair}`}
+                    onClick={onBewaarEnNieuw}
+                >
+                    {actieveNaam ? 'Bewaren en nieuw' : 'Bewaren…'}
                 </button>
             </div>
         </DialogSchil>

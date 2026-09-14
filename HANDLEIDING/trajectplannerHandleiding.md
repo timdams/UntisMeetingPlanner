@@ -173,13 +173,30 @@ OLODs (13)
   • Single board computers (01/09–01/07)
 ```
 
-### Trajecten bewaren en resetten
+### Dossiers bewaren, een nieuwe student beginnen en resetten
 
-![Knoppen rechtsboven: bewaar traject, laad traject, exporteren en reset](assets/bewaar.png)
+![De contextbalk met het dossiermenu, de bewaarknop en reset](assets/bewaar.png)
 
-Rechtsboven zie je de nodige knoppen om enerzijds alles te verwijderen (reset), zodat je met een nieuwe lei kan beginnen. Hierbij blijven de instellingen (data en klasgroepselectie) wél staan, maar worden de olod-selecties verwijderd.
+Een **dossier** is het traject van één student, samen met de instellingen waarin je het samenstelde. In de balk bovenaan het werkblad zie je bij **Dossier** aan welk dossier je werkt, of "nieuw dossier" zolang het nog geen naam heeft. Een oranje stip betekent dat er wijzigingen zijn die nog niet bewaard zijn. Dossiers worden in deze browser bewaard.
 
-Via de knoppen **Bewaar** en **Laad traject** kan je trajecten terug oproepen. Dit kan handig zijn als je een traject hebt samengesteld waarvan je denkt dat je het de komende dagen nog gaat nodig hebben (bv. een oplossing voor een conflict waar je lang naar hebt gezocht).
+Klik op de dossiernaam om het dossiermenu te openen:
+
+- **Nieuw dossier**: begin aan een volgende student. Het traject wordt leeg, je instellingen blijven staan. Is het huidige werk nog niet bewaard, dan vraagt de tool eerst of je dat wil bewaren.
+- **Bewaar** (of Ctrl+S, of de knop **Bewaar** naast het menu): bewaart het werk in het geopende dossier. Is er nog geen dossier open, dan vraagt de tool eerst een naam.
+- **Bewaar als…**: bewaart het werk als een nieuw dossier onder een andere naam. Het oorspronkelijke dossier blijft ongewijzigd.
+- **Bewaarde dossiers**: open een eerder bewaard dossier, of verwijder het met het vuilbakje.
+
+**Meerdere studenten na elkaar**
+
+1. Stel het traject van de eerste student samen en klik **Bewaar**. Geef als naam bv. de naam van de student.
+2. Kies in het dossiermenu **Nieuw dossier**.
+3. Stel het traject van de volgende student samen en klik **Bewaar**. Je krijgt opnieuw de vraag naar een naam.
+
+Wil je later verder werken aan een student, open dan zijn dossier via het dossiermenu.
+
+**Reset** (helemaal rechts in de balk) wist alle gekozen olods, zodat je met een nieuwe lei kan beginnen. De instellingen (data en klasgroepselectie) blijven staan. Reset sluit ook het geopende dossier: het bewaarde dossier blijft in de lijst, maar een volgende **Bewaar** overschrijft het niet en vraagt een naam. Wil je het bestaande dossier toch vervangen, kies dan in dat bewaarvenster zijn naam; de tool waarschuwt dat je overschrijft.
+
+Zowel **Nieuw dossier** als **Reset** kan je meteen terugdraaien met "ongedaan maken" in de melding onderaan.
 
 ## Veelgestelde vragen
 

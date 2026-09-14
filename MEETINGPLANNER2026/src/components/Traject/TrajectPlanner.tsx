@@ -26,6 +26,7 @@ import {
     useProfielen,
     useStudentTraject,
     useTrajectSettings,
+    type ActiefTraject,
     type BewaardTraject,
     type Profiel,
 } from './hooks';
@@ -36,6 +37,7 @@ import { ProfielMenu } from './ProfielMenu';
 import {
     BevestigDialog,
     BewaarDialog,
+    NieuwDossierDialog,
     ProfielDialog,
     ProfielWisselDialog,
     WizardStartDialog,
@@ -66,8 +68,12 @@ const handleidingUrl = `${import.meta.env.BASE_URL}trajectplannerHandleiding.pdf
 // De dialoog die momenteel openstaat. Alle bevestigingen en het benoemen van
 // een traject lopen hierlangs, in plaats van via window.confirm/prompt.
 type Dialoog =
-    | { soort: 'bewaar' }
+    // `daarnaNieuw`: na het bewaren meteen een nieuw dossier beginnen (de
+    // weg via "Nieuw dossier" wanneer het werk nog geen naam had).
+    | { soort: 'bewaar'; daarnaNieuw?: boolean }
     | { soort: 'reset' }
+    // Vóór "Nieuw dossier", enkel wanneer er niet-bewaard werk openstaat.
+    | { soort: 'nieuwDossier' }
     // De waarschuwing vóór de wizard opengaat: er staan al OLODs, en de wizard
     // vult die aan of schrijft erover. Enkel wanneer het traject niet leeg is.
     | { soort: 'wizardStart' }
@@ -310,10 +316,65 @@ export function TrajectPlanner({ onBack, presetApplied = false, presetNaam = nul
 
     // ===== Globale acties (elk via een dialoog) =====
 
+    // Reset wist het traject én laat het geopende dossier los: wat daarna op
+    // het werkblad komt, is een nieuw scenario of een andere student. Bleef het
+    // dossier open, dan overschreef een volgende Bewaar (of Ctrl+S) het vorige
+    // dossier stilzwijgend. Het bewaarde dossier zelf blijft in de lijst staan.
+    // Traject en dossier vormen samen één herstelpunt.
     const doeReset = () => {
         const aantal = traject.length;
+        const vorigTraject = traject;
+        const vorigDossier = actiefTraject;
         setDialoog(null);
-        metUndo(`Traject gewist (${aantal} ${aantal === 1 ? 'OLOD' : 'OLODs'})`, reset);
+        reset();
+        wisActief();
+        meldUndo(`Traject gewist (${aantal} ${aantal === 1 ? 'OLOD' : 'OLODs'})`, () => {
+            replaceTraject(vorigTraject);
+            herstelActiefTraject(vorigDossier);
+        });
+    };
+
+    // Aan een volgende student beginnen: traject leeg en geen dossier meer
+    // open, zodat de dossierknop weer "nieuw dossier" toont en de eerstvolgende
+    // Bewaar om een naam vraagt. De instellingen blijven staan — de volgende
+    // student komt meestal uit dezelfde opleiding. `herstelDossier` is wat
+    // "ongedaan maken" terugzet: na "bewaren en nieuw" het zojuist bewaarde
+    // dossier, anders het dossier dat openstond.
+    const doeNieuwDossier = (herstelDossier: ActiefTraject | null) => {
+        const vorigTraject = traject;
+        setDialoog(null);
+        reset();
+        wisActief();
+        setTab('werkblad');
+        meldUndo(
+            herstelDossier
+                ? `Nieuw dossier gestart — "${herstelDossier.naam}" blijft bewaard`
+                : 'Nieuw dossier gestart',
+            () => {
+                replaceTraject(vorigTraject);
+                herstelActiefTraject(herstelDossier);
+            }
+        );
+    };
+
+    const doeBewaarEnNieuw = (naam: string, overschrijfId?: string) => {
+        const id = bewaarTraject(naam, settings, traject, overschrijfId);
+        doeNieuwDossier({ id, naam, baseline: trajectVingerafdruk(traject, settings) });
+    };
+
+    // "Nieuw dossier" in het dossiermenu. Valt er niets te verliezen, dan
+    // start het meteen (met undo); anders vraagt de dialoog eerst of het werk
+    // bewaard moet worden.
+    const handleNieuwDossier = () => {
+        if (nietBewaard) setDialoog({ soort: 'nieuwDossier' });
+        else doeNieuwDossier(actiefTraject);
+    };
+
+    // "Bewaren en nieuw" uit die dialoog: met een geopend dossier gaat het werk
+    // er meteen in, zonder dossier vraagt de naamdialoog eerst een naam.
+    const handleBewaarEnNieuw = () => {
+        if (actiefTraject) doeBewaarEnNieuw(actiefTraject.naam, actiefTraject.id);
+        else setDialoog({ soort: 'bewaar', daarnaNieuw: true });
     };
 
     // Bewaart het huidige traject mét zijn instellingen (klasgroepen,
@@ -834,6 +895,8 @@ export function TrajectPlanner({ onBack, presetApplied = false, presetNaam = nul
                             kanBewaren={traject.length > 0}
                             onBewaar={doeSnelBewaar}
                             onBewaarAls={() => setDialoog({ soort: 'bewaar' })}
+                            kanNieuw={traject.length > 0 || actiefTraject !== null}
+                            onNieuw={handleNieuwDossier}
                             onLaad={handleLaad}
                             onVerwijder={item => setDialoog({ soort: 'verwijderBewaard', item })}
                         />
@@ -894,7 +957,7 @@ export function TrajectPlanner({ onBack, presetApplied = false, presetNaam = nul
                         className={styles.ctxResetBtn}
                         onClick={() => setDialoog({ soort: 'reset' })}
                         disabled={traject.length === 0}
-                        title="Wist alle gekozen OLODs; je instellingen, profielen en bewaarde dossiers blijven staan"
+                        title="Wist alle gekozen OLODs en sluit het geopende dossier; je instellingen, profielen en bewaarde dossiers blijven staan"
                     >
                         <RotateCcw size={14} /> Reset
                     </button>
@@ -1083,7 +1146,17 @@ export function TrajectPlanner({ onBack, presetApplied = false, presetNaam = nul
                 voorstel={actiefTraject?.naam ?? `Traject ${bewaardeTrajecten.length + 1}`}
                 bewaarde={bewaardeTrajecten}
                 aantalOlods={traject.length}
-                onBewaar={doeBewaar}
+                onBewaar={dialoog.daarnaNieuw ? doeBewaarEnNieuw : doeBewaar}
+                onAnnuleer={annuleerDialoog}
+            />
+        )}
+
+        {dialoog?.soort === 'nieuwDossier' && (
+            <NieuwDossierDialog
+                actieveNaam={actiefTraject?.naam ?? null}
+                aantalOlods={traject.length}
+                onBewaarEnNieuw={handleBewaarEnNieuw}
+                onNietBewaren={() => doeNieuwDossier(actiefTraject)}
                 onAnnuleer={annuleerDialoog}
             />
         )}
@@ -1094,8 +1167,20 @@ export function TrajectPlanner({ onBack, presetApplied = false, presetNaam = nul
                 bericht={
                     <>
                         Alle {traject.length} gekozen {traject.length === 1 ? 'OLOD' : 'OLODs'} verdwijnen
-                        uit het studenttraject. Je klasgroepen, periode-instellingen en bewaarde
-                        trajecten blijven staan.
+                        uit het studenttraject.{' '}
+                        {actiefTraject ? (
+                            <>
+                                Het dossier <strong>{actiefTraject.naam}</strong> blijft bewaard
+                                {nietBewaard
+                                    ? ' zoals je het laatst bewaarde (de wijzigingen sinds dan gaan verloren)'
+                                    : ''}
+                                , maar wordt gesloten: je volgende <em>Bewaar</em> vraagt een nieuwe
+                                naam en overschrijft het dus niet.{' '}
+                            </>
+                        ) : (
+                            'Dit werk staat in geen enkel dossier. '
+                        )}
+                        Je klasgroepen, periode-instellingen en bewaarde dossiers blijven staan.
                     </>
                 }
                 itemsKop="Verdwijnt uit het traject"
